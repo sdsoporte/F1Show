@@ -30,7 +30,9 @@ and purchases are not authorized by these grants.
   `413a75d..8cbe94b`, 15 commits, no merge commit. Independent audit passed 8/8,
   including all 36 published blobs matching local Git and 131 offline tests from a
   clean archive installation. MIT `LICENSE` and `SECURITY.md` followed in `fc30084`;
-  local `main` and `origin/main` both resolve to that tip. F03 is not published.
+  local `main` and `origin/main` both resolve to that tip. The separately authorized
+  F03a + F03b + F03b-1 advance is published on `origin/feat/f03-source-adapters`
+  through `3ec02ea`; `git ls-remote` matched the local commit exactly. Main was unchanged.
 - **Branch chain.** `feat/f1show-bootstrap` (F00–F01) → `feat/f02-python-foundation`
   (F02) → `feat/f03-source-adapters` (F03), each cut from the branch that had already
   landed, so a slice is never reviewed as part of an accumulated chain.
@@ -428,7 +430,8 @@ and purchases are not authorized by these grants.
   restoration and 164 passing afterwards. Native review `review-355e17c45ef3ad37`
   accepted the complete 772-line, ten-file candidate at medium risk; approved and
   acknowledged, authority burned. Its four informational findings do not reopen it.
-- **F03b-1 — Snapshot publication and replay boundary hardening. In progress.** New,
+- **F03b-1 — Snapshot publication and replay boundary hardening. Done.** Commit
+  `3ec02ea4ea670baa764e27f727061c5fe1739ef5`, published on the feature branch. New,
   separately authorized work unit for those four findings: atomic same-directory
   publication without unintended overwrite; reject an empty family declaration;
   align UTC boundary validation; prove mixed-session refusal. Route: delegated explorer
@@ -464,7 +467,7 @@ and purchases are not authorized by these grants.
     are silently swallowed because `sys.exc_info()` inside `except OSError` sees that
     cleanup error, not the caller's prior state. It also found staging-path ownership
     lost if `os.close` fails before `_staging_path` returns. No closure is claimed.
-  - [ ] **F03b-1-R1 — Correct cleanup exception context and staging ownership.** Continue
+  - [x] **F03b-1-R1 — Correct cleanup exception context and staging ownership.** Continue
     the same writer, narrowed to `snapshot.py` and `tests/test_snapshot.py`; add genuine
     RED for cleanup-only failure and initial-close failure, preserve any primary export
     failure, and do not blindly retry a possibly closed descriptor. Document unavoidable
@@ -480,21 +483,29 @@ and purchases are not authorized by these grants.
     follow-up `mv1dz637-k-8da5` settled: focused 34/full 185 passed; the independent
     probe now surfaces cleanup-only errors and preserves/notates the primary object.
     It confirmed initial-close ownership recovery and all non-regression checks.
-    R1 stays unchecked only until the unit's native review and commit are observed.
+    R1 closed with the unit's observed native approval/acknowledgement and `3ec02ea`.
   - Native assessment remained unassessable for the untracked helper and returned mandatory
     independent verification (high-risk fallback); that plan is fulfilled by the verifier's
     observed 34/185 tests and cleanup probe, not by a native approval claim.
-  - [ ] **F03b-1-RDD — Resolve fresh native review consent. In progress.** User has
-    returned and explicitly requested a new consent flow, followed by commit and scoped
-    feature-branch push if review allows delivery. Previous attempts: after a fresh
-    five-path inspect selecting `_time.py`, two START attempts returned
-    `consent-binding-expired`, `lineage_created=false`, `native_invocation_attempted=false`
-    and `mutation_performed=false`. No review authority exists, no approval/decline was
-    inferred, and automatic retries stopped. Never replay either expired binding. Resume
-    with the human available, a fresh inspect selecting the helper, and the exact new
-    provider consent/continuation; confirm all five paths remain in scope.
-    Native review/acknowledgement and local **code** commit remain pending. Push is now
-    authorized only for the reviewed current advance to `origin/feat/f03-source-adapters`.
+  - [x] **F03b-1-RDD — Fresh native review and exact acknowledgement.** Previous two
+    consent expiries created no authority and were never replayed. On the user's return,
+    fresh consent created `review-202a61df64e578a0`: medium risk, all five intended paths,
+    774 authored diff lines. First reviewer produced no text (`stopReason: length`);
+    fresh bound STATUS reoffered the exact slot, and one forecasted retry approved.
+    Exact acknowledgement returned **authority burned**; no STATUS followed the burn.
+    The staged Git tree matched reviewed tree `7b9a8616bc1c8389920f4b0bcd96bda7cc11ab9b`
+    exactly before the source/test commit. No correction transition was offered.
+  - [x] **F03b-1-PUB — Authorized feature-branch publication.** Normal push published
+    `3ec02ea` on `origin/feat/f03-source-adapters`; independent `git ls-remote` matched
+    the local SHA. Local and remote `main` remained `fc30084` before/after. No force-push,
+    PR or merge. Final task-closure metadata follows under this same delivery grant.
+  - **Five new informational advisories**, all non-blocking and not reasons to reopen
+    this approved review: `R3-addnote-floor` (`snapshot.py:183`, SUGGESTION),
+    `R3-global-close-patch` (`tests/test_snapshot.py:575-579`, WARNING),
+    `R3-hash-memory` (`snapshot.py:280`, SUGGESTION),
+    `R3-staging-suffix-drift` (`tests/test_snapshot.py:91`, SUGGESTION),
+    `R3-writer-instant-coverage` (`snapshot.py:239`, SUGGESTION). Registered for later
+    scoped work; none was silently fixed outside the reviewed candidate.
   - Authorized findings: `R3-nonatomic-snapshot-write` (`snapshot.py:120-145`, WARNING),
     `R3-empty-families-silent-fixture` (`snapshot.py:96-101`, SUGGESTION),
     `R3-duplicate-utc-helper-divergent` (`replay.py:38-44`, SUGGESTION),
@@ -620,12 +631,14 @@ and purchases are not authorized by these grants.
 
 ## Current next step
 
-F00–F02 are closed and published through `fc30084`. F03a and F03b are reviewed and
-committed locally; F03b-1 is implemented and independently verified (34 focused/185 full
-suite tests), but native consent expired twice before any authority was created. Resume
-that review with a fresh five-path selection and human consent, then commit reviewed
-bytes and close the unit. F03c historical sync and F03d injectable live seam remain
-pending and authorized; F04 onward requires a new grant.
+F00–F02 are closed and published on main through `fc30084`. F03a, F03b and F03b-1 are
+reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 closed in
+`3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
+acknowledged, with five informational advisories carried separately. Main is unchanged.
+
+Next: F03c historical sync, followed by F03d injectable live seam; both remain pending
+and authorized for implementation. Their publication is a separate decision. F04 onward
+requires a new implementation grant.
 
 The user now authorized publishing this reviewed advance to `origin/feat/f03-source-adapters`
 only, not to `main`; future units need their own delivery decision. No model ID may enter
