@@ -510,11 +510,39 @@ and purchases are not authorized by these grants.
     `R3-empty-families-silent-fixture` (`snapshot.py:96-101`, SUGGESTION),
     `R3-duplicate-utc-helper-divergent` (`replay.py:38-44`, SUGGESTION),
     `R3-mixed-session-refusal-unproved` (`replay.py:72-77`, SUGGESTION).
-- **F03c — the `sync` writer, historical path.** Paginated historical reads over the
-  `HttpClient` port with a per-endpoint watermark, resume and overlap handling,
-  timeouts, 429 and 5xx backoff, empty and malformed responses, and session
-  end/cancel/reset that never mixes two sessions. Exercised with the in-memory HTTP
-  double and the frozen clock, so the suite stays offline and deterministic.
+- **F03c — Historical sync. Authorized and in progress.** User: "ok, pasemos a F03c".
+  Baseline `e7247b7`, 185 tests. Explorer `mv1hctp2-l-sfku` mapped ports/ownership.
+  Public docs were consulted, not data APIs: `https://openf1.org/docs`, `/auth`, and
+  HTTPX 0.28.1 first-party docs. No OpenF1 pagination contract was found; use supported
+  filters, never invented `limit/offset`. Observation checkpoints are **not source date
+  cursors**. Static families resume by re-query/upsert; no fake date filtering from
+  `Clock.now()`. Source models currently cover sessions/drivers only; any extension
+  needs an explicit, evidenced family adapter. No cross-family atomicity is promised.
+  Four bounded units, planned before source writes; roughly 1,450–2,250 authored diff
+  lines total, split by behavior, not a hard limit. Existing auto-chain/feature-branch
+  strategy applies; **no F03c push is authorized**. One writer; tests-first offline.
+  - **F03c-1 — HTTP response/adapter. In progress.** Grow the single `get_json` contract
+    to a typed status/headers/payload response; migrate the fake, add scripted outcomes,
+    an owned httpx adapter and shared parity tests. Clock stays unchanged. Scope:
+    `src/f1show/{ports,fakes,http,__init__}.py`, `tests/test_{http,fakes,ports}.py`.
+    Estimate 450–650 diff lines; verify hard timeout, bounded JSON body, status/header
+    visibility, malformed success vs non-JSON error response, no implicit credentials,
+    deep-copy parity and idempotent close. No retry implementation in this unit.
+  - **F03c-2 — Pacing/retries. Pending.** Separate monotonic scheduler from UTC Clock;
+    global free-tier pacing (3/sec and 30/min), finite attempts, 429 Retry-After when
+    supplied and retryable transport/5xx errors. No new dependency; invalid/over-budget
+    wait rules explicit, no early retry below server advice. Estimate 350–550 lines.
+  - **F03c-3 — Ingest/checkpoints. Pending.** Validate whole endpoint batch and session
+    before mutation; data commit precedes observation checkpoint. A failed checkpoint
+    allows idempotent repeat. Valid empty arrays advance the successful observation
+    checkpoint; malformed/failing responses do not. Explicit per-endpoint outcomes,
+    not a false global-success flag; static overlap/resume tests. Estimate 350–550.
+  - **F03c-4 — Session lifecycle. Pending.** Explicit end/cancel/reset, fixed per-run
+    session identity, late-response isolation and partial-family outcomes; retain
+    caller-owned Store and never invent a delete/transaction API. Estimate 300–500.
+  Per-unit checks: scoped pytest then full `uv run --frozen pytest -q`, observed
+  RED/GREEN with coverage-only passes disclosed, native work-unit review under the
+  user's enabled switch, local Conventional Commit and task/mirror/todo evidence.
 - **F03d — the live seam, and its honest limit.** Live access needs an OpenF1 OAuth2
   token, which requires the paid subscription the project has not bought. So this unit
   can deliver the live adapter behind an injectable transport and the authentication
@@ -636,9 +664,9 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Next: F03c historical sync, followed by F03d injectable live seam; both remain pending
-and authorized for implementation. Their publication is a separate decision. F04 onward
-requires a new implementation grant.
+Active: F03c-1 HTTP response/adapter, first of four historical-sync units. F03c-2..4
+and F03d injectable live seam remain pending and authorized for implementation.
+Their publication is a separate decision. F04 onward requires a new implementation grant.
 
 The user now authorized publishing this reviewed advance to `origin/feat/f03-source-adapters`
 only, not to `main`; future units need their own delivery decision. No model ID may enter
