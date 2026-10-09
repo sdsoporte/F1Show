@@ -207,17 +207,32 @@ here.
   native reviewer context budget that already refused the F02a bundle, and because a
   candidate that large loses the authored code to the noise. Each unit is produced,
   reviewed as the working tree, acknowledged, and only then committed.
-  - **F02b-1 — shared contracts.** The event envelope with its provenance and
-    timezone rules, the enrichment record with its source and as-of attribution, and
-    the dialogue turn/transcript models, plus their tests. Schemas cover **only** the
-    families F01 actually observed; the unobserved endpoints get an explicit extension
-    point, never invented fields.
+  - **F02b-1 — shared contracts. Done.** Commit `f792eb3`: `src/f1show/events.py`,
+    `src/f1show/enrichment.py`, `src/f1show/dialogue.py`, the three test modules and the
+    re-exported package surface — 653 lines across seven files, 76 tests passing. The RED
+    was **assertion-level** this time (28 tests failed to raise while 48 passed with the
+    fields plain and no validators, against the import-level RED of F02a), and eight
+    mutations of the new invariants were each caught with the tree restored
+    byte-for-byte. Reviewed natively over exactly those seven files, **approved**;
+    authority burned under `gentle-ai.review-acknowledged/v1`.
   - **F02b-2 — injection boundaries.** Clock, HTTP, bus, store and model protocols with
     in-memory fakes and their tests. The store port carries no SQLite type in any
     signature, so a later move off the single-writer model stays a swap.
-  - **F02b-3 — redaction hardening.** Close the two WARNING findings (`exc_info` and
-    nested log arguments) and settle where the filter is installed, since a
-    logger-level filter misses records propagated from child loggers.
+  - **F02b-3 — hardening.** Close **every advisory finding from both reviews** — six in
+    total — rather than only the redaction pair, plus settle where the filter is
+    installed. From the F02a review: `exc_info` is not redacted, only `exc_text`, and
+    nested containers inside log arguments are not descended into (both WARNING, both
+    holes in the secret-bearing-log acceptance criterion); bytes secrets are stringified
+    rather than matched; the empty-string-credential path has no test; and a `since`
+    later than `until` is not rejected. From the F02b-1 review: `Provenance.source_url`
+    accepts an empty string where `None` is meant (WARNING); `Turn.model_id` accepts
+    whitespace because it carries no strip validator; `SessionRecord.date_start` and
+    `date_end` use a plain `datetime` and therefore accept a naive value from ingestion;
+    and the `EventType` docstring claims a consumer "must tolerate a member it does not
+    recognise" while the model itself rejects unknown members, so either that tolerance
+    is implemented at the consumer boundary or the claim is restated as strict here and
+    tolerant there. Every one of these is `informational` in the provider's own
+    classification and **must not be used to re-run review on either candidate**.
 
 **F02b-1 design decisions (2026-10-09):**
 
