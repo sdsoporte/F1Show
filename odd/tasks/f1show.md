@@ -165,7 +165,7 @@ here.
 
 ### F02 — Establish Python foundation and shared contracts
 
-- [ ] Create packaging/locked dependencies, typed configuration, event/enrichment/
+- [x] **Done.** Create packaging/locked dependencies, typed configuration, event/enrichment/
   dialogue schemas and injectable clock, HTTP, bus, store and model boundaries. The
   store boundary must not expose SQLite-specific behaviour to the roles, so a later
   move off the single-writer model is a swap and not a rewrite; commentary language
@@ -258,7 +258,11 @@ here.
   `ValueError` instead of leaking. It predates F02b-3 and is unchanged by it: the
   failure mode is a crash, which is fail-closed rather than a disclosure, but it is a
   hazard worth a later unit.
-  - **F02b-4 — contract and double hardening.** Everything advisory that is not a leak
+  - **F02b-4 — contract and double hardening. Done.** Commit `6381df5`: all fourteen items
+    closed across ten files, 226 changed lines, suite 120 → 131 passing. Nine produced an
+    assertion-level RED against the previous code and four were coverage-only additions
+    that passed immediately, which is stated rather than hidden. Reviewed natively,
+    **approved**; authority burned. Everything advisory that is not a leak
     path, grouped because each item is small and only the grouping makes it reviewable.
     Contracts: `Provenance.source_url` accepts an empty string where `None` is meant
     (WARNING); `Turn.model_id` accepts whitespace because it carries no strip validator;
@@ -367,7 +371,19 @@ here.
   the two WARNING findings, and the redaction-installation question the writer raised,
   before F08 logs real provider traffic** — secret-bearing log output is an explicit F02
   acceptance criterion and these are its remaining holes.
-- Depends on F01 (closed). F02b-1, F02b-2 and F02b-3 done; **F02b-4 pending**.
+- **F02 is complete.** F02a, F02b-1, F02b-2, F02b-3 and F02b-4 are all closed and
+  natively reviewed. Depends on F01 (closed).
+- **Two carried advisories from the F02b-4 review**, both `informational`, registered
+  rather than fixed because another review cycle costs more than they are worth, and
+  neither reopens that candidate: `Provenance.source_url` rejects the empty string but
+  still accepts a whitespace-only one — the same strictness gap just closed for
+  `Turn.model_id` — and the fail-closed container reconstruction uses a broad
+  `except Exception`, which is deliberate because it fails toward *more* redaction, but
+  would also swallow an unrelated error raised while rebuilding a container. Close both
+  if either file is touched again.
+- **Next: F03**, needing fresh explicit authorization. It is the first unit that writes
+  real data paths: the SQLite WAL store behind the `Store` port, the immutable Parquet
+  session snapshots, and the `sync` writer with its historical and live adapters.
 
 ### F03 — Implement source adapters and replay/session lifecycle
 
