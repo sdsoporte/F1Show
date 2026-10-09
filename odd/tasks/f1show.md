@@ -12,10 +12,12 @@ separately authorized and completed. The user explicitly approved publishing F01
 to `main`, followed by MIT licensing and `SECURITY.md`; the published tip is
 `fc30084`. F03 implementation was authorized on 2026-10-09, including local work-unit
 commits, and the user separately authorized the four F03b advisory fixes: "si continua
-con los arreglos para que quede de forma correcta." F03 changes remain local on
-`feat/f03-source-adapters`. F04–F13 implementation, further publication, pull requests,
-merges, deployment, authenticated/live API or model calls and purchases are not
-authorized by these grants.
+con los arreglos para que quede de forma correcta." The user then explicitly requested
+fresh native consent, approval flow, commit and push, and selected publication of the
+current F03a + F03b + F03b-1 advance on **`feat/f03-source-adapters` only**. Approval
+must come from native review; `main` must not change. F04–F13 implementation, publication
+of later units, pull requests, merges, deployment, authenticated/live API or model calls
+and purchases are not authorized by these grants.
 
 ## Baseline and decisions
 
@@ -482,14 +484,17 @@ authorized by these grants.
   - Native assessment remained unassessable for the untracked helper and returned mandatory
     independent verification (high-risk fallback); that plan is fulfilled by the verifier's
     observed 34/185 tests and cleanup probe, not by a native approval claim.
-  - [ ] **F03b-1-RDD — Resolve fresh native review consent. Blocked.** After a fresh
+  - [ ] **F03b-1-RDD — Resolve fresh native review consent. In progress.** User has
+    returned and explicitly requested a new consent flow, followed by commit and scoped
+    feature-branch push if review allows delivery. Previous attempts: after a fresh
     five-path inspect selecting `_time.py`, two START attempts returned
     `consent-binding-expired`, `lineage_created=false`, `native_invocation_attempted=false`
     and `mutation_performed=false`. No review authority exists, no approval/decline was
     inferred, and automatic retries stopped. Never replay either expired binding. Resume
     with the human available, a fresh inspect selecting the helper, and the exact new
     provider consent/continuation; confirm all five paths remain in scope.
-    Native review/acknowledgement and local **code** commit remain pending; no push.
+    Native review/acknowledgement and local **code** commit remain pending. Push is now
+    authorized only for the reviewed current advance to `origin/feat/f03-source-adapters`.
   - Authorized findings: `R3-nonatomic-snapshot-write` (`snapshot.py:120-145`, WARNING),
     `R3-empty-families-silent-fixture` (`snapshot.py:96-101`, SUGGESTION),
     `R3-duplicate-utc-helper-divergent` (`replay.py:38-44`, SUGGESTION),
@@ -622,6 +627,8 @@ that review with a fresh five-path selection and human consent, then commit revi
 bytes and close the unit. F03c historical sync and F03d injectable live seam remain
 pending and authorized; F04 onward requires a new grant.
 
-No F03 push is authorized. No model ID may enter configuration or code until account
-enumeration and current documentation verify it. No live/model calls, purchases or
-deployment are authorized; real-service correctness remains pending F13.
+The user now authorized publishing this reviewed advance to `origin/feat/f03-source-adapters`
+only, not to `main`; future units need their own delivery decision. No model ID may enter
+configuration or code until account enumeration and current documentation verify it.
+No live/model calls, purchases or deployment are authorized; real-service correctness
+remains pending F13.
