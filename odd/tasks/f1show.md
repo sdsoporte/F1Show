@@ -404,7 +404,8 @@ here.
 
 **Work units, planned before the first source write (2026-10-09):**
 
-- **F03a — the SQLite store behind the `Store` port.** Schema for source records and
+- **F03a — the SQLite store behind the `Store` port. Done** (commits `6df4def` and
+`318bec9`; suite 131 → 151). Schema for source records and
   watermarks, create-if-absent, WAL mode, upsert semantics that deduplicate by family,
   session and record identity, deterministic read windows by observation time, and
   `close()`. Tests run against a real temporary database, fully offline. A store-path
@@ -431,6 +432,18 @@ here.
 - **Decision carried from F01:** the store is SQLite in WAL mode with DuckDB over
   Parquet, not DuckDB as the live store, because DuckDB supports one read-write process
   or many read-only processes and every Compose service is a separate process.
+- **F03a lesson, and the rule it produced.** A parity pass aligned the double's upsert and
+  its identity rejection but **missed batch atomicity**, and the review caught it. Partial
+  alignment is worse than none: it makes "substitutable" look true when it is not. **The
+  rule now applied to any port with more than one implementation: the shared semantics are
+  demonstrated by one parameterized test that runs the same body against every
+  implementation**, because an assertion written once per implementation is exactly how the
+  missed semantic survived a review. F03b reads from the store and inherits that test.
+- **F03a also closed a silent-failure risk worth remembering.** `PRAGMA journal_mode =
+  WAL` was executed with its result ignored. On a filesystem that cannot support WAL,
+  SQLite keeps another mode **without saying so**, and the one-writer/many-readers
+  assumption the architecture rests on would have been false in production while every
+  test stayed green. The mode is now read back and a non-`wal` mode is refused.
 
 ### F04 — Implement deterministic collector and event detection
 
