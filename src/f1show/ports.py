@@ -67,6 +67,13 @@ class Store(Protocol):
     **No storage-engine type appears in any signature or annotation.** That is
     the point of this port: replacing the single-writer local store stays a swap
     of implementation rather than a rewrite of every role.
+
+    **Writing the same identity twice replaces that record rather than appending
+    a second one**, so a re-read that overlaps an earlier window is safe; and a
+    record without a non-empty ``record_id`` string is refused rather than given
+    an invented identity. Both rules are part of the contract precisely so an
+    in-memory double and a real store are genuinely interchangeable rather than
+    merely similar.
     """
 
     async def write_source_batch(

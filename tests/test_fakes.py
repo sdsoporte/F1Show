@@ -169,28 +169,79 @@ async def test_bus_does_not_redeliver_a_message_acked_out_of_order() -> None:
 @pytest.mark.anyio
 async def test_store_round_trips_records_isolated_by_family_and_session() -> None:
     store = InMemoryStore()
-    assert await store.write_source_batch("drivers", 9462, [{"driver_number": 1}], observed_at=MOMENT) == 1
-    await store.write_source_batch("drivers", 9463, [{"driver_number": 2}], observed_at=MOMENT)
-    await store.write_source_batch("laps", 9462, [{"lap_number": 3}], observed_at=MOMENT)
-    assert await store.read_source_records("drivers", 9462) == ({"driver_number": 1},)
-    assert await store.read_source_records("drivers", 9463) == ({"driver_number": 2},)
-    assert await store.read_source_records("laps", 9462) == ({"lap_number": 3},)
+    assert (
+        await store.write_source_batch(
+            "drivers", 9462, [{"record_id": "1", "driver_number": 1}], observed_at=MOMENT
+        )
+        == 1
+    )
+    await store.write_source_batch(
+        "drivers", 9463, [{"record_id": "2", "driver_number": 2}], observed_at=MOMENT
+    )
+    await store.write_source_batch(
+        "laps", 9462, [{"record_id": "3", "lap_number": 3}], observed_at=MOMENT
+    )
+    assert await store.read_source_records("drivers", 9462) == (
+        {"record_id": "1", "driver_number": 1},
+    )
+    assert await store.read_source_records("drivers", 9463) == (
+        {"record_id": "2", "driver_number": 2},
+    )
+    assert await store.read_source_records("laps", 9462) == ({"record_id": "3", "lap_number": 3},)
+
+
+@pytest.mark.anyio
+async def test_store_upserts_by_identity_instead_of_appending() -> None:
+    """The real store upserts on (family, session_key, record_id).
+
+    A double that appended would let tests pass that the real store would not, so
+    the replacement is part of the port contract rather than an implementation
+    detail.
+    """
+    store = InMemoryStore()
+    late = MOMENT + dt.timedelta(seconds=10)
+    await store.write_source_batch(
+        "drivers", 9462, [{"record_id": "1", "driver_number": 1}], observed_at=MOMENT
+    )
+    await store.write_source_batch(
+        "drivers", 9462, [{"record_id": "1", "team_name": "X"}], observed_at=late
+    )
+    stored = await store.read_source_records("drivers", 9462)
+    assert len(stored) == 1
+    assert stored[0]["team_name"] == "X"
+    # The replacement carries the later observation time, so the window moved with it.
+    assert await store.read_source_records("drivers", 9462, since=late) == stored
+
+
+@pytest.mark.anyio
+async def test_store_refuses_a_record_without_an_identity() -> None:
+    store = InMemoryStore()
+    with pytest.raises(ValueError, match="record_id"):
+        await store.write_source_batch("drivers", 9462, [{"driver_number": 1}], observed_at=MOMENT)
 
 
 @pytest.mark.anyio
 async def test_store_window_filters_by_observation_time() -> None:
     store = InMemoryStore()
     late = MOMENT + dt.timedelta(seconds=10)
-    await store.write_source_batch("laps", 9462, [{"lap_number": 1}], observed_at=MOMENT)
-    await store.write_source_batch("laps", 9462, [{"lap_number": 2}], observed_at=late)
-    assert await store.read_source_records("laps", 9462, since=late) == ({"lap_number": 2},)
-    assert await store.read_source_records("laps", 9462, until=MOMENT) == ({"lap_number": 1},)
+    await store.write_source_batch(
+        "laps", 9462, [{"record_id": "1", "lap_number": 1}], observed_at=MOMENT
+    )
+    await store.write_source_batch(
+        "laps", 9462, [{"record_id": "2", "lap_number": 2}], observed_at=late
+    )
+    assert await store.read_source_records("laps", 9462, since=late) == (
+        {"record_id": "2", "lap_number": 2},
+    )
+    assert await store.read_source_records("laps", 9462, until=MOMENT) == (
+        {"record_id": "1", "lap_number": 1},
+    )
 
 
 @pytest.mark.anyio
 async def test_store_returns_copies_that_cannot_reach_stored_state() -> None:
     store = InMemoryStore()
-    nested: dict[str, Any] = {"driver_number": 1, "tags": ["fast"]}
+    nested: dict[str, Any] = {"record_id": "1", "driver_number": 1, "tags": ["fast"]}
     await store.write_source_batch("drivers", 9462, [nested], observed_at=MOMENT)
     # Mutating the caller's own nested value must not reach stored state.
     nested["tags"].append("mutated")

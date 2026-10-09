@@ -10,6 +10,7 @@ from __future__ import annotations
 from f1show.config import (
     DEFAULT_OPENF1_BASE_URL,
     DEFAULT_REQUEST_TIMEOUT_SECONDS,
+    DEFAULT_STORE_PATH,
     BoothSettings,
     CredentialsSettings,
     Mode,
@@ -17,6 +18,7 @@ from f1show.config import (
     ReplaySettings,
     Settings,
     SourceSettings,
+    StoreSettings,
     TimeWindowSettings,
 )
 from f1show.dialogue import Speaker, Transcript, Turn
@@ -45,14 +47,15 @@ from f1show.ports import (
     Store,
 )
 from f1show.redaction import REDACTED, RedactingFilter, attach_redacting_filter, redact
+from f1show.store import SQLiteStore
 
 __all__ = [
-    "DEFAULT_OPENF1_BASE_URL", "DEFAULT_REQUEST_TIMEOUT_SECONDS", "REDACTED", "Attribution",
-    "BoothSettings", "Bus", "Clock", "CredentialsSettings", "DriverRecord",
+    "DEFAULT_OPENF1_BASE_URL", "DEFAULT_REQUEST_TIMEOUT_SECONDS", "DEFAULT_STORE_PATH", "REDACTED",
+    "Attribution", "BoothSettings", "Bus", "Clock", "CredentialsSettings", "DriverRecord",
     "EnrichmentKind", "EnrichmentRecord", "EventEnvelope", "EventType", "FakeHttpClient",
     "FrozenClock", "HttpClient", "InMemoryBus", "InMemoryStore", "Mode", "ModelClient",
     "ModelProvider", "ModelRequest", "ModelResponse", "Provenance", "RedactingFilter",
-    "ReplaySettings", "ScriptedModelClient", "SessionRecord", "Settings", "SourceSettings",
-    "Speaker", "Store", "TimeWindowSettings", "Transcript", "Turn", "attach_redacting_filter",
-    "redact",
+    "ReplaySettings", "SQLiteStore", "ScriptedModelClient", "SessionRecord", "Settings",
+    "SourceSettings", "Speaker", "Store", "StoreSettings", "TimeWindowSettings", "Transcript",
+    "Turn", "attach_redacting_filter", "redact",
 ]

@@ -138,6 +138,16 @@ class InMemoryStore:
         self._require_open()
         bucket = self._records.setdefault((family, session_key), [])
         for record in records:
+            identity = record.get("record_id")
+            if not isinstance(identity, str) or not identity.strip():
+                raise ValueError(
+                    f"source record for family {family!r} must carry a non-empty string "
+                    "'record_id'; deriving an identity belongs to the sync writer"
+                )
+            # Replace rather than append, so an overlapping re-read is safe. The
+            # real store upserts on (family, session_key, record_id); a double that
+            # appended would let tests pass that the real store would not.
+            bucket[:] = [row for row in bucket if row[1].get("record_id") != identity]
             bucket.append((observed_at, copy.deepcopy(dict(record))))
         return len(records)
 
