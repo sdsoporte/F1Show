@@ -182,12 +182,14 @@ async def test_store_round_trips_records_isolated_by_family_and_session() -> Non
         "laps", 9462, [{"record_id": "3", "lap_number": 3}], observed_at=MOMENT
     )
     assert await store.read_source_records("drivers", 9462) == (
-        {"record_id": "1", "driver_number": 1},
+        (MOMENT, {"record_id": "1", "driver_number": 1}),
     )
     assert await store.read_source_records("drivers", 9463) == (
-        {"record_id": "2", "driver_number": 2},
+        (MOMENT, {"record_id": "2", "driver_number": 2}),
     )
-    assert await store.read_source_records("laps", 9462) == ({"record_id": "3", "lap_number": 3},)
+    assert await store.read_source_records("laps", 9462) == (
+        (MOMENT, {"record_id": "3", "lap_number": 3}),
+    )
 
 
 @pytest.mark.anyio
@@ -208,7 +210,8 @@ async def test_store_upserts_by_identity_instead_of_appending() -> None:
     )
     stored = await store.read_source_records("drivers", 9462)
     assert len(stored) == 1
-    assert stored[0]["team_name"] == "X"
+    assert stored[0][0] == late
+    assert stored[0][1]["team_name"] == "X"
     # The replacement carries the later observation time, so the window moved with it.
     assert await store.read_source_records("drivers", 9462, since=late) == stored
 
@@ -231,10 +234,10 @@ async def test_store_window_filters_by_observation_time() -> None:
         "laps", 9462, [{"record_id": "2", "lap_number": 2}], observed_at=late
     )
     assert await store.read_source_records("laps", 9462, since=late) == (
-        {"record_id": "2", "lap_number": 2},
+        (late, {"record_id": "2", "lap_number": 2}),
     )
     assert await store.read_source_records("laps", 9462, until=MOMENT) == (
-        {"record_id": "1", "lap_number": 1},
+        (MOMENT, {"record_id": "1", "lap_number": 1}),
     )
 
 
@@ -246,13 +249,13 @@ async def test_store_returns_copies_that_cannot_reach_stored_state() -> None:
     # Mutating the caller's own nested value must not reach stored state.
     nested["tags"].append("mutated")
     stored = await store.read_source_records("drivers", 9462)
-    assert stored[0]["tags"] == ["fast"]
+    assert stored[0][1]["tags"] == ["fast"]
     # Mutating a returned record must not reach stored state either.
-    returned_tags = stored[0]["tags"]
+    returned_tags = stored[0][1]["tags"]
     assert isinstance(returned_tags, list)
     returned_tags.append("also-mutated")
     again = await store.read_source_records("drivers", 9462)
-    assert again[0]["tags"] == ["fast"]
+    assert again[0][1]["tags"] == ["fast"]
 
 
 @pytest.mark.anyio

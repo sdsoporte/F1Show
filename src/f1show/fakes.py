@@ -172,11 +172,12 @@ class InMemoryStore:
         *,
         since: dt.datetime | None = None,
         until: dt.datetime | None = None,
-    ) -> Sequence[Mapping[str, object]]:
-        """Return copies of records whose observation time is in the inclusive window.
+    ) -> Sequence[tuple[dt.datetime, Mapping[str, object]]]:
+        """Return ``(observed_at, record)`` pairs in the inclusive window, oldest first.
 
-        Each record is stamped with the ``observed_at`` of its write batch, and
-        the result is sorted stably by that time, matching the real store.
+        Each pair carries the instant of its write batch, and the result is sorted
+        stably by that time, matching the real store. Both the instant and the
+        payload are fresh copies, so a caller cannot reach stored state.
         """
         self._require_open()
         found = [
@@ -185,7 +186,7 @@ class InMemoryStore:
             if (since is None or stamped_at >= since) and (until is None or stamped_at <= until)
         ]
         found.sort(key=lambda row: row[0])
-        return tuple(record for _, record in found)
+        return tuple(found)
 
     async def set_watermark(
         self, endpoint: str, session_key: int, *, observed_at: dt.datetime

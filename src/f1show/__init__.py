@@ -1,8 +1,9 @@
 """F1Show: replay-testable, real-time Formula 1 commentary system.
 
 The public surface is the typed configuration, the secret-safe logging helpers,
-the shared contracts (events, enrichment and dialogue) and the injection
-boundaries: the ports plus their shipped in-memory test doubles.
+the shared contracts (events, enrichment and dialogue), the injection boundaries
+(the ports plus their shipped in-memory test doubles) and the session fixtures:
+immutable parquet snapshots plus the deterministic replay source that reads them.
 """
 
 from __future__ import annotations
@@ -47,6 +48,8 @@ from f1show.ports import (
     Store,
 )
 from f1show.redaction import REDACTED, RedactingFilter, attach_redacting_filter, redact
+from f1show.replay import SessionMismatchError, SnapshotReplaySource
+from f1show.snapshot import write_session_snapshot
 from f1show.store import SQLiteStore
 
 __all__ = [
@@ -55,7 +58,8 @@ __all__ = [
     "EnrichmentKind", "EnrichmentRecord", "EventEnvelope", "EventType", "FakeHttpClient",
     "FrozenClock", "HttpClient", "InMemoryBus", "InMemoryStore", "Mode", "ModelClient",
     "ModelProvider", "ModelRequest", "ModelResponse", "Provenance", "RedactingFilter",
-    "ReplaySettings", "SQLiteStore", "ScriptedModelClient", "SessionRecord", "Settings",
-    "SourceSettings", "Speaker", "Store", "StoreSettings", "TimeWindowSettings", "Transcript",
-    "Turn", "attach_redacting_filter", "redact",
+    "ReplaySettings", "SQLiteStore", "ScriptedModelClient", "SessionMismatchError", "SessionRecord",
+    "Settings", "SnapshotReplaySource", "SnapshotResult", "SourceSettings", "Speaker", "Store",
+    "StoreSettings", "TimeWindowSettings", "Transcript", "Turn", "attach_redacting_filter",
+    "redact", "write_session_snapshot",
 ]

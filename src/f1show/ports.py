@@ -92,7 +92,20 @@ class Store(Protocol):
         *,
         since: datetime | None = None,
         until: datetime | None = None,
-    ) -> Sequence[Mapping[str, object]]: ...
+    ) -> Sequence[tuple[datetime, Mapping[str, object]]]:
+        """Records in the inclusive ``[since, until]`` observation window, oldest
+        first, each paired with the instant it was observed.
+
+        The observation time crosses the port instead of staying hidden inside
+        the range filter. A store that can filter by time but cannot report it
+        forces every consumer either to re-derive chronology from payload fields
+        it may not have, or to lose it outright; with no production consumer yet,
+        this is the moment to correct the asymmetry rather than a workaround to
+        live with. There is deliberately **one** read method and not two: a
+        bare-payload variant would be a trap, because a future consumer would
+        reach for the obvious name and silently lose chronology.
+        """
+        ...
 
     async def set_watermark(
         self, endpoint: str, session_key: int, *, observed_at: datetime

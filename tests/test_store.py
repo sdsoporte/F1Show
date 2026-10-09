@@ -36,9 +36,9 @@ def open_store(tmp_path: pathlib.Path) -> SQLiteStore:
     return SQLiteStore(tmp_path / "f1show.sqlite3")
 
 
-def ids(records: Sequence[Mapping[str, object]]) -> list[object]:
+def ids(records: Sequence[tuple[dt.datetime, Mapping[str, object]]]) -> list[object]:
     """Return the record identities of a read result, in returned order."""
-    return [item["record_id"] for item in records]
+    return [record["record_id"] for _, record in records]
 
 
 async def _observable(store: Store) -> dict[str, Any]:
@@ -67,9 +67,9 @@ async def _observable(store: Store) -> dict[str, Any]:
 
 
 EXPECTED_OBSERVABLE: dict[str, Any] = {
-    "sessions": [{"record_id": "9462", "year": 2024, "tags": ["race"]}],
+    "sessions": [(MOMENT, {"record_id": "9462", "year": 2024, "tags": ["race"]})],
     "isolated": [],
-    "window": [{"record_id": "9462-1", "driver_number": 1, "nested": {"stint": 2}}],
+    "window": [(MOMENT, {"record_id": "9462-1", "driver_number": 1, "nested": {"stint": 2}})],
     "unset_watermark": None,
     "set_result": 1,
     "watermark": MOMENT,
@@ -106,7 +106,9 @@ async def test_both_stores_share_one_contract(
     await store.write_source_batch("drivers", 9462, [record("d", team="A")], observed_at=MOMENT)
     await store.write_source_batch("drivers", 9462, [record("d", team="B")], observed_at=LATER)
     stored = await store.read_source_records("drivers", 9462)
-    assert list(stored) == [record("d", team="B")]
+    assert list(stored) == [(LATER, record("d", team="B"))]
+    # The read reports each row's own observation time, not a caller-declared one.
+    assert [moment for moment, _ in stored] == [LATER]
     assert list(await store.read_source_records("drivers", 9462, since=LATER)) == list(stored)
     assert await store.read_source_records("drivers", 9462, until=MOMENT) == ()
 
@@ -116,12 +118,21 @@ async def test_both_stores_share_one_contract(
     await store.write_source_batch("laps", 9462, [record("c")], observed_at=LATER)
     await store.write_source_batch("laps", 9462, [record("a", lap_number=2)], observed_at=LATER)
     assert ids(await store.read_source_records("laps", 9462)) == ["b", "a", "c"]
+    # Two distinct instants come back as those two instants, in ascending order.
+    timed = list(await store.read_source_records("laps", 9462))
+    assert [moment for moment, _ in timed] == [MOMENT, LATER, LATER]
 
     # The window is inclusive at both bounds, by instant.
     assert ids(await store.read_source_records("laps", 9462, since=MOMENT)) == ["b", "a", "c"]
     assert ids(await store.read_source_records("laps", 9462, until=LATER)) == ["b", "a", "c"]
     assert ids(await store.read_source_records("laps", 9462, since=LATER)) == ["a", "c"]
     assert ids(await store.read_source_records("laps", 9462, until=MOMENT)) == ["b"]
+    # The bounds are inclusive and the surviving rows keep their own times.
+    bounded = await store.read_source_records("laps", 9462, since=LATER, until=LATER)
+    assert [(moment, payload["record_id"]) for moment, payload in bounded] == [
+        (LATER, "a"),
+        (LATER, "c"),
+    ]
 
     # One invalid record rejects the whole batch: nothing is written, before or after it.
     before = len(await store.read_source_records("laps", 9462))
@@ -191,7 +202,7 @@ async def test_schema_is_created_on_first_open_and_reopening_is_harmless(
     # discard what the first open wrote.
     second = SQLiteStore(path)
     assert list(await second.read_source_records("laps", 9462)) == [
-        {"record_id": "9462-1", "lap_number": 1}
+        (MOMENT, {"record_id": "9462-1", "lap_number": 1})
     ]
     await second.close()
 
@@ -218,8 +229,8 @@ async def test_repeated_write_updates_the_row_and_returns_what_was_written(
         == 2
     )
     assert list(await store.read_source_records("drivers", 9462)) == [
-        {"record_id": "9462-1", "driver_number": 2},
-        {"record_id": "9462-2", "driver_number": 3},
+        (LATER, {"record_id": "9462-1", "driver_number": 2}),
+        (LATER, {"record_id": "9462-2", "driver_number": 3}),
     ]
     # The upsert replaced the observation time too, so the earlier window no
     # longer matches the updated row.
@@ -243,14 +254,14 @@ async def test_records_isolate_by_family_and_by_session(tmp_path: pathlib.Path) 
         "laps", 9462, [record("9462-1", lap_number=1)], observed_at=MOMENT
     )
     assert list(await store.read_source_records("drivers", 9462)) == [
-        {"record_id": "9462-1", "driver_number": 1}
+        (MOMENT, {"record_id": "9462-1", "driver_number": 1})
     ]
     assert list(await store.read_source_records("drivers", 9463)) == [
-        {"record_id": "9463-1", "driver_number": 4}
+        (MOMENT, {"record_id": "9463-1", "driver_number": 4})
     ]
     # The same identity text in another family is another row.
     assert list(await store.read_source_records("laps", 9462)) == [
-        {"record_id": "9462-1", "lap_number": 1}
+        (MOMENT, {"record_id": "9462-1", "lap_number": 1})
     ]
     assert await store.read_source_records("laps", 9463) == ()
 
@@ -317,8 +328,8 @@ async def test_round_trip_preserves_identity_and_nested_values(tmp_path: pathlib
     store = open_store(tmp_path)
     await store.write_source_batch("drivers", 9462, [payload], observed_at=MOMENT)
     read_back = await store.read_source_records("drivers", 9462)
-    assert list(read_back) == [payload]
-    assert read_back[0]["record_id"] == "9462-1"
+    assert list(read_back) == [(MOMENT, payload)]
+    assert read_back[0][1]["record_id"] == "9462-1"
 
 
 @pytest.mark.anyio

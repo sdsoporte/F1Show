@@ -178,10 +178,15 @@ class SQLiteStore:
         *,
         since: dt.datetime | None = None,
         until: dt.datetime | None = None,
-    ) -> Sequence[Mapping[str, object]]:
-        """Return the stored records whose batch observation time is in the
-        inclusive ``[since, until]`` window, oldest first, as plain mappings that
-        equal what was written, ``record_id`` included."""
+    ) -> Sequence[tuple[dt.datetime, Mapping[str, object]]]:
+        """Return ``(observed_at, record)`` pairs whose batch observation time is
+        in the inclusive ``[since, until]`` window, oldest first, as plain
+        mappings that equal what was written, ``record_id`` included.
+
+        ``observed_at`` crosses the port as an aware datetime rather than being
+        consumed by the range filter, so a consumer keeps the chronology the
+        store already orders by.
+        """
         conn = self._require_open()
         since_stamp = None if since is None else _stamp(since, "since")
         until_stamp = None if until is None else _stamp(until, "until")
@@ -189,7 +194,7 @@ class SQLiteStore:
             # One static query for every window: a ``None`` bound short-circuits
             # its clause, so no SQL text is ever built from a caller value.
             """
-            SELECT payload FROM source_records
+            SELECT observed_at, payload FROM source_records
             WHERE family = ? AND session_key = ?
               AND (? IS NULL OR observed_at >= ?)
               AND (? IS NULL OR observed_at <= ?)
@@ -197,15 +202,18 @@ class SQLiteStore:
             """,
             (family, session_key, since_stamp, since_stamp, until_stamp, until_stamp),
         )
-        stored: list[Mapping[str, object]] = []
-        for (payload,) in cursor:
+        stored: list[tuple[dt.datetime, Mapping[str, object]]] = []
+        for observed_at, payload in cursor:
             try:
-                stored.append(json.loads(payload))
+                record = json.loads(payload)
             except json.JSONDecodeError as error:
                 raise RuntimeError(
                     f"stored payload for family {family!r} session {session_key} is not "
                     "valid JSON; the local store is corrupt"
                 ) from error
+            # ``_stamp`` wrote fixed-width UTC, so ``fromisoformat`` gives back
+            # an aware UTC instant; ``json.loads`` is already a fresh copy.
+            stored.append((dt.datetime.fromisoformat(observed_at), record))
         return tuple(stored)
 
     async def set_watermark(
