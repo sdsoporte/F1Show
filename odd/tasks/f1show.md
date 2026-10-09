@@ -215,24 +215,51 @@ here.
     mutations of the new invariants were each caught with the tree restored
     byte-for-byte. Reviewed natively over exactly those seven files, **approved**;
     authority burned under `gentle-ai.review-acknowledged/v1`.
-  - **F02b-2 — injection boundaries.** Clock, HTTP, bus, store and model protocols with
-    in-memory fakes and their tests. The store port carries no SQLite type in any
-    signature, so a later move off the single-writer model stays a swap.
-  - **F02b-3 — hardening.** Close **every advisory finding from both reviews** — six in
-    total — rather than only the redaction pair, plus settle where the filter is
-    installed. From the F02a review: `exc_info` is not redacted, only `exc_text`, and
-    nested containers inside log arguments are not descended into (both WARNING, both
-    holes in the secret-bearing-log acceptance criterion); bytes secrets are stringified
-    rather than matched; the empty-string-credential path has no test; and a `since`
-    later than `until` is not rejected. From the F02b-1 review: `Provenance.source_url`
-    accepts an empty string where `None` is meant (WARNING); `Turn.model_id` accepts
-    whitespace because it carries no strip validator; `SessionRecord.date_start` and
-    `date_end` use a plain `datetime` and therefore accept a naive value from ingestion;
-    and the `EventType` docstring claims a consumer "must tolerate a member it does not
-    recognise" while the model itself rejects unknown members, so either that tolerance
-    is implemented at the consumer boundary or the claim is restated as strict here and
-    tolerant there. Every one of these is `informational` in the provider's own
-    classification and **must not be used to re-run review on either candidate**.
+  - **F02b-2 — injection boundaries. Done.** Commit `c8cdc59`: `src/f1show/ports.py`,
+    `src/f1show/fakes.py`, the re-exported surface, the `anyio_backend` fixture and two
+    test modules — 661 changed lines, 108 tests passing. Assertion-level RED again
+    (25 failed while 7 passed with the protocols declared and the doubles
+    unimplemented, zero errors). The author caught and fixed a **spurious pass in one of
+    its own tests**, where the assertion was satisfied by pydantic's error text rather
+    than by the behaviour, and re-ran the RED honestly. Async tests use anyio's
+    already-present pytest plugin, so **no dependency was added and the lock is
+    untouched**. Reviewed natively over the six files, **approved**; authority burned.
+  - **F02b-2 parent verification, and two coverage gaps it exposed.** Eight mutations
+    were run against the new invariants: five bit (cross-group ack isolation, closed
+    store, model-request bounds, the storage-engine guard, clock freezing), one was a
+    **dead mutation of the parent's own** (mutating a line after the `raise` that fires
+    first — corrected and then it bit), one was an **equivalent mutant**
+    (`FakeHttpClient` still raises `KeyError`, a `LookupError` subclass, after its
+    explicit guard is removed, so the observable contract survives), and one exposed a
+    real gap: the bus's acked-set check in `read` only matters for **out-of-order
+    acks**, and the existing test acks in order, where the cursor advance already masks
+    it. The implementation was verified correct by hand for that case (`['1','3']` after
+    acking only `2`), so it is missing coverage, not a defect.
+  - **F02b-3 — redaction hardening.** The two WARNING findings that are genuine leak
+    paths in the secret-bearing-log acceptance criterion: `exc_info` is not redacted
+    (only `exc_text`), and nested containers inside log arguments are not descended
+    into. Also from the F02a review: bytes secrets are stringified rather than matched,
+    and the empty-string-credential path has no test. Plus the filter-installation
+    decision, since a logger-level filter misses records propagated from child
+    loggers. **This unit must land before F08 logs any real provider traffic.**
+  - **F02b-4 — contract and double hardening.** Everything advisory that is not a leak
+    path, grouped because each item is small and only the grouping makes it reviewable.
+    Contracts: `Provenance.source_url` accepts an empty string where `None` is meant
+    (WARNING); `Turn.model_id` accepts whitespace because it carries no strip validator;
+    `SessionRecord.date_start`/`date_end` use a plain `datetime` and so accept a naive
+    value from ingestion; the `EventType` docstring claims a consumer must tolerate an
+    unknown member while the model rejects unknown members, so either that tolerance is
+    implemented at the consumer boundary or the claim is restated as strict here and
+    tolerant there; and a `since` later than `until` is not rejected.
+    Doubles: `FrozenClock.advance` accepts a negative value and can move time backwards;
+    its docstring promises UTC while the fake returns whatever aware offset it was
+    given; `InMemoryStore` returns shallow `dict` copies, so a caller could mutate
+    stored state through a nested value; and the `close()` test does not cover every
+    method. Tests: the bus needs an out-of-order-ack case, and the unregistered-URL test
+    should assert the deliberate error rather than a broad `LookupError`, since
+    `KeyError` satisfies it.
+    **Every one of these is `informational` in the provider's own classification and
+    must not be used to re-run review on any candidate.**
 
 **F02b-1 design decisions (2026-10-09):**
 
