@@ -521,11 +521,16 @@ and purchases are not authorized by these grants.
   Four bounded units, planned before source writes; roughly 1,450–2,250 authored diff
   lines total, split by behavior, not a hard limit. Existing auto-chain/feature-branch
   strategy applies; **no F03c push is authorized**. One writer; tests-first offline.
-  - **F03c-1 — HTTP response/adapter. Independent verification in progress.**
-    Writer `mv1i0aoc-m-mrpe` reports 86 focused/233 full tests and 1,032 diff lines
-    (forecast 450–650 exceeded; seven planned paths, tests retained). Not yet accepted.
-    ASSESS is unassessable for undeclared new files: high-risk fallback; independent
-    verifier `mv1ir20g-n-ov7w` runs offline. Static lint/types remain unverified.
+  - **F03c-1 — HTTP response/adapter. Corrective work in progress, not accepted.**
+    Independent verifier `mv1ir20g-n-ov7w`: 86 focused/233 full tests PASS, but FAIL on
+    primary-error masking, raw cleanup-only errors and unbounded close after deadline/
+    cancel (`http.py:146-148`). Existing tests used no-op close. Native review not started.
+    Machine-counted candidate: 1,016 additions +17 deletions = **1,033 diff lines**
+    (forecast 450–650 exceeded; seven planned paths, tests retained). ASSESS remains
+    unassessable for undeclared new files: high-risk fallback. Static checks unverified.
+    **F03c-1-R1:** bounded, non-masking cleanup in `http.py` + regression cases in
+    `test_http.py`; preserve primary identity, surface cleanup-only errors port-typed,
+    document actual deadline/cleanup budgets. Reverify independently before acceptance.
     Grow the single `get_json` contract to a typed status/headers/payload response;
     migrate the fake, add scripted outcomes,
     an owned httpx adapter and shared parity tests. Clock stays unchanged. Scope:
@@ -669,7 +674,7 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: F03c-1 independent verification, first of four historical-sync units.
+Active: F03c-1-R1 cleanup correction, within the first historical-sync work unit.
 F03c-2..4 and F03d injectable live seam remain pending and authorized for implementation.
 Their publication is a separate decision. F04 onward requires a new implementation grant.
 
