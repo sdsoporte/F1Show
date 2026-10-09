@@ -457,11 +457,20 @@ authorized by these grants.
     Reported RED: snapshot 8 failures and replay 1, zero collection errors; coverage-only
     passes named separately. Reported GREEN/refactor: focused 29, full 180 tests. It also
     fixed DuckDB's empty `executemany` rejection so declared zero-row families can export.
-  - Parent code spot check flagged cleanup error handling for independent reproduction;
-    no closure is claimed from green tests alone. Verifier `mv1dmx4o-i-0b51` is active.
-    Native assessment was unassessable pending untracked-helper declaration and returned
-    mandatory independent verification (high-risk fallback). Independent acceptance,
-    native review/acknowledgement and local work-unit commit remain pending.
+  - Verifier `mv1dmx4o-i-0b51` independently passed focused 29/full 180 and corroborated
+    race/failure/UTC/session tests, but **failed acceptance**: cleanup-only unlink errors
+    are silently swallowed because `sys.exc_info()` inside `except OSError` sees that
+    cleanup error, not the caller's prior state. It also found staging-path ownership
+    lost if `os.close` fails before `_staging_path` returns. No closure is claimed.
+  - [ ] **F03b-1-R1 — Correct cleanup exception context and staging ownership.** Continue
+    the same writer, narrowed to `snapshot.py` and `tests/test_snapshot.py`; add genuine
+    RED for cleanup-only failure and initial-close failure, preserve any primary export
+    failure, and do not blindly retry a possibly closed descriptor. Document unavoidable
+    cleanup failures and a completed target remaining valid if post-publication cleanup
+    fails. Independent revalidation must pass before native freeze and commit.
+  - Native assessment was unassessable pending untracked-helper declaration and returned
+    mandatory independent verification (high-risk fallback). Native review/acknowledgement
+    and local work-unit commit remain pending.
   - Authorized findings: `R3-nonatomic-snapshot-write` (`snapshot.py:120-145`, WARNING),
     `R3-empty-families-silent-fixture` (`snapshot.py:96-101`, SUGGESTION),
     `R3-duplicate-utc-helper-divergent` (`replay.py:38-44`, SUGGESTION),
