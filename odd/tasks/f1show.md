@@ -203,8 +203,45 @@ here.
   deterministic. `RedactingFilter` attached to a logger does not see records propagated
   from child loggers, so F03 must decide where it is installed — logger, handler, or
   both.
-- **F02b — Pending.** The event/enrichment/dialogue schemas and the clock, HTTP, bus,
-  store and model boundaries with their in-memory fakes.
+- **F02b — split into three bounded units**, because the whole unit would exceed the
+  native reviewer context budget that already refused the F02a bundle, and because a
+  candidate that large loses the authored code to the noise. Each unit is produced,
+  reviewed as the working tree, acknowledged, and only then committed.
+  - **F02b-1 — shared contracts.** The event envelope with its provenance and
+    timezone rules, the enrichment record with its source and as-of attribution, and
+    the dialogue turn/transcript models, plus their tests. Schemas cover **only** the
+    families F01 actually observed; the unobserved endpoints get an explicit extension
+    point, never invented fields.
+  - **F02b-2 — injection boundaries.** Clock, HTTP, bus, store and model protocols with
+    in-memory fakes and their tests. The store port carries no SQLite type in any
+    signature, so a later move off the single-writer model stays a swap.
+  - **F02b-3 — redaction hardening.** Close the two WARNING findings (`exc_info` and
+    nested log arguments) and settle where the filter is installed, since a
+    logger-level filter misses records propagated from child loggers.
+
+**F02b-1 design decisions (2026-10-09):**
+
+- **Two strictness policies, on purpose.** Internal contracts forbid unknown fields,
+  because an unexpected field there is a bug in our own pipeline. Ingested source
+  records tolerate unknown fields, because a provider may add fields at any time and a
+  pipeline that refuses them would break on a change it cannot control; the fields we
+  depend on are still required and validated.
+- **Provenance is mandatory and observation time is distinct from event time.** Every
+  event carries the endpoint it came from and the moment it was observed, so a record
+  can be re-derived and audited later without trusting the event's own timestamp.
+- **Schemas cover only observed families.** Only OpenF1's `sessions` and `drivers`
+  shapes were observed at F01, so those are the only record models written now. The
+  normalized event payload stays explicitly provisional with a documented extension
+  point, because the collector that produces it is F04. Inventing the other sixteen
+  payloads here would be fabricating contracts.
+- **Absence stays absent.** An enrichment record must carry at least one fact, so an
+  empty enrichment cannot be emitted as if it were a finding. This is the structural
+  form of "unknown records stay absent".
+- **Dialogue turns carry non-empty evidence references**, which is the structural
+  form of "personas may only use what they are given", and a transcript enforces
+  non-decreasing turn order.
+- **No new dependencies**, so no lock churn and no generated artifact in the review
+  candidate.
 
 **Decisions taken before the first source write (2026-10-09):**
 
