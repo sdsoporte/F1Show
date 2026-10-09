@@ -22,6 +22,13 @@ ever been observed, so a ``positions`` or ``stints`` reconstruction would invent
 semantics for families nobody has seen, and event and state derivation belongs
 to F04's collector. Seeding is therefore generic - the records observed at or
 before an instant - and nothing family-specific is claimed or promised.
+
+**The instant rule is shared with the writer.** ``start`` and ``after`` are
+validated by the same internal helper the snapshot writer uses, so the two cannot
+drift: an aware instant is normalised to UTC and compared as an instant, two
+offsets for one moment partition identically, and a naive or non-datetime value is
+refused. The stored column is naive UTC because the Parquet ``TIMESTAMP`` type has
+no offset; this reader converts it back to aware UTC on load.
 """
 
 from __future__ import annotations
@@ -34,18 +41,11 @@ from collections.abc import Iterator, Mapping
 
 import duckdb
 
+from f1show import _time  # shared aware-UTC validation; see the module docstring
+
 
 class SessionMismatchError(RuntimeError):
     """Raised when a snapshot holds a different session than the one requested."""
-
-
-def _utc_instant(value: dt.datetime, field: str) -> dt.datetime:
-    """Validate an aware instant and normalise it to UTC for comparison."""
-    if value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError(
-            f"{field} must be timezone-aware; naive datetimes are ambiguous and are rejected"
-        )
-    return value.astimezone(dt.timezone.utc)
 
 
 class SnapshotReplaySource:
@@ -110,12 +110,12 @@ class SnapshotReplaySource:
 
     def seed(self, start: dt.datetime) -> tuple[Mapping[str, object], ...]:
         """Records observed at or before ``start``, for a mid-session start."""
-        moment = _utc_instant(start, "start")
+        moment = _time.utc_instant(start, "start")
         return tuple(copy.deepcopy(e[3]) for e in self._entries if e[0] <= moment)
 
     def replay(self, *, after: dt.datetime | None = None) -> Iterator[Mapping[str, object]]:
         """Iterate the records strictly after ``after``, or all of them."""
-        moment = None if after is None else _utc_instant(after, "after")
+        moment = None if after is None else _time.utc_instant(after, "after")
         selected = tuple(
             copy.deepcopy(e[3]) for e in self._entries if moment is None or e[0] > moment
         )
