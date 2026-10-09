@@ -235,13 +235,29 @@ here.
     acks**, and the existing test acks in order, where the cursor advance already masks
     it. The implementation was verified correct by hand for that case (`['1','3']` after
     acking only `2`), so it is missing coverage, not a defect.
-  - **F02b-3 — redaction hardening.** The two WARNING findings that are genuine leak
-    paths in the secret-bearing-log acceptance criterion: `exc_info` is not redacted
-    (only `exc_text`), and nested containers inside log arguments are not descended
-    into. Also from the F02a review: bytes secrets are stringified rather than matched,
-    and the empty-string-credential path has no test. Plus the filter-installation
-    decision, since a logger-level filter misses records propagated from child
-    loggers. **This unit must land before F08 logs any real provider traffic.**
+  - **F02b-3 — redaction hardening. Done.** Commit `217aa08`: `src/f1show/redaction.py`
+    plus the two test modules, 323 authored changed lines, suite 108 → 120 passing.
+    `record.exc_info` is now rendered, redacted, stored on `exc_text` and cleared so the
+    formatter cannot re-render the raw traceback; log arguments are walked through
+    mappings, lists, tuples, sets and frozensets with path-scoped cycle detection and a
+    fail-closed depth cap; bytes secrets match in both decoded and repr form; and
+    installation covers the logger **and** its handlers, idempotently. The RED was
+    genuine: the previous implementation was restored and the ten new tests failed
+    against it. Reviewed natively, **approved**; authority burned.
+- **F02b-3 findings, carried into F02b-4.** Both WARNINGs describe the technique's
+  inherent trade-off rather than a defect: rendering the traceback inside the filter
+  means `formatException` runs for records that may never be emitted, and clearing
+  `exc_info` means a consumer that wanted the structured exception object no longer has
+  it. Also: container reconstruction via `type(value)(items)` assumes every container
+  type is constructible that way, and the depth cap has no test (it was verified by hand
+  during triangulation).
+- **A pre-existing functional hazard, surfaced by F02b-3 and not a leak.** The filter
+  rewrites `record.msg` before `%`-interpolation, so if a registered secret happens to
+  be a substring of the format template — a secret equal to a `%(name)s` key, or a
+  literal `"s"` colliding with `%s` — interpolation breaks with `KeyError` or
+  `ValueError` instead of leaking. It predates F02b-3 and is unchanged by it: the
+  failure mode is a crash, which is fail-closed rather than a disclosure, but it is a
+  hazard worth a later unit.
   - **F02b-4 — contract and double hardening.** Everything advisory that is not a leak
     path, grouped because each item is small and only the grouping makes it reviewable.
     Contracts: `Provenance.source_url` accepts an empty string where `None` is meant
@@ -257,7 +273,8 @@ here.
     stored state through a nested value; and the `close()` test does not cover every
     method. Tests: the bus needs an out-of-order-ack case, and the unregistered-URL test
     should assert the deliberate error rather than a broad `LookupError`, since
-    `KeyError` satisfies it.
+    `KeyError` satisfies it. Plus the F02b-3 items above (the two technique trade-offs,
+    the container-reconstruction assumption, and the untested depth cap).
     **Every one of these is `informational` in the provider's own classification and
     must not be used to re-run review on any candidate.**
 
@@ -350,7 +367,7 @@ here.
   the two WARNING findings, and the redaction-installation question the writer raised,
   before F08 logs real provider traffic** — secret-bearing log output is an explicit F02
   acceptance criterion and these are its remaining holes.
-- Depends on F01 (closed). F02b pending.
+- Depends on F01 (closed). F02b-1, F02b-2 and F02b-3 done; **F02b-4 pending**.
 
 ### F03 — Implement source adapters and replay/session lifecycle
 
