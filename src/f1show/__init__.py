@@ -1,8 +1,8 @@
 """F1Show: replay-testable, real-time Formula 1 commentary system.
 
 The public surface is the typed configuration, the secret-safe logging helpers,
-and the shared contracts: events, enrichment and dialogue. Injection boundaries
-land in F02b-2.
+the shared contracts (events, enrichment and dialogue) and the injection
+boundaries: the ports plus their shipped in-memory test doubles.
 """
 
 from __future__ import annotations
@@ -28,12 +28,31 @@ from f1show.events import (
     Provenance,
     SessionRecord,
 )
+from f1show.fakes import (
+    FakeHttpClient,
+    FrozenClock,
+    InMemoryBus,
+    InMemoryStore,
+    ScriptedModelClient,
+)
+from f1show.ports import (
+    Bus,
+    Clock,
+    HttpClient,
+    ModelClient,
+    ModelRequest,
+    ModelResponse,
+    Store,
+)
 from f1show.redaction import REDACTED, RedactingFilter, attach_redacting_filter, redact
 
 __all__ = [
     "DEFAULT_OPENF1_BASE_URL", "DEFAULT_REQUEST_TIMEOUT_SECONDS", "REDACTED", "Attribution",
-    "BoothSettings", "CredentialsSettings", "DriverRecord", "EnrichmentKind",
-    "EnrichmentRecord", "EventEnvelope", "EventType", "Mode", "ModelProvider", "Provenance",
-    "RedactingFilter", "ReplaySettings", "SessionRecord", "Settings", "SourceSettings",
-    "Speaker", "TimeWindowSettings", "Transcript", "Turn", "attach_redacting_filter", "redact",
+    "BoothSettings", "Bus", "Clock", "CredentialsSettings", "DriverRecord",
+    "EnrichmentKind", "EnrichmentRecord", "EventEnvelope", "EventType", "FakeHttpClient",
+    "FrozenClock", "HttpClient", "InMemoryBus", "InMemoryStore", "Mode", "ModelClient",
+    "ModelProvider", "ModelRequest", "ModelResponse", "Provenance", "RedactingFilter",
+    "ReplaySettings", "ScriptedModelClient", "SessionRecord", "Settings", "SourceSettings",
+    "Speaker", "Store", "TimeWindowSettings", "Transcript", "Turn", "attach_redacting_filter",
+    "redact",
 ]

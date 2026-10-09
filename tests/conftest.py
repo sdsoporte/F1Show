@@ -15,6 +15,12 @@ import pytest
 
 
 @pytest.fixture
+def anyio_backend() -> str:
+    """Run anyio tests on asyncio only; trio is not installed."""
+    return "asyncio"
+
+
+@pytest.fixture
 def clean_settings_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Remove every ``F1SHOW_*`` variable from the environment."""
     for name in list(os.environ):
