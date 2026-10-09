@@ -265,6 +265,36 @@ def test_secrets_are_usable_but_never_exposed(make_settings: Any) -> None:
     assert settings.credentials.gemini_api_key.get_secret_value() == "gemini-key-secret"
 
 
+def test_empty_string_credential_is_treated_as_missing(make_settings: Any) -> None:
+    """An exported-but-empty variable must behave exactly like an absent one."""
+    gemini_booth = {"model_id": TEST_MODEL_ID, "language": "en", "provider": "gemini"}
+
+    with pytest.raises(ValidationError) as absent:
+        make_settings(**{**REPLAY, "booth": gemini_booth})
+    assert "gemini_api_key" in str(absent.value)
+
+    with pytest.raises(ValidationError) as empty:
+        make_settings(
+            **{**REPLAY, "booth": gemini_booth, "credentials": {"gemini_api_key": ""}}
+        )
+    assert "gemini_api_key" in str(empty.value)
+
+    # The blank value is dropped rather than stored as an empty secret.
+    settings = make_settings(**{**REPLAY, "credentials": {"gemini_api_key": ""}})
+    assert settings.credentials.gemini_api_key is None
+
+
+def test_live_mode_rejects_empty_openf1_credentials(make_settings: Any) -> None:
+    booth = {"model_id": TEST_MODEL_ID, "language": "en"}
+    with pytest.raises(ValidationError) as excinfo:
+        make_settings(
+            mode="live",
+            credentials={"openf1_username": "", "openf1_password": ""},
+            booth=booth,
+        )
+    assert "openf1_username" in str(excinfo.value)
+
+
 def test_settings_are_forbidden_from_accepting_unknown_keys(make_settings: Any) -> None:
     with pytest.raises(ValidationError):
         make_settings(**{**REPLAY, "unknown_section": {"anything": 1}})
