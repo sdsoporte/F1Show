@@ -24,6 +24,14 @@ The filter is deliberately the right place for this work, not the formatter:
 * Bytes secrets are decoded as UTF-8 (``errors="replace"``) and kept in their
   ``repr`` form as well, so a secret supplied as bytes is removed whether the
   output shows the plain text or ``b'…'``.
+* Two consequences are accepted trade-offs of this technique, not defects, and
+  must not be "fixed" into a leak. Rendering ``exc_info`` inside the filter runs
+  ``Formatter.formatException`` for every record that carries exception info,
+  including records a later filter or level test may drop before they are ever
+  emitted. And clearing ``record.exc_info`` means a consumer that wanted the
+  structured exception object no longer receives it; all that remains is the
+  redacted text on ``record.exc_text``. Both are the price of guaranteeing the
+  formatter can never re-render a raw traceback.
 
 Installation is also part of the contract. A filter attached to a *logger* does
 not run for records that a child logger propagates into that logger's handlers;
@@ -175,9 +183,15 @@ class RedactingFilter(logging.Filter):
                 items = [self._redact_value(item, visited, _depth + 1) for item in value]
             finally:
                 visited.discard(marker)
-            if isinstance(value, tuple) and hasattr(value, "_fields"):
-                return cast("Any", type(value))(*items)
-            return type(value)(items)
+            try:
+                if isinstance(value, tuple) and hasattr(value, "_fields"):
+                    return cast("Any", type(value))(*items)
+                return type(value)(items)
+            except Exception:
+                # ``type(value)(items)`` is false for some container types.
+                # Fail closed: replace the whole container rather than raising
+                # or letting it through, so no secret can survive unanswered.
+                return REDACTED
         return value
 
 

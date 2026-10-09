@@ -88,6 +88,14 @@ def test_model_id_is_required_with_no_default_and_not_blank() -> None:
     assert "model_id" in str(excinfo.value)
 
 
+def test_model_id_is_stored_stripped_and_whitespace_is_rejected() -> None:
+    # ``model_id`` carries the same strip-and-reject-blank rule as ``text``.
+    assert turn(model_id="  test-model  ").model_id == "test-model"
+    with pytest.raises(ValidationError) as excinfo:
+        turn(model_id="   ")
+    assert "model_id" in str(excinfo.value)
+
+
 def test_turn_rejects_an_unknown_field() -> None:
     with pytest.raises(ValidationError) as excinfo:
         turn(temperature=0.7)

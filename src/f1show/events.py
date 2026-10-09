@@ -11,7 +11,6 @@ refusing it would break on a change we do not control.
 
 from __future__ import annotations
 
-from datetime import datetime
 from enum import Enum
 from typing import Annotated
 
@@ -21,11 +20,16 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 class EventType(str, Enum):
     """F1Show's internal event taxonomy, deliberately not OpenF1's vocabulary.
 
-    The set is **extensible**: F04 adds members as it detects more families, and
-    a consumer must tolerate a member it does not recognise. ``OVERTAKE``
-    corresponds to OpenF1's documented ``overtakes`` endpoint and must never be
-    inferred from a position change alone: pit cycles, penalties, retirements
-    and lapped traffic all move positions without an overtake.
+    The set is **extensible**: F04 adds members as it detects more families.
+    This enum is **strict on the producer side** — an unrecognised member is a
+    validation error here, because an unknown value in our own pipeline is a
+    bug, not something to silently accept. Tolerance for a member this build
+    does not know is therefore a **consumer-side obligation to be implemented
+    where events are read (F05)**, and it is not a behaviour this enum
+    provides. ``OVERTAKE`` corresponds to OpenF1's documented ``overtakes``
+    endpoint and must never be inferred from a position change alone: pit
+    cycles, penalties, retirements and lapped traffic all move positions
+    without an overtake.
     """
 
     SESSION_START = "session_start"
@@ -59,7 +63,7 @@ class Provenance(_Strict):
     """
 
     endpoint: Annotated[str, Field(min_length=1)]
-    source_url: str | None = None
+    source_url: Annotated[str, Field(min_length=1)] | None = None
     observed_at: AwareDatetime
 
 
@@ -92,8 +96,8 @@ class SessionRecord(BaseModel):
     session_key: int
     session_name: str
     session_type: str
-    date_start: datetime
-    date_end: datetime
+    date_start: AwareDatetime
+    date_end: AwareDatetime
     meeting_key: int
     circuit_key: int
     circuit_short_name: str

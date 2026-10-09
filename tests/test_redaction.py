@@ -182,6 +182,36 @@ def test_filter_redacts_secrets_inside_sets_and_tuples() -> None:
     assert "s3cr3t-token" not in as_tuple
 
 
+class _GuardedList(list):
+    """A list subclass that cannot be rebuilt from an iterable alone."""
+
+    def __init__(self, iterable: Any = (), *, required: Any) -> None:
+        super().__init__(iterable)
+        self.required = required
+
+
+def test_unrebuildable_container_is_replaced_not_raised_or_leaked() -> None:
+    # ``type(value)(items)`` is false for some container types. Failing closed
+    # means the whole container becomes the placeholder, not an exception and
+    # not a pass-through.
+    payload = _GuardedList(["s3cr3t-token"], required=1)
+    rendered = _rendered("payload=%s", (payload,), ["s3cr3t-token"])
+    assert "s3cr3t-token" not in rendered
+    assert REDACTED in rendered
+
+
+def test_a_container_beyond_the_depth_cap_is_replaced() -> None:
+    deep: Any = ["keep-me", "s3cr3t-token"]
+    for _ in range(9):
+        deep = [deep]
+    rendered = _rendered("payload=%s", (deep,), ["s3cr3t-token"])
+    assert "s3cr3t-token" not in rendered
+    # ``keep-me`` is not a secret: it can only be missing if the whole container
+    # beyond the cap was replaced rather than walked through.
+    assert "keep-me" not in rendered
+    assert REDACTED in rendered
+
+
 def test_redact_matches_bytes_secrets_in_plain_and_repr_form() -> None:
     assert redact("token=abcdef", [b"abcdef"]) == f"token={REDACTED}"
     assert redact("token=b'abcdef'", [b"abcdef"]) == f"token={REDACTED}"

@@ -225,6 +225,18 @@ def test_aware_bounds_are_accepted(make_settings: Any) -> None:
     assert settings.window.until == until
 
 
+def test_since_later_than_until_is_rejected(make_settings: Any) -> None:
+    since = dt.datetime(2024, 3, 2, 17, 0, 0, tzinfo=dt.timezone.utc)
+    until = dt.datetime(2024, 3, 2, 15, 0, 0, tzinfo=dt.timezone.utc)
+    with pytest.raises(ValidationError) as excinfo:
+        make_settings(**{**REPLAY, "window": {"since": since, "until": until}})
+    message = str(excinfo.value)
+    assert "since" in message and "until" in message
+    # Equal bounds describe a single instant and stay valid.
+    equal = make_settings(**{**REPLAY, "window": {"since": since, "until": since}})
+    assert equal.window.since == equal.window.until
+
+
 def test_time_bounds_are_optional(make_settings: Any) -> None:
     settings = make_settings(**REPLAY)
     assert settings.window.since is None

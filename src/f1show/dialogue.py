@@ -12,7 +12,14 @@ from __future__ import annotations
 from enum import Enum
 from typing import Annotated
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+)
 
 
 class Speaker(str, Enum):
@@ -42,12 +49,12 @@ class Turn(_Strict):
     model_id: Annotated[str, Field(min_length=1)]
     created_at: AwareDatetime
 
-    @field_validator("text")
+    @field_validator("text", "model_id")
     @classmethod
-    def _strip_non_blank(cls, value: str) -> str:
+    def _strip_non_blank(cls, value: str, info: ValidationInfo) -> str:
         stripped = value.strip()
         if not stripped:
-            raise ValueError("text must not be blank")
+            raise ValueError(f"{info.field_name} must not be blank")
         return stripped
 
     @field_validator("evidence")

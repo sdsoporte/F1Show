@@ -144,6 +144,12 @@ class TimeWindowSettings(_Section):
             )
         return value
 
+    @model_validator(mode="after")
+    def _check_ordering(self) -> TimeWindowSettings:
+        if self.since is not None and self.until is not None and self.since > self.until:
+            raise ValueError("window.since must not be later than window.until")
+        return self
+
 
 class Settings(BaseSettings):
     """The whole application configuration.

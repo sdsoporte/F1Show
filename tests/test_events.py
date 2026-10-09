@@ -12,7 +12,13 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from f1show.events import DriverRecord, EventEnvelope, EventType, Provenance, SessionRecord
+from f1show.events import (
+    DriverRecord,
+    EventEnvelope,
+    EventType,
+    Provenance,
+    SessionRecord,
+)
 
 UTC = dt.timezone.utc
 NOW = dt.datetime(2024, 3, 2, 15, 0, 1, tzinfo=UTC)
@@ -130,3 +136,26 @@ def test_provenance_is_mandatory_and_endpoint_is_not_empty() -> None:
     with pytest.raises(ValidationError) as excinfo:
         envelope(provenance={"endpoint": "", "observed_at": NOW})
     assert "endpoint" in str(excinfo.value)
+
+
+def test_provenance_source_url_is_absent_or_non_empty() -> None:
+    # ``None`` is the one way to say "absent"; an empty string must not be a
+    # second, silent spelling of the same thing.
+    assert Provenance(endpoint="/v1/position", observed_at=NOW).source_url is None
+    present = Provenance(
+        endpoint="/v1/position", source_url="https://example.invalid/v1", observed_at=NOW
+    )
+    assert present.source_url == "https://example.invalid/v1"
+    with pytest.raises(ValidationError) as excinfo:
+        envelope(provenance={"endpoint": "/v1/position", "source_url": "", "observed_at": NOW})
+    assert "source_url" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("field", ["date_start", "date_end"])
+def test_session_record_timestamps_must_be_timezone_aware(field: str) -> None:
+    # The observation carries UTC offsets and the rest of the package rejects
+    # naive instants; an ingested session record must do the same.
+    with pytest.raises(ValidationError) as excinfo:
+        SessionRecord(**{**SESSION, field: "2024-03-02T15:00:00"})
+    assert field in str(excinfo.value)
+    assert "timezone" in str(excinfo.value)

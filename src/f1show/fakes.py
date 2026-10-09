@@ -8,6 +8,7 @@ touches the network, the wall clock or the disk.
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 from collections.abc import Mapping, Sequence
 
@@ -21,14 +22,22 @@ class FrozenClock:
     def __init__(self, start: dt.datetime) -> None:
         if start.tzinfo is None or start.utcoffset() is None:
             raise ValueError("FrozenClock needs a timezone-aware instant; naive time is ambiguous")
-        self._now = start
+        self._now = start.astimezone(dt.timezone.utc)
 
     def now(self) -> dt.datetime:
         """Return the frozen instant. Always timezone-aware and UTC."""
         return self._now
 
     def advance(self, seconds: float) -> dt.datetime:
-        """Move the clock forward by ``seconds`` and return the new instant."""
+        """Move the clock forward by ``seconds`` and return the new instant.
+
+        A negative value is rejected: a test clock that can silently run
+        backwards is a hazard, not a feature.
+        """
+        if seconds < 0:
+            raise ValueError(
+                f"FrozenClock cannot advance by a negative number of seconds; got {seconds!r}"
+            )
         self._now += dt.timedelta(seconds=seconds)
         return self._now
 
@@ -129,7 +138,7 @@ class InMemoryStore:
         self._require_open()
         bucket = self._records.setdefault((family, session_key), [])
         for record in records:
-            bucket.append((observed_at, dict(record)))
+            bucket.append((observed_at, copy.deepcopy(dict(record))))
         return len(records)
 
     async def read_source_records(
@@ -151,7 +160,7 @@ class InMemoryStore:
                 continue
             if until is not None and stamped_at > until:
                 continue
-            found.append(dict(record))
+            found.append(copy.deepcopy(record))
         return tuple(found)
 
     async def set_watermark(
