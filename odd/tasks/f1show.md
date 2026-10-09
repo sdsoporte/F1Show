@@ -4,14 +4,18 @@
 
 Build a replay-testable, real-time Formula 1 commentary system with five logical
 roles: deterministic collector, tactical analyst and historian, plus two Gemini
-commentator personas. Run four application services and Redis with Docker Compose.
+commentator personas. Run four role services plus a dedicated sync writer, and Redis,
+with Docker Compose.
 
-**This session authorizes repository bootstrap, source-document preservation,
-updated documentation and this ODD plan only. Application implementation, live
-API/model calls, paid subscriptions, deployment and automated publication are not
-authorized by creating the backlog.** The user explicitly authorized preparation
-and closure commits plus the initial push to `main` after verification. This does
-not authorize application implementation, PR creation or later deliveries.
+**Authorization is per task and does not accumulate.** Repository bootstrap,
+source-document preservation, current documentation and this ODD plan were authorized
+together with preparation and closure commits and the initial push to `main` after
+verification; that initial publication happened at F00 and **nothing has been pushed
+since**. F01 (external-contract validation) was separately authorized and closed on
+2026-10-09. **Application implementation remains unauthorized**: F02 onward needs a new
+explicit grant, and live API or model calls, paid subscriptions, deployment, later
+pushes, pull requests and automated merges are not authorized by anything recorded
+here.
 
 ## Baseline and decisions
 
@@ -32,8 +36,27 @@ not authorize application implementation, PR creation or later deliveries.
   Final dependency versions and available model IDs must be verified before coding.
 - Three deterministic roles make zero LLM calls. Only the commentary service uses
   Gemini. No agent framework is required for the specified initial topology.
-- Historical OpenF1 data is free; real-time access requires a paid subscription.
+- Historical OpenF1 data is free and unauthenticated from the 2023 season onwards;
+  real-time access requires a paid subscription (€9.90/month, verified 2026-10-09).
   Replay comes first. Do not promise free live data or authorize purchases.
+- `sync` writer plus a local store replaces direct per-agent API access. A single
+  sync process is the only component that talks to OpenF1; it writes to **SQLite in
+  WAL mode** (one writer, many concurrent cross-process readers) and produces
+  immutable per-session **Parquet snapshots** analysed with **DuckDB**, which double
+  as the replay fixtures. DuckDB was rejected as the live store because its own
+  documentation supports only one read-write process or many read-only processes, and
+  every Compose service is a separate process. **Redis Streams remains the event
+  transport**: agents still consume events, and the store serves state, context and
+  history only.
+- Live sync cadence is approximately 3 seconds. The end-to-end latency budget is sync
+  interval + derivation + enrichment join + model call, of the order of 5–8 seconds;
+  the measurable F12 acceptance limit is **≤ 8 seconds**.
+- F01 gate decisions: commentary language is **configurable with no default fixed
+  yet** (chosen before F09); the audience is the **technical Formula 1 fan** — a
+  data-dense register where every claim is tied to session evidence; **model spend
+  per session is not capped**, so the system measures and reports only; and the pilot
+  ceiling is approved at F13 against measured usage. Until F13 there is **no hard cost
+  stop of any kind**.
 - Text/CLI transcript is the initial output. Audio/TTS, dashboards, social posting,
   multi-session operation and cloud deployment are separate future scope.
 
@@ -110,27 +133,53 @@ not authorize application implementation, PR creation or later deliveries.
 
 ### F01 — Validate current external contracts and operating limits
 
-- [ ] Verify OpenF1 historical/live access, auth, endpoint schemas, cadence and
-  quotas; verify Jolpica URL, coverage and identifier mapping; current GenAI SDK
-  and available model IDs. Record unknowns instead of inventing guarantees.
-- Acceptance: evidence-linked dependency choices, configurable endpoint/model
-  settings, explicit live access prerequisites and user-approved pilot budget.
-- Gate: clarify commentary language, audience/sink and measurable latency/cost
-  limits before accepting a live broadcast. No subscription/model call by default.
-- Depends on F00. Commit/checks: pending.
+- [x] **Done.** External contracts validated on 2026-10-09 against first-party sources
+  plus two direct unauthenticated observations, and recorded in
+  `docs/EXTERNAL-CONTRACTS.md`: OpenF1 tiers, prices, rate limits, endpoint inventory,
+  cadence and two observed schemas; Jolpica base URL, observed shapes, documented
+  limits and Ergast differences; `google-genai` version, the deprecation of the legacy
+  package, the enumeration method, both auth paths, the dependency floor and the cost
+  envelope. No model ID is named anywhere.
+- Acceptance: evidence-linked dependency choices and configurable endpoint/model
+  settings are satisfied by citing every claim and by requiring endpoints and model
+  IDs to come from typed configuration rather than literals. Explicit live access
+  prerequisites are recorded. **The "user-approved pilot budget" criterion is moved
+  to F13**, because a total cannot be set honestly before the model and its measured
+  usage are known; F01 records the verified subscription price and the decisions
+  instead of inventing a number.
+- Gate: resolved. Commentary language is configurable with no default fixed yet and is
+  chosen before F09; the audience is the technical Formula 1 fan; the measurable
+  latency limit is ≤ 8 seconds end-to-end; per-session model spend is uncapped by
+  decision, which is recorded as the reason no hard cost stop exists until F13.
+- Notable findings: a single sync writer is a **structural necessity**, not a cost
+  preference — `car_data` at 3.7 Hz across ~20 drivers is ~74 req/s, about 25× the free
+  tier and 12× the live tier. OpenF1 exposes no driver identifier beyond per-session
+  `driver_number` and `name_acronym`, and `driver_number` is not stable across seasons,
+  so the identity mapping is ours to build and freeze as a dated fixture.
+- Correction carried forward: an earlier revision claimed Jolpica's driver object lacks
+  `dateOfBirth`. It **does** expose it; the claim came from a truncated observation and
+  is corrected in the documents. F08's acceptance is corrected by the same pass.
+- Depends on F00. Evidence: `docs/EXTERNAL-CONTRACTS.md`, plus `docs/ARCHITECTURE.md`
+  and `README.md` updated with cited sources. Commits `f908a28` (contract record) and
+  `aab638b` (local store, cited access terms and the `dateOfBirth` correction).
 
 ### F02 — Establish Python foundation and shared contracts
 
 - [ ] Create packaging/locked dependencies, typed configuration, event/enrichment/
-  dialogue schemas and injectable clock, HTTP, bus and model boundaries.
+  dialogue schemas and injectable clock, HTTP, bus, store and model boundaries. The
+  store boundary must not expose SQLite-specific behaviour to the roles, so a later
+  move off the single-writer model is a swap and not a rewrite; commentary language
+  and model IDs come from typed configuration with no hardcoded defaults.
 - Acceptance/checks: offline tests reject malformed data, missing credentials in
   live mode, wrong session IDs, invalid timestamps and secret-bearing log output.
 - Depends on F01. Commit/checks: pending.
 
 ### F03 — Implement source adapters and replay/session lifecycle
 
-- [ ] Build httpx adapter, deterministic replay and explicit session selection;
-  seed mid-session state and handle end/cancel/reset without mixing sessions.
+- [ ] Build the sync writer's source adapters (httpx for historical and REST, MQTT or
+  WebSocket for live), the SQLite WAL store with Parquet snapshot export, deterministic
+  replay and explicit session selection; seed mid-session state and handle
+  end/cancel/reset without mixing sessions.
 - Acceptance/checks: fake HTTP/clock tests cover history vs live auth, timeouts,
   429/backoff, empty data, invalid responses and per-endpoint watermarks/overlap.
 - Depends on F02. Commit/checks: pending.
@@ -174,8 +223,11 @@ not authorize application implementation, PR creation or later deliveries.
 - [ ] Use async `google-genai` with explicit verified model IDs, output bounds,
   request timeout, bounded retries/concurrency and measured usage accounting.
 - Acceptance/checks: fake provider tests cover 429/5xx, timeout, missing/invalid
-  responses and budget stop. Disclose accounting/enforcement limits; reported
-  token usage alone does not prove a hard cost or in-flight cancellation limit.
+  responses and the **measurement and alerting** path. **Corrected by F01: this task
+  does not implement a spend ceiling.** Per-session spend is uncapped by user decision
+  and the pilot total is approved at F13, so F08 measures, reports and alerts, and its
+  output must state plainly that reported token usage is not a hard spend limit and
+  that no hard cost stop exists before F13.
 - Depends on F01/F02. Commit/checks: pending.
 
 ### F09 — Implement the two-person commentary booth
@@ -196,10 +248,11 @@ not authorize application implementation, PR creation or later deliveries.
   stop fresh factual calls. Queue size, timeouts and degradation are observable.
 - Depends on F05/F09. Commit/checks: pending.
 
-### F11 — Package the four services and Redis in Docker Compose
+### F11 — Package the services and Redis in Docker Compose
 
-- [ ] Build collector, analyst, historian and booth images; configure internal
-  Redis networking, persistence, readiness/health checks and clean shutdown.
+- [ ] Build `sync`, collector, analyst, historian and booth images, plus Redis and the
+  local SQLite store volume; configure internal networking, persistence,
+  readiness/health checks and clean shutdown.
 - Acceptance/checks: Compose config/build/smoke with fixture sources and fake
   provider; non-root application containers, no embedded credentials or default
   public Redis port, readiness rather than depends_on-only startup assumptions.
@@ -225,13 +278,14 @@ not authorize application implementation, PR creation or later deliveries.
 
 ## Current next step
 
-F00 is closed and published. F01–F13 remain unstarted and need fresh explicit user
-authorization: the bootstrap grant never covered application implementation, and
-this backlog alone does not grant it.
+F00 and F01 are closed and published. F02–F13 remain unstarted and need fresh explicit
+user authorization: the grants so far never covered application implementation, and this
+backlog alone does not grant it.
 
-Start a fresh session from the repository, reconcile this file with mirror
-`odd/f1show/tasks`, and authorize F01 before any source edit: validate OpenF1
-historical versus live access and auth, endpoint schemas, cadence and quotas; the
-Jolpica URL, coverage and identifier mapping; and the current `google-genai` SDK with
-the model IDs actually available to this account. Record unknowns instead of
-inventing guarantees, and never pin a model ID from a search result.
+Next is F02 (Python foundation and shared contracts) — the first task that writes real
+source code, so it needs an explicit implementation authorization first. F02 must pin
+the `google-genai` version resolved at that time (2.29.0 was latest on 2026-10-09),
+decide the `httpx` versus `httpx2` question deliberately rather than by habit, and keep
+SQLite behaviour behind a store boundary. **No model ID may be written into
+configuration or code** until it is enumerated with the account and its GA status
+confirmed in current documentation, and no price is attributable to a named model yet.
