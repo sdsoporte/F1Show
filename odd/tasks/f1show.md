@@ -7,15 +7,15 @@ roles: deterministic collector, tactical analyst and historian, plus two Gemini
 commentator personas. Run four role services plus a dedicated sync writer, and Redis,
 with Docker Compose.
 
-**Authorization is per task and does not accumulate.** Repository bootstrap,
-source-document preservation, current documentation and this ODD plan were authorized
-together with preparation and closure commits and the initial push to `main` after
-verification; that initial publication happened at F00 and **nothing has been pushed
-since**. F01 (external-contract validation) was separately authorized and closed on
-2026-10-09. **Application implementation remains unauthorized**: F02 onward needs a new
-explicit grant, and live API or model calls, paid subscriptions, deployment, later
-pushes, pull requests and automated merges are not authorized by anything recorded
-here.
+**Authorization is per task and does not accumulate.** F00, F01 and F02 were
+separately authorized and completed. The user explicitly approved publishing F01+F02
+to `main`, followed by MIT licensing and `SECURITY.md`; the published tip is
+`fc30084`. F03 implementation was authorized on 2026-10-09, including local work-unit
+commits, and the user separately authorized the four F03b advisory fixes: "si continua
+con los arreglos para que quede de forma correcta." F03 changes remain local on
+`feat/f03-source-adapters`. F04–F13 implementation, further publication, pull requests,
+merges, deployment, authenticated/live API or model calls and purchases are not
+authorized by these grants.
 
 ## Baseline and decisions
 
@@ -25,10 +25,10 @@ here.
 - Repository-local Git identity (user-selected; no global identity exists on this
   machine): `sdsoporte <211432262+sdsoporte@users.noreply.github.com>`.
 - **Publication.** `main` was fast-forwarded to F02's tip and pushed on 2026-10-09:
-  `413a75d..8cbe94b`, 15 commits, no merge commit. `main` and `origin/main` both report
-  `8cbe94b`. An independent read-only audit of the published tree was delegated to
-  confirm the remote ref, the published file set, the absence of local artifacts and
-  credentials, and that the published blobs match the reviewed ones.
+  `413a75d..8cbe94b`, 15 commits, no merge commit. Independent audit passed 8/8,
+  including all 36 published blobs matching local Git and 131 offline tests from a
+  clean archive installation. MIT `LICENSE` and `SECURITY.md` followed in `fc30084`;
+  local `main` and `origin/main` both resolve to that tip. F03 is not published.
 - **Branch chain.** `feat/f1show-bootstrap` (F00–F01) → `feat/f02-python-foundation`
   (F02) → `feat/f03-source-adapters` (F03), each cut from the branch that had already
   landed, so a slice is never reviewed as part of an accumulated chain.
@@ -389,9 +389,9 @@ here.
   `except Exception`, which is deliberate because it fails toward *more* redaction, but
   would also swallow an unrelated error raised while rebuilding a container. Close both
   if either file is touched again.
-- **Next: F03**, needing fresh explicit authorization. It is the first unit that writes
-  real data paths: the SQLite WAL store behind the `Store` port, the immutable Parquet
-  session snapshots, and the `sync` writer with its historical and live adapters.
+- **Next: F03**, explicitly authorized after F02 publication. It writes real data
+  paths: the SQLite WAL store behind the `Store` port, immutable Parquet session
+  snapshots and the `sync` writer with historical and injectable live adapters.
 
 ### F03 — Implement source adapters and replay/session lifecycle
 
@@ -413,11 +413,50 @@ here.
   default for the path, no default for anything that identifies a model or a secret.
   The port's contract is fixed already, so this unit must satisfy it rather than reshape
   it — a test asserts the implementation is substitutable for the in-memory double.
-- **F03b — Parquet snapshots and the deterministic replay source.** Export immutable
-  per-session Parquet snapshots with DuckDB, and a replay source that reads them and
-  drives session choice explicitly, seeding mid-session state so a run can start partway
-  through with correct positions, stints and lap history. The snapshots are the replay
-  fixtures, so their determinism is the acceptance criterion, not their speed.
+- **F03b — Parquet snapshots and deterministic replay. Done.** Dependency commit
+  `2165b64` pins DuckDB 1.5.6; behavior commit `6d3a907` exports per-session Parquet,
+  returns a SHA-256, refuses unintended overwrite and provides deterministic replay
+  with explicit session selection. `Store.read_source_records` now returns
+  `(observed_at, record)` pairs in both implementations, retaining inclusive windows;
+  the shared parity body proves the time channel. Seeding partitions retained rows by
+  observation time, **not full historical positions/stints/lap reconstruction**: upserts
+  keep the latest row per identity, and endpoint-specific derivation belongs to F04.
+  Writer RED: 21 failed, 30 passed, no collection errors; GREEN: 164 full-suite tests,
+  51 focused. Three parent time-channel mutations were caught, with byte-exact
+  restoration and 164 passing afterwards. Native review `review-355e17c45ef3ad37`
+  accepted the complete 772-line, ten-file candidate at medium risk; approved and
+  acknowledged, authority burned. Its four informational findings do not reopen it.
+- **F03b-1 — Snapshot publication and replay boundary hardening. In progress.** New,
+  separately authorized work unit for those four findings: atomic same-directory
+  publication without unintended overwrite; reject an empty family declaration;
+  align UTC boundary validation; prove mixed-session refusal. Route: delegated explorer
+  (multi-module mapping), one delegated writer (multiple non-trivial files), delegated
+  independent verification spot check. Forecast: about 200–400 authored diff lines
+  for the complete follow-up versus `6d3a907`, not the correction delta or file lengths;
+  retain useful tests/docs even if that advisory estimate is exceeded.
+  - Explorer `mv1d5odw-g-yzn3` confirmed a direct-to-target COPY failure hazard plus a
+    check-then-write overwrite race. Mixed-session refusal already works and needs
+    coverage only. Naive UTC in the Parquet TIMESTAMP versus aware UTC in replay is
+    intentional; share validation in a small internal helper, retaining explicit
+    conversion at the Parquet boundary. Do not refactor store/fakes/config in this unit.
+  - Edit surfaces: `src/f1show/snapshot.py`, `src/f1show/replay.py`, new
+    `src/f1show/_time.py`, `tests/test_snapshot.py`, `tests/test_replay.py`.
+  - Acceptance: failed/cancelled export leaves no partial target; failed explicit
+    overwrite preserves previous bytes; a competing publisher is not overwritten
+    without permission; handled failures clean staging files. Atomic visibility is
+    required, not an unverified power-loss durability guarantee.
+  - Reject `families=()` before filesystem mutation; timestamp boundaries must reject
+    naive/invalid aware datetimes and compare equivalent offset instants consistently;
+    a mixed-session Parquet file is refused, not filtered into apparent validity.
+  - Preserve byte-identical exports, observation-time partitioning, deterministic
+    tie-breaks, deep-copy behavior and existing session/overwrite rules. Distinguish
+    genuine RED from coverage-only tests that pass against the baseline.
+  - Checks pending: focused offline pytest, full `uv run --frozen pytest -q`, independent
+    failure/race/UTC spot checks, native assessment/review and local work-unit commit.
+  - Authorized findings: `R3-nonatomic-snapshot-write` (`snapshot.py:120-145`, WARNING),
+    `R3-empty-families-silent-fixture` (`snapshot.py:96-101`, SUGGESTION),
+    `R3-duplicate-utc-helper-divergent` (`replay.py:38-44`, SUGGESTION),
+    `R3-mixed-session-refusal-unproved` (`replay.py:72-77`, SUGGESTION).
 - **F03c — the `sync` writer, historical path.** Paginated historical reads over the
   `HttpClient` port with a per-endpoint watermark, resume and overlap handling,
   timeouts, 429 and 5xx backoff, empty and malformed responses, and session
@@ -539,14 +578,11 @@ here.
 
 ## Current next step
 
-F00 and F01 are closed and published. F02–F13 remain unstarted and need fresh explicit
-user authorization: the grants so far never covered application implementation, and this
-backlog alone does not grant it.
+F00–F02 are closed and published through `fc30084`. F03a and F03b are reviewed and
+committed locally; F03b-1 is the active authorized hardening unit. Finish its four
+findings with observed checks and a new review candidate, then continue the authorized
+F03c historical sync and F03d injectable live seam. F04 onward requires a new grant.
 
-Next is F02 (Python foundation and shared contracts) — the first task that writes real
-source code, so it needs an explicit implementation authorization first. F02 must pin
-the `google-genai` version resolved at that time (2.29.0 was latest on 2026-10-09),
-decide the `httpx` versus `httpx2` question deliberately rather than by habit, and keep
-SQLite behaviour behind a store boundary. **No model ID may be written into
-configuration or code** until it is enumerated with the account and its GA status
-confirmed in current documentation, and no price is attributable to a named model yet.
+No F03 push is authorized. No model ID may enter configuration or code until account
+enumeration and current documentation verify it. No live/model calls, purchases or
+deployment are authorized; real-service correctness remains pending F13.
