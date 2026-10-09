@@ -475,7 +475,10 @@ authorized by these grants.
     without unsafe close retry. Caller-contamination mutation was caught and source
     SHA-256 restored byte-exactly. Complete candidate is **774 authored diff lines**
     (679 additions + 53 deletions tracked, plus 42 helper lines); independent verifier
-    follow-up `mv1dz637-k-8da5` is active, so R1 stays unchecked.
+    follow-up `mv1dz637-k-8da5` settled: focused 34/full 185 passed; the independent
+    probe now surfaces cleanup-only errors and preserves/notates the primary object.
+    It confirmed initial-close ownership recovery and all non-regression checks.
+    R1 stays unchecked only until the unit's native review and commit are observed.
   - Native assessment was unassessable pending untracked-helper declaration and returned
     mandatory independent verification (high-risk fallback). Native review/acknowledgement
     and local work-unit commit remain pending.
