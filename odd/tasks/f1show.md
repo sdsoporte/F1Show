@@ -176,7 +176,9 @@ here.
 
 **Work units:**
 
-- **F02a — Done.** `pyproject.toml`, `uv.lock`, `.python-version`, `src/f1show/__init__.py`,
+- **F02a — Done.** Commits `d831505` (packaging and lock) and `97976d6` (authored
+  modules and tests). Files: `pyproject.toml`, `uv.lock`, `.python-version`,
+  `src/f1show/__init__.py`,
   `src/f1show/config.py`, `src/f1show/redaction.py`, `tests/conftest.py`,
   `tests/test_config.py`, `tests/test_redaction.py`. 39 offline tests pass
   (`uv run --frozen pytest -q`), `uv lock --check` reports the lock current, and the
@@ -242,13 +244,33 @@ here.
   original corpus.
 - **Deliberately not included:** a linter or formatter. The plan does not ask for one
   and adding tool config is not this task's scope; revisit at F12 when CI lands.
-- **Review scope note.** The first native review attempt over this whole unit was
-  refused by the controller with `lens_context_budget_exceeded`: the candidate's
-  reviewer evidence exceeded the native context budget, **no review authority was
-  created**, and the refused attempt is safe to retry or replace. The unit is therefore
-  delivered as a chain of smaller reviewable commits — packaging and lock separately
-  from the authored modules — because a generated lock file must not be allowed to
-  crowd out the authored code from review attention.
+- **Native review.** The first attempt over the whole unit was refused by the
+  controller with `lens_context_budget_exceeded`: the candidate's reviewer evidence
+  exceeded the native context budget, **no review authority was created**, and the
+  refused attempt is safe to retry or replace. The unit was therefore delivered as a
+  chain — packaging and lock committed first, authored modules reviewed separately —
+  because a generated 824-line lock file must not crowd the code out of review
+  attention. The reviewed candidate was the six authored files (`src/f1show/*` and
+  `tests/*`, 758 lines) at lineage `review-41562a9623e79220`, **medium** tier, one
+  consolidated `review-reliability` lens. Outcome: **approved**, authority burned under
+  `gentle-ai.review-acknowledged/v1`.
+- **Five review findings, all non-blocking, recorded as follow-ups — not corrections.**
+  The provider classified every one as `informational`; none opened a correction and
+  none reopens this candidate, so they must **not** be treated as a reason to re-run
+  review on it. Two are WARNING severity and bite the acceptance criterion directly,
+  because both are paths where a secret can still reach a log sink:
+  `R3-redaction-exc-info-leak` (`src/f1show/redaction.py:92-93` — only `exc_text` is
+  redacted, not `exc_info`, so a secret inside an exception message can still be
+  rendered by a formatter) and `R3-redaction-nested-args-leak`
+  (`src/f1show/redaction.py:96-101` — `_redact_value` handles `str`, `list` and `tuple`
+  but not a container nested inside them). Three are SUGGESTION severity:
+  `R3-bytes-secret-mangled` (`redaction.py:22-29`, bytes secrets are stringified rather
+  than matched), `R3-empty-credential-path-untested` (`config.py:124-129`, the
+  empty-string-is-missing path has no test) and `R3-window-no-ordering-check`
+  (`config.py:132-136`, a `since` later than `until` is not rejected). **F02b must close
+  the two WARNING findings, and the redaction-installation question the writer raised,
+  before F08 logs real provider traffic** — secret-bearing log output is an explicit F02
+  acceptance criterion and these are its remaining holes.
 - Depends on F01 (closed). F02b pending.
 
 ### F03 — Implement source adapters and replay/session lifecycle
