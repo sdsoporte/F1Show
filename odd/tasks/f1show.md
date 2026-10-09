@@ -468,6 +468,14 @@ authorized by these grants.
     failure, and do not blindly retry a possibly closed descriptor. Document unavoidable
     cleanup failures and a completed target remaining valid if post-publication cleanup
     fails. Independent revalidation must pass before native freeze and commit.
+    Writer follow-up `mv1dsbab-j-n1ui` reported three assertion-level RED failures,
+    then focused 34/full 185 passing. Explicit per-call primary capture avoids both
+    cleanup-handler and already-handling-caller contamination; secondary unlink errors
+    are noted on the preserved primary. Initial-close failure removes the owned name
+    without unsafe close retry. Caller-contamination mutation was caught and source
+    SHA-256 restored byte-exactly. Complete candidate is **774 authored diff lines**
+    (679 additions + 53 deletions tracked, plus 42 helper lines); independent verifier
+    follow-up `mv1dz637-k-8da5` is active, so R1 stays unchecked.
   - Native assessment was unassessable pending untracked-helper declaration and returned
     mandatory independent verification (high-risk fallback). Native review/acknowledgement
     and local work-unit commit remain pending.
