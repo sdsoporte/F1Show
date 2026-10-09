@@ -479,9 +479,17 @@ authorized by these grants.
     probe now surfaces cleanup-only errors and preserves/notates the primary object.
     It confirmed initial-close ownership recovery and all non-regression checks.
     R1 stays unchecked only until the unit's native review and commit are observed.
-  - Native assessment was unassessable pending untracked-helper declaration and returned
-    mandatory independent verification (high-risk fallback). Native review/acknowledgement
-    and local work-unit commit remain pending.
+  - Native assessment remained unassessable for the untracked helper and returned mandatory
+    independent verification (high-risk fallback); that plan is fulfilled by the verifier's
+    observed 34/185 tests and cleanup probe, not by a native approval claim.
+  - [ ] **F03b-1-RDD — Resolve fresh native review consent. Blocked.** After a fresh
+    five-path inspect selecting `_time.py`, two START attempts returned
+    `consent-binding-expired`, `lineage_created=false`, `native_invocation_attempted=false`
+    and `mutation_performed=false`. No review authority exists, no approval/decline was
+    inferred, and automatic retries stopped. Never replay either expired binding. Resume
+    with the human available, a fresh inspect selecting the helper, and the exact new
+    provider consent/continuation; confirm all five paths remain in scope.
+    Native review/acknowledgement and local **code** commit remain pending; no push.
   - Authorized findings: `R3-nonatomic-snapshot-write` (`snapshot.py:120-145`, WARNING),
     `R3-empty-families-silent-fixture` (`snapshot.py:96-101`, SUGGESTION),
     `R3-duplicate-utc-helper-divergent` (`replay.py:38-44`, SUGGESTION),
@@ -608,9 +616,11 @@ authorized by these grants.
 ## Current next step
 
 F00–F02 are closed and published through `fc30084`. F03a and F03b are reviewed and
-committed locally; F03b-1 is the active authorized hardening unit. Finish its four
-findings with observed checks and a new review candidate, then continue the authorized
-F03c historical sync and F03d injectable live seam. F04 onward requires a new grant.
+committed locally; F03b-1 is implemented and independently verified (34 focused/185 full
+suite tests), but native consent expired twice before any authority was created. Resume
+that review with a fresh five-path selection and human consent, then commit reviewed
+bytes and close the unit. F03c historical sync and F03d injectable live seam remain
+pending and authorized; F04 onward requires a new grant.
 
 No F03 push is authorized. No model ID may enter configuration or code until account
 enumeration and current documentation verify it. No live/model calls, purchases or
