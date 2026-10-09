@@ -1,0 +1,124 @@
+# --- Secrets and local configuration -------------------------------------
+# Never commit live credentials. Ship .env.example instead.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+credentials.json
+secrets.json
+service-account*.json
+
+# --- Local agent/tooling state -------------------------------------------
+.atl/
+.coach/
+.codegraph/
+
+# --- Python --------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# Testing and coverage
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# --- Node / frontend (if a dashboard lands here) -------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.vite/
+.next/
+.cache/
+*.tsbuildinfo
+
+# --- Containers and infrastructure ---------------------------------------
+# Local bind mounts, volumes and captured container state
+docker/data/
+docker/volumes/
+*.sqlite3
+*.sqlite3-journal
+*.db
+
+# --- Runtime artifacts and captured API data -----------------------------
+# Raw OpenF1 payloads, telemetry dumps and generated commentary output
+data/raw/
+data/cache/
+out/
+output/
+logs/
+*.jsonl
+!tests/**/*.jsonl
+!fixtures/**/*.jsonl
+
+# --- Office temporary files ----------------------------------------------
+# LibreOffice/Word lock files; originals are archived under origis/
+.~lock.*#
+~$*.docx
+~$*.xlsx
+~$*.pptx
+*.tmp
+
+# --- OS and editor junk --------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+.idea/
+# Ignore the directory *contents* rather than the directory itself.
+# `.vscode/` would exclude the parent directory, and Git cannot re-include a
+# file whose parent directory is excluded -- so the negations below would never
+# match. `.vscode/*` keeps the directory traversable and lets them apply.
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
