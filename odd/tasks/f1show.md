@@ -24,6 +24,14 @@ here.
   `sdsoporte/F1Show`, created with the existing SSH/gh configuration.
 - Repository-local Git identity (user-selected; no global identity exists on this
   machine): `sdsoporte <211432262+sdsoporte@users.noreply.github.com>`.
+- **Publication.** `main` was fast-forwarded to F02's tip and pushed on 2026-10-09:
+  `413a75d..8cbe94b`, 15 commits, no merge commit. `main` and `origin/main` both report
+  `8cbe94b`. An independent read-only audit of the published tree was delegated to
+  confirm the remote ref, the published file set, the absence of local artifacts and
+  credentials, and that the published blobs match the reviewed ones.
+- **Branch chain.** `feat/f1show-bootstrap` (F00–F01) → `feat/f02-python-foundation`
+  (F02) → `feat/f03-source-adapters` (F03), each cut from the branch that had already
+  landed, so a slice is never reviewed as part of an accumulated chain.
 - The unrelated `/home/s/.git` is not this project's repository. Never stage it.
 - User chose the full documented architecture, current SDK/models, deterministic
   analyst/historian, and archiving the original Word documents now.
@@ -387,13 +395,42 @@ here.
 
 ### F03 — Implement source adapters and replay/session lifecycle
 
-- [ ] Build the sync writer's source adapters (httpx for historical and REST, MQTT or
-  WebSocket for live), the SQLite WAL store with Parquet snapshot export, deterministic
-  replay and explicit session selection; seed mid-session state and handle
-  end/cancel/reset without mixing sessions.
+- [ ] Build the sync writer's source adapters, the SQLite WAL store with Parquet
+  snapshot export, deterministic replay and explicit session selection; seed mid-session
+  state and handle end/cancel/reset without mixing sessions.
 - Acceptance/checks: fake HTTP/clock tests cover history vs live auth, timeouts,
   429/backoff, empty data, invalid responses and per-endpoint watermarks/overlap.
-- Depends on F02. Commit/checks: pending.
+- Depends on F02 (closed).
+
+**Work units, planned before the first source write (2026-10-09):**
+
+- **F03a — the SQLite store behind the `Store` port.** Schema for source records and
+  watermarks, create-if-absent, WAL mode, upsert semantics that deduplicate by family,
+  session and record identity, deterministic read windows by observation time, and
+  `close()`. Tests run against a real temporary database, fully offline. A store-path
+  setting joins the typed configuration, with the same rule as elsewhere: a documented
+  default for the path, no default for anything that identifies a model or a secret.
+  The port's contract is fixed already, so this unit must satisfy it rather than reshape
+  it — a test asserts the implementation is substitutable for the in-memory double.
+- **F03b — Parquet snapshots and the deterministic replay source.** Export immutable
+  per-session Parquet snapshots with DuckDB, and a replay source that reads them and
+  drives session choice explicitly, seeding mid-session state so a run can start partway
+  through with correct positions, stints and lap history. The snapshots are the replay
+  fixtures, so their determinism is the acceptance criterion, not their speed.
+- **F03c — the `sync` writer, historical path.** Paginated historical reads over the
+  `HttpClient` port with a per-endpoint watermark, resume and overlap handling,
+  timeouts, 429 and 5xx backoff, empty and malformed responses, and session
+  end/cancel/reset that never mixes two sessions. Exercised with the in-memory HTTP
+  double and the frozen clock, so the suite stays offline and deterministic.
+- **F03d — the live seam, and its honest limit.** Live access needs an OpenF1 OAuth2
+  token, which requires the paid subscription the project has not bought. So this unit
+  can deliver the live adapter behind an injectable transport and the authentication
+  handling, exercised by a fake transport — **but its correctness against the real
+  service cannot be established here**. Record that plainly rather than implying the
+  live path is proven; the real validation belongs to F13, under its own authorization.
+- **Decision carried from F01:** the store is SQLite in WAL mode with DuckDB over
+  Parquet, not DuckDB as the live store, because DuckDB supports one read-write process
+  or many read-only processes and every Compose service is a separate process.
 
 ### F04 — Implement deterministic collector and event detection
 
