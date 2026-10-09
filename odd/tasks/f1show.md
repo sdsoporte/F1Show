@@ -172,7 +172,84 @@ here.
   and model IDs come from typed configuration with no hardcoded defaults.
 - Acceptance/checks: offline tests reject malformed data, missing credentials in
   live mode, wrong session IDs, invalid timestamps and secret-bearing log output.
-- Depends on F01. Commit/checks: pending.
+- Depends on F01.
+
+**Work units:**
+
+- **F02a — Done.** `pyproject.toml`, `uv.lock`, `.python-version`, `src/f1show/__init__.py`,
+  `src/f1show/config.py`, `src/f1show/redaction.py`, `tests/conftest.py`,
+  `tests/test_config.py`, `tests/test_redaction.py`. 39 offline tests pass
+  (`uv run --frozen pytest -q`), `uv lock --check` reports the lock current, and the
+  resolved versions are `pydantic 2.14.0`, `pydantic-settings 2.15.0`,
+  `google-genai 2.29.0`, `httpx 0.28.1`, `redis 8.1.0`, `pytest 9.1.1` on Python 3.14.4.
+- **F02a RED caveat, and how it was closed.** The writer reported honestly that its RED
+  was collection-level only (`ModuleNotFoundError: No module named 'f1show.config'`), so
+  no test body ever ran against unwritten behaviour and every test passed on its first
+  executed run. That is the weakest admissible form of test-first, so the parent mutated
+  each of the five validation rules in turn and confirmed that a test fails for each:
+  the `latest` rejection, the positive-selector rule, the live-credentials rule, the
+  timezone requirement and the redaction filter. **All five mutants were caught**, the
+  working tree was restored byte-for-byte (verified by digest), and the suite was green
+  afterwards. The tests have teeth; the initial RED did not prove it, and this does.
+- **F02a parent fix.** `.gitignore` no longer ignores `.python-version`, which
+  contradicted the interpreter pin the same commit introduces; the pin is now committed
+  alongside `uv.lock`.
+- **F02a disclosures carried forward as review focus.** `mode` defaults to `replay`,
+  chosen as the offline-safe default. The session selector accepts numeric strings
+  through pydantic's lax coercion, so only the literal `latest` is intercepted; that is
+  deliberate for environment-variable configuration and still explicit and
+  deterministic. `RedactingFilter` attached to a logger does not see records propagated
+  from child loggers, so F03 must decide where it is installed — logger, handler, or
+  both.
+- **F02b — Pending.** The event/enrichment/dialogue schemas and the clock, HTTP, bus,
+  store and model boundaries with their in-memory fakes.
+
+**Decisions taken before the first source write (2026-10-09):**
+
+- **Two bounded work units**, because the task as specified exceeds the ~400 authored
+  line heuristic as a single unit. **F02a** is the project foundation: packaging, the
+  locked dependency set, typed configuration and secret-safe logging, with the
+  acceptance tests for configuration validation. **F02b** is the shared contracts and
+  the injection boundaries: event/enrichment/dialogue schemas plus clock, HTTP, bus,
+  store and model protocols with in-memory fakes. F02a must land first because it
+  establishes the package, the lock file and the test harness that F02b builds on.
+- **Packaging: `uv` with `pyproject.toml` and a committed `uv.lock`.** Verified working
+  on this machine before the task started.
+- **Python: system 3.14.4, verified by a real install** — every wheel resolves,
+  including a prebuilt `pydantic_core` for cp314, so nothing compiles from source.
+  `requires-python = ">=3.12"` with `.python-version` pinned to 3.14; **the declared
+  floor is a compatibility claim that F12's CI must actually exercise**, since only
+  3.14 was run here.
+- **HTTP client: `httpx`, at 0.28.1.** `httpx2` is rejected deliberately: `google-genai`
+  pins `httpx>=0.28.1,<1.0.0`, so using `httpx2` would leave `httpx` in the tree
+  anyway and give the project two HTTP stacks and two connection pools for one job.
+- **Configuration: `pydantic` plus `pydantic-settings`**, since `pydantic` is already a
+  hard transitive dependency of `google-genai` and the extra cost is one small package.
+- **Test runner: `pytest`, synchronous only in F02.** Every F02 acceptance criterion is
+  a synchronous validation test; an async plugin is deferred to F03, where the async
+  boundaries first get real implementations.
+- **Layout: `src/f1show/`**, so tests import the installed package rather than the
+  working directory and no accidental shadowing is possible.
+- **Endpoints have documented defaults and are overridable; model IDs and the
+  commentary language have NO defaults and must be supplied.** The distinction is the
+  point: an unset model ID or language is a configuration error, never a silent
+  fallback to whatever the SDK or a hardcoded string happens to offer.
+- **`latest` is rejected as a session selector in replay mode.** OpenF1 documents it
+  as a live convenience; in a replay it would silently make a run non-deterministic.
+  Replay session selectors must be explicit positive integers.
+- **Timestamps must be timezone-aware.** Naive datetimes are rejected at the boundary,
+  which is the direct antidote to the inconsistent-timestamp defect found in the
+  original corpus.
+- **Deliberately not included:** a linter or formatter. The plan does not ask for one
+  and adding tool config is not this task's scope; revisit at F12 when CI lands.
+- **Review scope note.** The first native review attempt over this whole unit was
+  refused by the controller with `lens_context_budget_exceeded`: the candidate's
+  reviewer evidence exceeded the native context budget, **no review authority was
+  created**, and the refused attempt is safe to retry or replace. The unit is therefore
+  delivered as a chain of smaller reviewable commits — packaging and lock separately
+  from the authored modules — because a generated lock file must not be allowed to
+  crowd out the authored code from review attention.
+- Depends on F01 (closed). F02b pending.
 
 ### F03 — Implement source adapters and replay/session lifecycle
 
