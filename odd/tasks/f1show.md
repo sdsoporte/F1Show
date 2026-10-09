@@ -451,8 +451,17 @@ authorized by these grants.
   - Preserve byte-identical exports, observation-time partitioning, deterministic
     tie-breaks, deep-copy behavior and existing session/overwrite rules. Distinguish
     genuine RED from coverage-only tests that pass against the baseline.
-  - Checks pending: focused offline pytest, full `uv run --frozen pytest -q`, independent
-    failure/race/UTC spot checks, native assessment/review and local work-unit commit.
+  - Writer `mv1dbgol-h-sd84` returned five allowed files, **605 authored diff lines**
+    (509 additions + 54 deletions tracked, plus 42 new helper lines); the estimate was
+    exceeded by failure/race/UTC tests, not scope expansion or cosmetic compression.
+    Reported RED: snapshot 8 failures and replay 1, zero collection errors; coverage-only
+    passes named separately. Reported GREEN/refactor: focused 29, full 180 tests. It also
+    fixed DuckDB's empty `executemany` rejection so declared zero-row families can export.
+  - Parent code spot check flagged cleanup error handling for independent reproduction;
+    no closure is claimed from green tests alone. Verifier `mv1dmx4o-i-0b51` is active.
+    Native assessment was unassessable pending untracked-helper declaration and returned
+    mandatory independent verification (high-risk fallback). Independent acceptance,
+    native review/acknowledgement and local work-unit commit remain pending.
   - Authorized findings: `R3-nonatomic-snapshot-write` (`snapshot.py:120-145`, WARNING),
     `R3-empty-families-silent-fixture` (`snapshot.py:96-101`, SUGGESTION),
     `R3-duplicate-utc-helper-divergent` (`replay.py:38-44`, SUGGESTION),
