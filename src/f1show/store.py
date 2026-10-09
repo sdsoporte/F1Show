@@ -112,12 +112,33 @@ class SQLiteStore:
     """A single-writer SQLite store; see the module docstring for the choices."""
 
     def __init__(self, path: str | pathlib.Path) -> None:
-        """Open (creating if absent) the database at ``path`` with its schema."""
+        """Open (creating if absent) the database at ``path`` with its schema.
+
+        The persisted ``journal_mode`` is read back and **asserted**, because WAL
+        is what makes the one-writer/many-readers assumption true: on a filesystem
+        that cannot support it SQLite keeps a different mode silently, and the
+        whole architecture would rest on a mode that is not in effect.
+
+        ``synchronous`` is read back and recorded as well, but honestly: it is a
+        per-connection pragma, not a property stored in the database file, so there
+        is nothing a second connection could be checked against. It is reported on
+        ``self.synchronous`` rather than asserted.
+        """
         self._path = pathlib.Path(path)
         self._closed = False
         self._conn = sqlite3.connect(str(self._path))
-        self._conn.execute("PRAGMA journal_mode = WAL")
+        mode = self._conn.execute("PRAGMA journal_mode = WAL").fetchone()
+        self.journal_mode = "unknown" if mode is None else str(mode[0]).lower()
+        if self.journal_mode != "wal":
+            self._conn.close()
+            raise RuntimeError(
+                f"SQLiteStore at {self._path} could not enable WAL: SQLite reports "
+                f"journal_mode={self.journal_mode!r}. The single-writer/many-readers "
+                "assumption rests on WAL, so this is refused rather than silently degraded"
+            )
         self._conn.execute("PRAGMA synchronous = NORMAL")
+        sync = self._conn.execute("PRAGMA synchronous").fetchone()
+        self.synchronous: int | None = None if sync is None else int(sync[0])
         with self._conn:
             self._conn.executescript(_SCHEMA)
 

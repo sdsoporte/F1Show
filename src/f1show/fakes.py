@@ -116,10 +116,18 @@ class InMemoryStore:
     """A dict-backed store: records isolate by ``family`` and ``session_key``, the
     watermark is per ``(endpoint, session_key)``, and ``close`` marks it closed so
     further use raises.
+
+    Reads mirror the real store's ``ORDER BY observed_at, rowid``: ascending by
+    batch observation time, stable for equal times. Records are held in an
+    insertion-ordered mapping keyed by identity, so a replacement updates the
+    value in place and keeps its original position, exactly as an upsert keeps
+    its ``rowid``.
     """
 
     def __init__(self) -> None:
-        self._records: dict[tuple[str, int], list[tuple[dt.datetime, dict[str, object]]]] = {}
+        self._records: dict[
+            tuple[str, int], dict[str, tuple[dt.datetime, dict[str, object]]]
+        ] = {}
         self._watermarks: dict[tuple[str, int], dt.datetime] = {}
         self._closed = False
 
@@ -136,7 +144,10 @@ class InMemoryStore:
         observed_at: dt.datetime,
     ) -> int:
         self._require_open()
-        bucket = self._records.setdefault((family, session_key), [])
+        # Validate and copy the whole batch before touching stored state, exactly
+        # as the real store prepares every row before executing: one invalid
+        # record rejects the batch without a partial write.
+        prepared: list[tuple[str, dict[str, object]]] = []
         for record in records:
             identity = record.get("record_id")
             if not isinstance(identity, str) or not identity.strip():
@@ -144,11 +155,14 @@ class InMemoryStore:
                     f"source record for family {family!r} must carry a non-empty string "
                     "'record_id'; deriving an identity belongs to the sync writer"
                 )
-            # Replace rather than append, so an overlapping re-read is safe. The
-            # real store upserts on (family, session_key, record_id); a double that
-            # appended would let tests pass that the real store would not.
-            bucket[:] = [row for row in bucket if row[1].get("record_id") != identity]
-            bucket.append((observed_at, copy.deepcopy(dict(record))))
+            prepared.append((identity, copy.deepcopy(dict(record))))
+        bucket = self._records.setdefault((family, session_key), {})
+        for identity, payload in prepared:
+            # Reassign an existing key, which keeps its position: a replacement
+            # stays where it was instead of moving to the back. The real store
+            # upserts on (family, session_key, record_id); a double that appended
+            # would let tests pass that the real store would not.
+            bucket[identity] = (observed_at, payload)
         return len(records)
 
     async def read_source_records(
@@ -161,17 +175,17 @@ class InMemoryStore:
     ) -> Sequence[Mapping[str, object]]:
         """Return copies of records whose observation time is in the inclusive window.
 
-        Each record is stamped with the ``observed_at`` of its write batch.
+        Each record is stamped with the ``observed_at`` of its write batch, and
+        the result is sorted stably by that time, matching the real store.
         """
         self._require_open()
-        found: list[dict[str, object]] = []
-        for stamped_at, record in self._records.get((family, session_key), []):
-            if since is not None and stamped_at < since:
-                continue
-            if until is not None and stamped_at > until:
-                continue
-            found.append(copy.deepcopy(record))
-        return tuple(found)
+        found = [
+            (stamped_at, copy.deepcopy(record))
+            for stamped_at, record in self._records.get((family, session_key), {}).values()
+            if (since is None or stamped_at >= since) and (until is None or stamped_at <= until)
+        ]
+        found.sort(key=lambda row: row[0])
+        return tuple(record for _, record in found)
 
     async def set_watermark(
         self, endpoint: str, session_key: int, *, observed_at: dt.datetime

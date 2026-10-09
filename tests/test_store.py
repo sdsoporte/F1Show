@@ -11,7 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import pathlib
 import sqlite3
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import pytest
@@ -86,6 +86,84 @@ async def test_sqlite_store_is_substitutable_for_the_in_memory_double(
     assert from_sqlite == EXPECTED_OBSERVABLE
 
 
+#: One factory per implementation. Running one shared body against both is what
+#: makes a semantic divergence impossible to hide; a hand-written assertion per
+#: implementation is exactly how the last divergence survived review.
+STORE_FACTORIES = [
+    pytest.param(lambda path: SQLiteStore(path / "parity.sqlite3"), id="sqlite"),
+    pytest.param(lambda path: InMemoryStore(), id="in-memory"),
+]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("build_store", STORE_FACTORIES)
+async def test_both_stores_share_one_contract(
+    build_store: Callable[[pathlib.Path], Store], tmp_path: pathlib.Path
+) -> None:
+    """One body, both stores: replacement, ordering, atomicity, windows, refusal."""
+    store = build_store(tmp_path)
+    # Rewriting the same identity replaces: one record at the later time.
+    await store.write_source_batch("drivers", 9462, [record("d", team="A")], observed_at=MOMENT)
+    await store.write_source_batch("drivers", 9462, [record("d", team="B")], observed_at=LATER)
+    stored = await store.read_source_records("drivers", 9462)
+    assert list(stored) == [record("d", team="B")]
+    assert list(await store.read_source_records("drivers", 9462, since=LATER)) == list(stored)
+    assert await store.read_source_records("drivers", 9462, until=MOMENT) == ()
+
+    # Ordering: ascending observation time, stable for ties. "a" and "b" share
+    # MOMENT; rewriting "a" at LATER must not push it past "c", written later.
+    await store.write_source_batch("laps", 9462, [record("a"), record("b")], observed_at=MOMENT)
+    await store.write_source_batch("laps", 9462, [record("c")], observed_at=LATER)
+    await store.write_source_batch("laps", 9462, [record("a", lap_number=2)], observed_at=LATER)
+    assert ids(await store.read_source_records("laps", 9462)) == ["b", "a", "c"]
+
+    # The window is inclusive at both bounds, by instant.
+    assert ids(await store.read_source_records("laps", 9462, since=MOMENT)) == ["b", "a", "c"]
+    assert ids(await store.read_source_records("laps", 9462, until=LATER)) == ["b", "a", "c"]
+    assert ids(await store.read_source_records("laps", 9462, since=LATER)) == ["a", "c"]
+    assert ids(await store.read_source_records("laps", 9462, until=MOMENT)) == ["b"]
+
+    # One invalid record rejects the whole batch: nothing is written, before or after it.
+    before = len(await store.read_source_records("laps", 9462))
+    with pytest.raises(ValueError, match="record_id"):
+        await store.write_source_batch(
+            "laps", 9462, [record("new"), {"lap_number": 9}], observed_at=LATER
+        )
+    assert len(await store.read_source_records("laps", 9462)) == before
+    assert "new" not in ids(await store.read_source_records("laps", 9462))
+
+    # Every method refuses once the store is closed; close is idempotent.
+    await store.close()
+    await store.close()
+    with pytest.raises(RuntimeError):
+        await store.write_source_batch("laps", 9462, [record("x")], observed_at=MOMENT)
+    with pytest.raises(RuntimeError):
+        await store.read_source_records("laps", 9462)
+    with pytest.raises(RuntimeError):
+        await store.set_watermark("/v1/laps", 9462, observed_at=MOMENT)
+    with pytest.raises(RuntimeError):
+        await store.get_watermark("/v1/laps", 9462)
+
+
+@pytest.mark.anyio
+async def test_wal_is_read_back_and_synchronous_is_recorded(tmp_path: pathlib.Path) -> None:
+    store = SQLiteStore(tmp_path / "wal.sqlite3")
+    assert store.journal_mode == "wal"
+    assert store.synchronous == 1  # SQLite's NORMAL
+    await store.close()
+
+
+def test_a_database_that_cannot_enable_wal_is_refused_loudly() -> None:
+    # An in-memory SQLite database cannot use WAL. The guard must refuse instead
+    # of letting the one-writer/many-readers assumption break without a word.
+    with pytest.raises(RuntimeError) as excinfo:
+        SQLiteStore(":memory:")
+    message = str(excinfo.value)
+    assert "'memory'" in message
+    assert "journal_mode" in message
+
+
+@pytest.mark.anyio
 @pytest.mark.anyio
 async def test_sqlite_store_satisfies_the_store_protocol(tmp_path: pathlib.Path) -> None:
     store = open_store(tmp_path)
