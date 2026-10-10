@@ -1021,15 +1021,56 @@ new real-service/model calls or automatic publication of the next source unit.
       `sha256:88908440fd210a9670b9ac2bfcb2d89e639fea7777f764c14eb0fb5443203b24`; burn evidence
       `gentle-ai.review-acknowledged/v1`; never query this lineage again. Informational
       advisory (body absent; do not infer/fix): `R3-001` tests/test_session.py:511-529.
+      That advisory is now **actioned as a bounded follow-up**, not absorbed into this unit:
+      the provider never returned its text, so the parent inspected the named region itself and
+      found the genuine gap a reliability lens would flag there — that one test asserted the
+      refused endpoint's status and failure label but not its honest-partial fields
+      (`records_written is None`, `checkpoint_written is False`, a real `observed_at` stamp) or
+      the run state or the absent drivers records, while sibling tests do assert those fields.
+      The hardening is test-only and its correctness was checked against `ingest.py`'s actual
+      write-failure branch before editing. It cannot be claimed to match the provider's unstated
+      intent; it is verified as correct and load-bearing for the refused-write contract.
   Per-unit checks: scoped pytest then full `uv run --frozen pytest -q`, observed
   RED/GREEN with coverage-only passes disclosed, native work-unit review under the
   user's enabled switch, local Conventional Commit and task/mirror/todo evidence.
-- **F03d — the live seam, and its honest limit.** Live access needs an OpenF1 OAuth2
-  token, which requires the paid subscription the project has not bought. So this unit
-  can deliver the live adapter behind an injectable transport and the authentication
-  handling, exercised by a fake transport — **but its correctness against the real
-  service cannot be established here**. Record that plainly rather than implying the
-  live path is proven; the real validation belongs to F13, under its own authorization.
+- **F03d — the live seam, in two bounded units.** The documented live contract is now
+  first-party verified (documentation reading only — no subscription, purchase, credential use
+  or live/authenticated call was made): `POST https://api.openf1.org/token` with
+  `Content-Type: application/x-www-form-urlencoded` and `username`/`password` form fields,
+  returning `{"expires_in": "3600", "access_token": "…", "token_type": "bearer"}` — the
+  documented `expires_in` is a **string**, which strict parsing must accept without inventing
+  a different type. Authenticated REST requests add `Authorization: Bearer <token>`, and
+  tokens expire after one hour, so the client must refresh rather than fail silently.
+  The same page recommends **MQTT/WebSocket** for live data (`mqtt.openf1.org:8883`,
+  `wss://mqtt.openf1.org:8084/mqtt`, token as the password) and calls it the more efficient
+  option. **That streaming path is deliberately not adopted here**, because the project fixed a
+  ~3 s REST polling cadence and streaming would add a new transport, dependency and lifecycle;
+  the recommendation is recorded as an unadopted alternative for F10/F13 rather than silently
+  ignored or silently implemented. `config.py` already carries
+  `CredentialsSettings.openf1_username`/`openf1_password` as `SecretStr`, so no new credential
+  configuration is invented.
+  The obstacle is the reviewed `HttpClient` port: `get_json(url, *, params=…)` has no header
+  parameter and the port has no form POST, so neither an authenticated GET nor a token exchange
+  can be expressed without extending it. Instead of turning that into one large multi-area
+  change, F03d is split into two units, each with its own independent/native review and local
+  commit:
+    - **F03d-1 — HTTP boundary extension.** Additive `headers` support on `get_json` plus one
+      form-POST method, forwarded by the retrying wrapper and mirrored by the fake, with every
+      existing retry, pacing, cleanup and error contract preserved and only the new surface
+      tested. Surfaces: `src/f1show/{ports,http,fakes,request_policy}.py` and
+      `tests/test_{http,fakes,request_policy}.py`. These bytes were reviewed before, but the
+      burned F03c-1/F03c-2 authorities are never reused: this is a new candidate and a new
+      review. Secrets or credential values must never appear in these files or their tests.
+    - **F03d-2 — authentication and the live seam.** A token model accepting the documented
+      string-or-int `expires_in` and a `bearer` token type, an expiry-with-skew refresh policy,
+      a provider that exchanges credentials once through the extended port and caches until
+      refresh is due, an auth-injecting client that adds exactly one `Authorization` header
+      without opening, closing or replacing caller-owned objects, and strict redaction so
+      neither credentials nor tokens can reach logs, reprs, errors, outcomes or the store.
+      New surfaces: a new auth module and its tests, plus additive exports.
+  Honest limit unchanged: without the paid subscription the real exchange, the real expiry
+  behaviour and real live responses remain unverified; a fake transport proves only our
+  handling, and live validation belongs to F13 under its own authorization.
 - **Decision carried from F01:** the store is SQLite in WAL mode with DuckDB over
   Parquet, not DuckDB as the live store, because DuckDB supports one read-write process
   or many read-only processes and every Compose service is a separate process.
@@ -1145,19 +1186,16 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03c complete; F03d live seam next**, under the existing F03 authorization and
-with its own design registered before any source write. F03c-4 source `a0a3683` is closed
-locally after independent verifier PASS (121 focused/431 full, 6/6 mutants killed, 53 probes),
-native approval and exact acknowledgement, with reviewed/staged/committed tree equality.
-F03c now stands at four closed units: 3a `aca17e2`, 3b `d4e1bc4`, 3c-4 `a0a3683`, plus the
-retired 3c-1/3c-2 units, and the disclosed overruns (F03c authored total 2620 lines against
-one 350–550 and two 300–450 forecasts). Carried, not fixed: probes-only CI gaps, the base
-`SnapshotResult` warning, harness Ruff I001, unverified Python 3.12 floor, scripted-only race
-coverage, a generation branch unreachable by the public API, and three informational native
-suggestions whose bodies were never returned. No new source push; remote `3f52c33` and main
-`fc30084` remain as published. F03d's honest limit stands: real-service correctness cannot be
-established without the paid subscription, so it ships an injectable live seam and auth
-handling proven only against a fake transport, with live validation deferred to F13.
+Active: **F03d-1 HTTP boundary extension**, after the R3-001 test hardening closes, under the
+existing F03 authorization. F03c-4 `a0a3683` closed with burned authority and matched tree; the
+R3-001 hardening touches only `tests/test_session.py` and awaits independent verification plus
+its own native review and local commit. F03d is split into F03d-1 (HTTP boundary) and F03d-2
+(auth and the live seam) rather than one large multi-area change, with the documented OAuth2
+contract and the unadopted MQTT/WebSocket alternative recorded above. Carried, not fixed:
+probes-only CI gaps, the base `SnapshotResult` warning, harness Ruff I001, the unverified
+Python 3.12 floor, scripted-only race coverage, the generation branch unreachable by the public
+API, and informational native suggestions whose bodies were never returned. No new source push;
+remote `3f52c33` and main `fc30084` remain as published. F04 onward stays unauthorized.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
