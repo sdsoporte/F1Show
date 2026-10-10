@@ -825,7 +825,20 @@ new real-service/model calls or automatic publication of the next source unit.
       checkpoint, write/checkpoint faults, repeat/ownership/UTC/cancellation and full suite.
       Forecast 450–650 total diff lines including tests/exports; retain meaningful evidence.
       Independent/native checks and local source work-unit commit complete, not published.
-    - [ ] **F03c-3b — Fixed sessions/drivers HTTP composition. Native review next.**
+    - [x] **F03c-3b — Fixed sessions/drivers HTTP composition. Closed locally.**
+      Source `d4e1bc4186b5401454413c39abc3b0ac905df143`, Conventional Commit
+      `feat(ingest): compose fixed session endpoint sync over HTTP`, 3 paths +831/−7 = 838.
+      Reviewed = staged = committed tree `097f3bf7f7e6aaef71f10597c6f8718a2123c20a`;
+      all three source hashes checked before staging; clean worktree after commit, no push.
+      Native `review-af79c3ab0d550c27`, medium/reliability/838 lines/budget 200, approved on
+      the first reviewer run after one pre-lineage consent expiry (that attempt created no
+      lineage, attempted no invocation and mutated nothing; the exact provider follow-up was
+      a fresh START, never a replayed binding).
+      Exact bound STATUS/ack returned authority **burned**; consumed revision
+      `sha256:551a025b0be6edf7a6a6635ae2edc16632a923363c9f094adfa8dbd5ac8a69b5`;
+      burn evidence `gentle-ai.review-acknowledged/v1`; never query this lineage again.
+      Informational advisories (bodies absent; do not infer/fix): `R3-empty-base-url`
+      ingest.py:329, `R3-fetch-catch-breadth` ingest.py:336-342. Approval stands.
       Writer `mv2le0ri-15-l6k5` returned implementation, not acceptance. Parent confirms
       three modified tracked paths, empty index and HEAD `faa116c4`, protected files unchanged.
       Candidate **831 additions +7 deletions = 838** total diff lines: source +107/−2,
@@ -852,7 +865,8 @@ new real-service/model calls or automatic publication of the next source unit.
       retry/ownership/watermark query behavior. Active LSP: no new primary errors; base
       SnapshotResult warning/NED typo carried. Writer cached Ruff/base I001 and dependency-
       aware Pyright/base warning are config-specific; no project lint/floor-runtime claim.
-      Fresh native inspect/start and exact-byte local work-unit commit pending; no new push.
+      Native approval/acknowledgement and the exact-byte local work-unit commit are recorded
+      above; writer/independent-style evidence below is the historical record for this unit.
       3a closed before this bounded writer; source/test hashes above form its baseline.
       Same allowed surfaces only: `src/f1show/ingest.py`, `tests/test_ingest.py`, additive
       exports in `src/f1show/__init__.py`; other source/tests/config/ports/fakes untouched.
@@ -881,9 +895,48 @@ new real-service/model calls or automatic publication of the next source unit.
       forecasts are not caps or permission to expand areas; preserve meaningful tests.
     Session query empty-vs-404 behavior is not live-verified; valid empty remains accepted
     and non-2xx remains failure. F03c-4 owns lifecycle; future source publication is separate.
-  - **F03c-4 — Session lifecycle. Pending.** Explicit end/cancel/reset, fixed per-run
-    session identity, late-response isolation and partial-family outcomes; retain
-    caller-owned Store and never invent a delete/transaction API. Estimate 300–500.
+  - **F03c-4 — Session lifecycle. Design registered before writes; implementation pending.**
+    Requirement: explicit end/cancel/reset, fixed per-run session identity, late-response
+    isolation and partial-family outcomes, caller-owned Store, no delete/transaction API.
+    `ARCHITECTURE.md:46` already assigns "session lifecycle" to the `sync` service, so this
+    unit is the seam F03d/F10 will drive rather than a new subsystem.
+    **Design decision (parent, derived from that requirement):** a new module
+    `src/f1show/session.py` whose run identity is supplied by the caller — no hidden
+    entropy, uuid or clock read — so behavior stays deterministic and testable.
+      - Frozen `SessionRunIdentity(run_id, session_key)`; `run_id` is a non-empty caller
+        string. No provider field, no store column, no schema change.
+      - `RunState` vocabulary `active`/`ended`/`cancelled`, reported as data.
+      - `SessionRun(identity, generation)`: `generation` changes only through this object's
+        own transitions so a superseded run is distinguishable from a live one.
+      - `async run.sync(http, store, clock, *, base_url=DEFAULT_OPENF1_BASE_URL)` performs at
+        most ONE `sync_session` while the run is `active` and returns its `SessionSyncResult`
+        unchanged, preserving the fixed identity and the ordered partial-family outcomes.
+      - `run.end()` and `run.cancel()` are terminal (cancel additionally requests cancellation
+        of an in-flight sync; the caller still owns the task and `CancelledError` propagates).
+        `run.reset(session_key)` returns a NEW `SessionRun` with a new caller-supplied
+        `run_id` and never reads, rewrites, deletes or truncates committed store rows.
+      - Refusal is typed data: a `sync` after `end`/`cancel`, or under a superseded
+        generation, raises a distinct `RunNotActiveError` **before any fetch or persistence
+        effect**, and never carries a payload, URL, secret or message text.
+      - Late-response isolation: a sync whose run was ended, cancelled or superseded while
+        its request was in flight must not commit. `sync_session` receives a run-scoped
+        `Store` view that refuses `write_source_batch`/`set_watermark` with a stable
+        `StaleRunError` once the run is not active, so the honest `failed` outcome with
+        `failure_type="StaleRunError"` is reported instead of a committed write. The view
+        never closes or replaces the caller's store and never exposes a delete/transaction
+        API; `CancelledError`/`BaseException` still propagate.
+      - Two runs sharing one `session_key` stay independent: a late response from run N can
+        never advance run N+1's checkpoint or records.
+      Checks: behavioral RED on the new lifecycle behavior (collection-compatible scaffold if
+      needed; collection failure recorded separately), then GREEN/refactor. Cover end/cancel/
+      reset transitions and idempotence; refusal before effects with zero fetch/write/checkpoint
+      calls; stale-write isolation raced against `reset`; cancellation/BaseException propagation
+      with no fabricated outcome; unchanged `SessionSyncResult` partial outcomes and honest
+      counts; caller ownership of HTTP and Store; no schema/deletion/transaction surface; no
+      text or serialized-payload leakage. Offline only, reusing the published fakes,
+      `MockTransport` and shared limiter. 3a/3b reviewed bytes (`ingest.py`, `test_ingest.py`)
+      are protected and must stay unchanged. Independent/native review and local unit commit
+      due. Forecast 300–500 total diff lines including tests and exports.
   Per-unit checks: scoped pytest then full `uv run --frozen pytest -q`, observed
   RED/GREEN with coverage-only passes disclosed, native work-unit review under the
   user's enabled switch, local Conventional Commit and task/mirror/todo evidence.
@@ -1008,12 +1061,14 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03c-3b fresh native review** after writer 86 focused/396 full/124 HTTP-policy.
-Parent confirms 838 diff lines/three paths/no new LSP errors. ASSESS medium/large accepts
-writer self-verification and requires no separate verifier; native candidate unconsumed.
-F03c-3a source `aca17e2` remains closed locally, authority burned, exact tree matched;
-probes-only gaps/base warnings carried. Native suggestion bodies absent, no advisory fixes.
-No new source push. F03c-3b native approval/acknowledgement and local unit commit remain.
+Active: **F03c-4 session lifecycle**, one bounded writer after this closure/design/mirror/todo
+reconciliation. F03c-3b source `d4e1bc4` is closed locally: 86 focused/396 full/124 HTTP-policy,
+ASSESS medium/large accepted the writer record, native approval and exact acknowledgement with
+reviewed/staged/committed tree equality; the two informational suggestions have no returned
+bodies and are not fixes here. F03c-3a source `aca17e2` likewise closed, burned, tree-matched.
+Probes-only CI gaps, the base `SnapshotResult` warning, the harness Ruff I001 and the unverified
+Python 3.12 floor are carried, not fixed. No new source push. F03c-4 implementation, checks,
+native review and local unit commit remain; F03d follows under the same F03 authorization.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
