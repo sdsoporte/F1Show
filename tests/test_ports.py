@@ -15,6 +15,7 @@ import pytest
 from pydantic import ValidationError
 
 from f1show.ports import (
+    Clock,
     HttpDecodeError,
     HttpError,
     HttpClient,
@@ -24,6 +25,7 @@ from f1show.ports import (
     HttpTransportError,
     ModelRequest,
     ModelResponse,
+    MonotonicClock,
     Store,
 )
 
@@ -162,3 +164,12 @@ def test_http_client_port_declares_a_typed_response_and_a_close() -> None:
     assert get_type_hints(HttpClient.get_json)["return"] is HttpResponse
     assert any(name == "params" for name in get_type_hints(HttpClient.get_json))
     assert get_type_hints(HttpClient.close)["return"] is type(None)
+
+
+def test_monotonic_clock_port_separates_pacing_time_from_utc_observation_time() -> None:
+    """Pacing and retry backoff need elapsed duration, which the UTC observation
+    clock cannot supply: a rate limit measured on wall time would follow a step in
+    that time. The two seams must therefore stay distinct types."""
+    assert get_type_hints(MonotonicClock.monotonic)["return"] is float
+    assert get_type_hints(MonotonicClock.sleep)["return"] is type(None)
+    assert MonotonicClock is not Clock

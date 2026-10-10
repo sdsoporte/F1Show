@@ -33,6 +33,7 @@ from f1show.events import (
 )
 from f1show.fakes import (
     FakeHttpClient,
+    FakeMonotonicClock,
     FrozenClock,
     InMemoryBus,
     InMemoryStore,
@@ -52,10 +53,17 @@ from f1show.ports import (
     ModelClient,
     ModelRequest,
     ModelResponse,
+    MonotonicClock,
     Store,
 )
 from f1show.redaction import REDACTED, RedactingFilter, attach_redacting_filter, redact
 from f1show.replay import SessionMismatchError, SnapshotReplaySource
+from f1show.request_policy import (
+    PacingPolicy,
+    RateLimiter,
+    RetryPolicy,
+    RetryingHttpClient,
+)
 from f1show.snapshot import write_session_snapshot
 from f1show.store import SQLiteStore
 
@@ -63,11 +71,13 @@ __all__ = [
     "DEFAULT_OPENF1_BASE_URL", "DEFAULT_REQUEST_TIMEOUT_SECONDS", "DEFAULT_STORE_PATH", "REDACTED",
     "Attribution", "BoothSettings", "Bus", "Clock", "CredentialsSettings", "DriverRecord",
     "EnrichmentKind", "EnrichmentRecord", "EventEnvelope", "EventType", "FakeHttpClient",
-    "FrozenClock", "HttpClient", "HttpDecodeError", "HttpError", "HttpResponse",
+    "FakeMonotonicClock", "FrozenClock", "HttpClient", "HttpDecodeError", "HttpError", "HttpResponse",
     "HttpResponseTooLargeError", "HttpTimeoutError", "HttpTransportError", "HttpxJsonClient",
     "InMemoryBus", "InMemoryStore", "Mode", "ModelClient",
-    "ModelProvider", "ModelRequest", "ModelResponse", "Provenance", "RedactingFilter",
-    "ReplaySettings", "SQLiteStore", "ScriptedModelClient", "SessionMismatchError", "SessionRecord",
+    "ModelProvider", "ModelRequest", "ModelResponse", "MonotonicClock", "PacingPolicy", "Provenance",
+    "RateLimiter", "RedactingFilter",
+    "ReplaySettings", "RetryPolicy", "RetryingHttpClient", "SQLiteStore", "ScriptedModelClient",
+    "SessionMismatchError", "SessionRecord",
     "Settings", "SnapshotReplaySource", "SnapshotResult", "SourceSettings", "Speaker", "Store",
     "StoreSettings", "TimeWindowSettings", "Transcript", "Turn", "attach_redacting_filter",
     "redact", "write_session_snapshot",

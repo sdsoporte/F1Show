@@ -15,6 +15,7 @@ import pytest
 from f1show.events import EventEnvelope, EventType
 from f1show.fakes import (
     FakeHttpClient,
+    FakeMonotonicClock,
     FrozenClock,
     InMemoryBus,
     InMemoryStore,
@@ -29,6 +30,7 @@ from f1show.ports import (
     ModelClient,
     ModelRequest,
     ModelResponse,
+    MonotonicClock,
     Store,
 )
 
@@ -389,3 +391,34 @@ async def test_scripted_model_raises_when_the_queue_is_exhausted() -> None:
     with pytest.raises(RuntimeError):
         await client.generate(request)
     assert client.requests == [request]
+
+
+def test_fake_monotonic_clock_satisfies_the_pacing_seam() -> None:
+    assert isinstance(FakeMonotonicClock(), MonotonicClock)
+
+
+@pytest.mark.anyio
+async def test_fake_monotonic_clock_advances_only_by_the_requested_sleep() -> None:
+    clock = FakeMonotonicClock(start=10.0)
+    assert clock.monotonic() == 10.0
+    await clock.sleep(0.25)
+    await clock.sleep(2.0)
+    assert clock.monotonic() == 12.25
+    assert clock.sleeps == [0.25, 2.0]
+
+
+@pytest.mark.anyio
+async def test_fake_monotonic_clock_rejects_a_negative_sleep() -> None:
+    clock = FakeMonotonicClock()
+    with pytest.raises(ValueError):
+        await clock.sleep(-1.0)
+    assert (clock.monotonic(), clock.sleeps) == (0.0, [])
+
+
+@pytest.mark.anyio
+async def test_the_monotonic_fake_never_moves_the_frozen_utc_clock() -> None:
+    utc = FrozenClock(MOMENT)
+    monotonic = FakeMonotonicClock(start=100.0)
+    await monotonic.sleep(30.0)
+    assert monotonic.monotonic() == 130.0
+    assert utc.now() == MOMENT, "pacing time and observation time are separate seams"

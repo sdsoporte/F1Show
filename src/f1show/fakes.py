@@ -42,6 +42,35 @@ class FrozenClock:
         return self._now
 
 
+class FakeMonotonicClock:
+    """A virtual monotonic clock that moves only when someone sleeps on it.
+
+    Deliberately independent from :class:`FrozenClock`: pacing measures elapsed
+    duration, not the UTC instant an observation is stamped with, and the two must
+    not be able to move each other. Every ``sleep`` advances the clock by exactly
+    the requested duration and records it, so a test can assert the precise waits a
+    policy asked for. A negative sleep is refused rather than silently rewinding.
+    """
+
+    def __init__(self, start: float = 0.0) -> None:
+        self._now = float(start)
+        self.sleeps: list[float] = []
+
+    def monotonic(self) -> float:
+        """Return the virtual instant; only differences between calls matter."""
+        return self._now
+
+    async def sleep(self, seconds: float) -> None:
+        """Advance the virtual clock by exactly ``seconds`` and record the wait."""
+        if seconds < 0:
+            raise ValueError(
+                "FakeMonotonicClock cannot sleep for a negative number of seconds; "
+                f"got {seconds!r}"
+            )
+        self.sleeps.append(seconds)
+        self._now += seconds
+
+
 class FakeHttpClient:
     """Answers registered URLs, or the outcomes scripted for them, and logs every call.
 

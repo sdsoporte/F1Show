@@ -33,6 +33,25 @@ class Clock(Protocol):
     def now(self) -> datetime: ...
 
 
+@runtime_checkable
+class MonotonicClock(Protocol):
+    """Monotonic timing boundary for pacing and retry backoff; added at F03c-2.
+
+    Deliberately a different seam from ``Clock``. ``Clock`` reports the UTC instant an
+    observation is stamped with, which an operator may correct, restart or move;
+    pacing and backoff measure an *elapsed duration*, so they run on a monotonic source
+    whose origin is unspecified and whose values are only meaningful as differences. A
+    rate limit computed on the observation clock would jump whenever wall time stepped.
+
+    ``sleep(seconds)`` is the only place a policy spends time, and it is injected so
+    tests observe exact virtual durations instead of really waiting.
+    """
+
+    def monotonic(self) -> float: ...
+
+    async def sleep(self, seconds: float) -> None: ...
+
+
 class HttpError(Exception):
     """Base of every HTTP failure raised at this boundary.
 
