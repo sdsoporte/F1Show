@@ -1651,8 +1651,22 @@ one separately granted real generation, then F09's two-person booth, then a thin
 that prints a transcript. Seven deferred items stay tracked as issues #3–#9, the user chose **free
 mode**, and nothing on the MVP path needs authenticated or real-time access. `main` stays at
 `2c83a150`: the F03-cleanup work, the fixtures and F04 sit on the feature branch awaiting their own
-publication decision. Housekeeping: the three-part ODD mirror will need a fourth record at roughly
-the next unit, and the splitter already handles any number of parts.
+publication decision. Housekeeping: the ODD mirror is now **four** records — #5666, #5747, #5800 and
+#5838 (`odd/f1show/tasks-part4`) — and the splitter handles any number of parts.
+**Parallel track, coordinated 2026-10-10.** A second session implements **F08** (the Gemini gateway)
+in an isolated worktree `/home/s/dev/projects/work/F1Show-f08`, branch `feat/f08-gemini-gateway`,
+based on `0b1f0c7`, registering its own design in that branch's copy of the F08 section. Verified
+state at coordination time: two writers total — this session and that one — plus a third
+`git worktree` entry that is **not** a writer at all but the review integrator's frozen detached
+candidate view under `.git/gentle-ai/candidate-views/`, which is worth knowing because it looks like
+a third agent in `git worktree list`. The merge-conflict surface between the two branches is exactly
+two files: `src/f1show/__init__.py`, which **both** modify additively and which the parent resolves
+on integration because this branch carries the tip, and this task document, which both modify and
+where the parent's version wins with the F08 design block re-applied on top. `feat/f03-source-adapters`
+is **never rewritten**: only fast-forward pushes (`3f52c33`→`ce7d113`→`7b56e49`) and PR merges have
+ever landed on it, never a force-push, squash or rebase. At that moment the remote sat at `7b56e49`
+while the local tip was `e999a10`, six commits unpublished, and the F04 source was still uncommitted
+pending verification — both facts were disclosed to the other session rather than left implicit.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
