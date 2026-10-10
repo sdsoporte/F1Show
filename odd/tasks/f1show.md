@@ -1208,6 +1208,40 @@ new real-service/model calls or automatic publication of the next source unit.
       log was overwritten. The consequence is explicit: the concurrency proof has **no RED
       evidence at all**, and a hang instead of a failure is itself a hazard the verifier is
       asked to judge rather than repair.
+      **Independent verification of the returned bytes: PASS, with two findings it did not hide.**
+      Verifier `mv2weiqx-1d-5jqc` confirmed 52 focused/548 full on Python 3.14.4, candidate pins
+      identical at start and end, **863 added / 0 deleted**, and the refresh boundary as
+      skew-correct rather than off by one. Ten faithful mutants, **nine killed**, and it reported
+      the fourth thing a self-report would have missed:
+      (1) **A confirmed hang hazard.** It removed the gate's `started.set()` and the concurrency
+      test was killed by `timeout 20` with **exit 124** at `test_auth.py:280` — a suite that
+      hangs instead of failing. (2) **One surviving mutant (m9).** Deleting `_require_open()`
+      from `post_form_json` was not caught, because after `close()` the adopted inner client
+      also refuses; the guard **is** present at `auth.py:404`, so this was a **coverage gap, not
+      a behaviour defect** — the double refusal masked the wrapper's own guard.
+      (3) It **refined a parent judgement**: the parent had called the `unchecked-numeric-parse`
+      warnings false positives because `isdigit()` supposedly makes `int()` infallible, and the
+      verifier probed that `'²'.isdigit()` is True while `int('²')` raises. The verdict stands
+      (the raise happens inside a pydantic validator and becomes a typed, value-free error) but
+      **the parent's stated rationale was imprecise**, and that is recorded rather than smoothed.
+      (4) It **declared its own deviation** instead of hiding it: in-process `pytest.main` did not
+      observe mutated file edits (proven with a marker probe), so each mutant ran as an isolated
+      frozen pytest process rather than literally in the same one.
+      It also confirmed that the single-in-flight property had **zero RED evidence** — the only
+      RED was that test's deselection — and supplied that evidence itself via the m3 kill and a
+      live five-caller gated proof.
+      **Test-only correction `mv2wr5ji-1e-c0ss`, with both fixes proven load-bearing.**
+      `tests/test_auth.py` moved 431→457 lines and `f505541c…`→`b26381f7…` while `auth.py` and
+      `__init__.py` stayed byte-identical; no test was added, so the count stays 52. The
+      concurrency test now bounds both waits with `asyncio.wait_for(..., timeout=5.0)` and
+      `pytest.fail` naming the hazard — the writer re-ran the never-starting probe and it now
+      **fails in 5.16 s with exit 1 instead of hanging** — and the after-close assertion now
+      demands the wrapper's own message (`AuthenticatedHttpClient is closed`) for **both**
+      methods, which the writer showed kills m9 in a `/tmp` shadow (`Actual message:
+      'FakeHttpClient is closed'`). The follow-up disclosed one residual honestly: the bound is a
+      fixed wall-clock wait, so a pathologically slow but correct exchange would fail as a
+      hazard; for in-process fake-driven work that trade is accepted. A focused independent
+      re-verification of these new bytes is in flight.
   Honest limit unchanged: without the paid subscription the real exchange, the real expiry
   behaviour and real live responses remain unverified; a fake transport proves only our
   handling, and live validation belongs to F13 under its own authorization.
@@ -1326,21 +1360,21 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03d-2 independent verification**, then fresh native review and the exact-byte local
-unit commit, and only then its own separately authorized publication. The candidate is three
-paths — a new `auth.py`, a new `test_auth.py` and additive root exports — at **863 total
-lines**, with 52 focused and **548** full tests green. ASSESS is unassessable for the undeclared
-new files, so its mandatory high-risk plan applies: the writer's self-verification plus an
-independent verifier, which is running. The parent confirmed the auth client's ownership reading
-against the real `request_policy.py` precedent and judged the two numeric-parse warnings false
-positives. F03c and F03d-1 are already merged into `main` through PR #1 (`77f22466`); F03d-2
-bytes are absent from `main` and will not reach it without their own verification, approval and
-authorization. Carried, not fixed: the pre-existing `tests/test_fakes.py` and `conftest.py`
-static findings, base lint findings, the unverified Python 3.12 floor, the unverified POST-retry
-assumption, scripted-only race coverage and the unreachable generation branch from F03c-4,
-probes-only CI gaps, and informational native suggestions whose bodies were never returned.
-Forecast calibration stays a standing concern (F03c 2620, F03d-1 1090, F03d-2 863 against
-smaller forecasts). F04 onward remains unauthorized.
+Active: **F03d-2 focused re-verification of the corrected test bytes**, then fresh native review
+and the exact-byte local unit commit, and only then its own separately authorized publication.
+The candidate is three paths — a new `auth.py`, a corrected `test_auth.py` and additive root
+exports — with 52 focused and **548** full tests green. Independent verification PASSED the first
+bytes and reported a confirmed hang hazard plus one surviving mutant; the test-only correction
+closed both with load-bearing proofs, and a focused re-verification is confirming them now.
+ASSESS is unassessable for the undeclared new files, so its mandatory high-risk plan governs.
+The parent confirmed the auth client's ownership reading against the real `request_policy.py`
+precedent. F03c and F03d-1 are already merged into `main` through PR #1 (`77f22466`); none of
+these bytes are in `main` and they will not reach it without their own verification, approval and
+authorization. Carried, not fixed: pre-existing `tests/test_fakes.py` and `conftest.py` findings,
+base lint findings, the unverified Python 3.12 floor, the unverified POST-retry assumption,
+scripted-only race coverage, the unreachable generation branch, probes-only CI gaps, the
+caller-owns-its-composition caveat, and informational native suggestions whose bodies were never
+returned. Forecast calibration remains a standing concern. F04 onward remains unauthorized.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
