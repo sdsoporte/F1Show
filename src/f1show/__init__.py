@@ -40,6 +40,7 @@ from f1show.fakes import (
     ScriptedModelClient,
 )
 from f1show.http import HttpxJsonClient
+from f1show.ingest import EndpointOutcome, ingest_endpoint
 from f1show.ports import (
     Bus,
     Clock,
@@ -70,6 +71,7 @@ from f1show.store import SQLiteStore
 __all__ = [
     "DEFAULT_OPENF1_BASE_URL", "DEFAULT_REQUEST_TIMEOUT_SECONDS", "DEFAULT_STORE_PATH", "REDACTED",
     "Attribution", "BoothSettings", "Bus", "Clock", "CredentialsSettings", "DriverRecord",
+    "EndpointOutcome",
     "EnrichmentKind", "EnrichmentRecord", "EventEnvelope", "EventType", "FakeHttpClient",
     "FakeMonotonicClock", "FrozenClock", "HttpClient", "HttpDecodeError", "HttpError", "HttpResponse",
     "HttpResponseTooLargeError", "HttpTimeoutError", "HttpTransportError", "HttpxJsonClient",
@@ -80,5 +82,5 @@ __all__ = [
     "SessionMismatchError", "SessionRecord",
     "Settings", "SnapshotReplaySource", "SnapshotResult", "SourceSettings", "Speaker", "Store",
     "StoreSettings", "TimeWindowSettings", "Transcript", "Turn", "attach_redacting_filter",
-    "redact", "write_session_snapshot",
+    "ingest_endpoint", "redact", "write_session_snapshot",
 ]
