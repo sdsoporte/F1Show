@@ -543,6 +543,30 @@ and purchases are not authorized by these grants.
     bound, attacks the `is_closed` reclassification heuristic in both false-positive and
     false-negative directions, and mutation-tests the 9 regressions on a `/tmp` copy with
     proof of the imported module path. Static checks remain unverified (no ruff/mypy).
+    **Independent reverification `mv1tlpc8-s-3yux`: 7 of 8 criteria PASS, one proven
+    contract defect; NOT accepted.** Re-ran 95 focused/242 full (baseline 185) and
+    `-k close` 9/37 on the pinned bytes, and reproduced the four original failures as
+    fixed. Measured the real bound: stalled read plus stalled close returned in 0.602s at
+    timeout 0.3 (`timeout_seconds + min(timeout,1s)`, no hidden wait beyond that); a
+    synchronous closer took 1.000s at timeout 0.2 and is an honest, documented,
+    unboundable case. Sanitization held (`_target` strips query and userinfo). External
+    cancel: done + cancelled, no lingering task, and no `create_task`/`ensure_future`
+    anywhere in `src`. The `is_closed` heuristic survived a two-directional attack
+    (`is_closed` is True when httpx awaits `stream.aclose()` after EOF) with no
+    reproducible false positive or negative. Mutation testing on a `/tmp` copy with the
+    imported module path proven: allowance cap → 1 failed, reclassification → 2 failed,
+    `add_note` dropped → 2 failed, so the 9 close cases assert behavior, not internals.
+    **Proven defect, in scope:** a custom injected transport raising a NON-httpx
+    exception mid-read with the response still open escapes `get_json` raw and untyped,
+    contradicting the module docstring. Real httpx transports raise `httpx.*` and are
+    typed correctly, so reachability is narrow — but the adapter accepts an injected
+    transport by design, and F03c-2's retry policy must classify typed errors. Corrective
+    **F03c-1-R2** normalizes only transport-origin exceptions from the send and the
+    streamed body read, keeps `HttpDecodeError` for our own parse failures so an internal
+    bug is never masked, keeps cancellation propagating, and states the contract
+    precisely. Re-verification on the new bytes is required before acceptance.
+    Re-pinned: the candidate is measured against HEAD `b592ae5` (docs-only concurrent
+    commit); the seven source bytes are unchanged by it.
     Grow the single `get_json` contract to a typed status/headers/payload response;
     migrate the fake, add scripted outcomes,
     an owned httpx adapter and shared parity tests. Clock stays unchanged. Scope:
@@ -686,8 +710,9 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: F03c-1-R1 independent reverification `mv1tlpc8-s-3yux`, pinned candidate
-`0b8cb9f`/1,447 diff lines, within the first historical-sync work unit.
+Active: F03c-1-R2 normalization of transport-origin read errors `mv1tz6c2-t-m8eu`,
+within the first historical-sync work unit. Acceptance still needs re-verification on the
+new bytes, native review and a local work-unit commit.
 F03c-2..4 and F03d injectable live seam remain pending and authorized for implementation.
 Their publication is a separate decision. F04 onward requires a new implementation grant.
 
