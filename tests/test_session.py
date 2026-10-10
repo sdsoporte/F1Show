@@ -519,14 +519,23 @@ async def test_a_stale_run_keeps_the_endpoint_already_committed_before_the_trans
     result = await run.sync(http, store, CountingClock(), base_url=BASE)
 
     # No cross-endpoint rollback is claimed: sessions committed before the end.
+    assert run.state is RunState.ENDED
     assert result.outcomes[0].status == "ok"
+    assert result.outcomes[0].records_written == 1
     assert result.outcomes[0].checkpoint_written is True
     assert result.outcomes[1].status == "failed"
     assert result.outcomes[1].failure_stage == "write"
     assert result.outcomes[1].failure_type == "StaleRunError"
+    # The refused endpoint reports an unknown count and no checkpoint, never a fabricated
+    # zero or an invented success; the observation stamp still exists because the clock was
+    # read before the write was refused.
+    assert result.outcomes[1].records_written is None
+    assert result.outcomes[1].checkpoint_written is False
+    assert result.outcomes[1].observed_at is not None
     assert store.calls == ["write", "checkpoint"]
     assert await store.get_watermark("sessions", SESSION_KEY) == OBSERVED
     assert await store.get_watermark("drivers", SESSION_KEY) is None
+    assert await store.read_source_records("drivers", SESSION_KEY) == ()
 
 
 # --- cancellation and ownership ---------------------------------------------
