@@ -1585,6 +1585,37 @@ deletions** count, `events.py` and the `fixtures/` tree byte-identical, 18 focus
    handled, against a design whose spine is that unusable values stay unknown. The other three
    suggestions are carried as informational, since they describe type-level invariants and a
    version-dependent `fromisoformat` tail and none is a demonstrated defect.
+   **The warning's correction is committed as `cfbe6148202d8d7328b88b90f15807319d8b055f`**,
+   `fix(collector): make the dedup identity hashable for any payload value`, two paths
+   **+164/−2**, with reviewed scope checks clean and the non-allowed trees byte-identical. The
+   identity field is now a **type-tagged token**: the type name plus the value when it hashes, and
+   plus a canonical `json.dumps(..., sort_keys=True)` rendering otherwise. The type tag also closes
+   a latent conflation the raw key had, where `1`, `True` and `"1"` were the same identity, and the
+   **raw value still appears in the event evidence**, so a corrupt record is no longer fatal but is
+   not hidden either. No validation, skipping or refused-record concept was added.
+   **No native review was run for this correction, and the reason is the provider's own gate.**
+   ASSESS returned medium with **`reviewDue: false`, `reviewDueReason: under_budget`** at 166
+   changed lines, and `independentVerifier: false`. Following that returned plan rather than
+   over-riding it is deliberate: spending a reviewer on a bounded correction of a warning that a
+   reviewer already raised is exactly the workload the gate exists to avoid. Stated openly so the
+   omission is a decision on the record, not a gap discovered later.
+   **What the parent established itself, since no third party did.** It reproduced the crash before
+   the fix and confirmed both one-liners now emit an event instead of raising; it confirmed the new
+   auxiliary lint warning at `collector.py:253` is the same guarded-regex false-positive class as
+   before, now at a new line number; and it proved the behaviour claim **element by element** rather
+   than by digest: a `/tmp` shadow built from the pre-fix collector at `893fa5b` (with an import
+   proof, `d5d2fe23`) and the current module both produce **1,648 events, identical
+   element-by-element**, so the correction changes nothing about the recorded stream.
+   **A false negative the parent nearly accepted, worth recording.** The first comparison used the
+   parent's own invented canonicalization and **the digests did not match** (`495caf2d…` against the
+   writer's `bb845138…`). That was a serialization difference, not a behaviour difference: comparing
+   two different canonical forms proves nothing in either direction. Redoing it against the same
+   objects element by element is what settled it, and the lesson is that a digest comparison is only
+   meaningful when both sides share the exact canonical form.
+   **Residuals disclosed, not fixed:** a value whose own `__hash__` raises something other than
+   `TypeError` still propagates, deliberately narrow because it is unreachable from JSON; and the
+   `repr` fallback is insertion-order sensitive, so two equal dicts with **mixed-type** keys need not
+   deduplicate, while every `str`-keyed payload goes through `json.dumps` and does.
 3. **F08 — Gemini gateway**, exercised against a fake provider, with one separately granted real
    generation to prove the wiring. One model call is a budget decision, not an assumption.
 4. **F09 — the two-person booth.** Lead and colour personas, explicit turn order, bounded context,
@@ -1732,20 +1763,21 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F04 closed as `893fa5b`; a bounded fix for the review's unhashable-identity warning is in
-flight.** F04 carried **657 additions** over three paths, passed independent verification with **8/8
-mutants killed and no survivor**, survived a focused re-verification of its classifier correction,
-and was approved by a medium-tier reliability review whose authority is **burned**. The remaining
-work on it is the parent-reproduced crash: a list- or dict-valued identity field raises `TypeError`
-out of the dedup set, so the function is not total over the `Mapping[str, object]` it advertises. The
-MVP order after that is F08 against a fake provider with one separately granted real generation, then
-F09's two-person booth, then a thin single-process F10 that prints a transcript. A parallel session
-implements F08 in an isolated worktree on `feat/f08-gemini-gateway`, with the integration contract
-agreed: this branch's task document wins, its design block arrives as `11f78c8` for a single
-`cherry-pick -n`, and the additive `__init__.py` conflict is resolved here. Seven deferred items stay
-tracked as issues #3–#9, the user chose **free mode**, and nothing on the MVP path needs
-authenticated or real-time access. `main` stays at `2c83a150`. Housekeeping: the ODD mirror is four
-records and the splitter handles any number of parts.
+Active: **F04 and its two corrections are closed; MVP step 3 is F08.** F04 stands as units
+`893fa5b` (the collector, +657), `cfbe614` (the hashable-identity correction, +164/−2) and, before
+it, the classifier guard folded into the same unit — with independent verification at **8/8 mutants
+killed**, a medium-tier review whose authority is **burned**, and one post-approval correction
+carried **without** a review because ASSESS returned `reviewDue: false` under budget. The parent
+proved the behaviour claim element-wise against a pre-fix shadow, so that omission rests on evidence
+rather than on trust. Next is F08, whose isolated track already closed on
+`feat/f08-gemini-gateway` as `b56a2fe` with a burned authority and 10/10 mutants killed, and whose
+integration is agreed: this branch's task document wins, the design and evidence arrive as
+`cherry-pick -n 11f78c8 f7e7412` (verified to apply cleanly in sequence), and the additive
+`__init__.py` conflict is resolved here. Then F09's two-person booth and a thin single-process F10
+that prints a transcript. Seven deferred items stay tracked as issues #3–#9, and issue #7 now also
+carries the measured fact that **no ruff configuration is committed**, so every lint claim in this
+project is config-scoped and must name its rule selection. The user chose **free mode**. `main` stays
+at `2c83a150`. Housekeeping: the ODD mirror is four records and the splitter handles any number.
 **Parallel track, coordinated 2026-10-10.** A second session implements **F08** (the Gemini gateway)
 in an isolated worktree `/home/s/dev/projects/work/F1Show-f08`, branch `feat/f08-gemini-gateway`,
 based on `0b1f0c7`, registering its own design in that branch's copy of the F08 section. Verified
