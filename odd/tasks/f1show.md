@@ -1030,6 +1030,24 @@ new real-service/model calls or automatic publication of the next source unit.
       The hardening is test-only and its correctness was checked against `ingest.py`'s actual
       write-failure branch before editing. It cannot be claimed to match the provider's unstated
       intent; it is verified as correct and load-bearing for the refused-write contract.
+      **Closed** as `f13757b64c9fb2f668f9511c65f1aebeb6e24b`, Conventional Commit
+      `test(session): assert honest partial fields on the refused endpoint`, 1 path +9/−0;
+      reviewed = staged = committed tree `a180bb216066cd3947acf7c602dc733eee852a57`.
+      Independent verifier `mv2ucsd7-18-bsr6` PASS: 121 focused/431 full unchanged; candidate
+      `4e59c7ef3d22f4b0e97561a2d001146b992a849aaf1734b9be4f3dba1f22de4a` (662 lines);
+      **three mutants killed**, each failing the hardened test by name — `records_written=0`
+      (`assert 0 is None`), `observed_at=None` (`assert None is not None`) and
+      `checkpoint_written=True` (`assert True is False`) — with a pristine control at 122 and the
+      shadow's `ingest.py` restored to its pinned hash. The verifier also reported, honestly,
+      that HEAD moved mid-run (`bee9881a`→`d2cf6da`, docs-only, the parent's commit) rather than
+      hiding it. Native `review-3717be5e3cd796bb`, medium/1 file/9 lines/budget 5, approved on
+      the first run in 25 s; exact bound STATUS/ack returned authority **burned**; consumed
+      revision `sha256:a3d889bc877d85b44353a518b811fcf55657e647ec04382e93ded78cc05eb09c`; never
+      query it again. The reviewer raised a NEW non-blocking suggestion we did not anticipate,
+      `R3-observed-at-assertion-weak` at `tests/test_session.py:535`, judging the added
+      `observed_at is not None` assertion weak. That is a fair point — a stronger assertion
+      would compare the stamp to the clock's actual value — and it is carried as later work
+      rather than reopening this candidate or rewriting approved bytes.
   Per-unit checks: scoped pytest then full `uv run --frozen pytest -q`, observed
   RED/GREEN with coverage-only passes disclosed, native work-unit review under the
   user's enabled switch, local Conventional Commit and task/mirror/todo evidence.
@@ -1186,16 +1204,18 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03d-1 HTTP boundary extension**, after the R3-001 test hardening closes, under the
-existing F03 authorization. F03c-4 `a0a3683` closed with burned authority and matched tree; the
-R3-001 hardening touches only `tests/test_session.py` and awaits independent verification plus
-its own native review and local commit. F03d is split into F03d-1 (HTTP boundary) and F03d-2
-(auth and the live seam) rather than one large multi-area change, with the documented OAuth2
-contract and the unadopted MQTT/WebSocket alternative recorded above. Carried, not fixed:
-probes-only CI gaps, the base `SnapshotResult` warning, harness Ruff I001, the unverified
-Python 3.12 floor, scripted-only race coverage, the generation branch unreachable by the public
-API, and informational native suggestions whose bodies were never returned. No new source push;
-remote `3f52c33` and main `fc30084` remain as published. F04 onward stays unauthorized.
+Active: **F03d-1 HTTP boundary extension**, one bounded writer after this R3-001 closure,
+under the existing F03 authorization and with the design registered at `d2cf6da` before any
+write. R3-001 closed as `f13757b` with its own independent verification and burned native
+authority. F03d-1 adds additive `headers` support to `get_json` plus one form-POST method across
+`ports.py`, `http.py`, `fakes.py` and `request_policy.py`, preserving every existing retry,
+pacing, cleanup and error contract and re-reviewing those bytes as a NEW candidate (the burned
+F03c-1/F03c-2 authorities are never reused). F03d-2 owns auth and the live seam afterwards.
+Carried, not fixed: probes-only CI gaps, the base `SnapshotResult` warning, harness Ruff I001,
+the unverified Python 3.12 floor, scripted-only race coverage, the generation branch unreachable
+by the public API, and informational native suggestions whose bodies were never returned or
+whose own text was never provided. No new source push; remote `3f52c33` and main `fc30084`
+remain as published. F04 onward stays unauthorized.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
