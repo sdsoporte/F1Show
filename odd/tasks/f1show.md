@@ -1300,6 +1300,36 @@ new real-service/model calls or automatic publication of the next source unit.
       **The honest limit stands:** this proves the floor is runnable today, not that a future
       dependency bump preserves it, and no CI in this repository enforces it — a matrix job
       pinning 3.12 would be needed to keep the claim honest over time.
+      (3) **Auth hardening closed as `8b17df23a619eca3b34f7039aa7187651b441c8a`.** Conventional Commit
+      `fix(auth): consume abandoned exchange failures and sanitize transport errors`, three paths
+      **+261/−18 = 279**; reviewed = staged = committed tree
+      `78fc6d6b1c7bd752fba65f270a079cdadb0165df`. The parent's own analysis of the flagged
+      locations, **not** retrieved provider intent, drove four self-standing changes: `repr`/`str`
+      now emit a fixed mask and never unwrap the secret; `asyncio.shield` is replaced by a manual
+      relay whose done-callback always consumes the exchange's exception; a new
+      `TokenTransportError` brings transport, timeout and oversized-body failures into the
+      `AuthError` taxonomy with a sanitized message; and the composition caveat is documented.
+      The relay was a **design correction to the parent's brief**: the original mechanism could not
+      pass the original proof, because `asyncio.shield` reports an abandoned shielded failure
+      regardless of retrieval — the writer stopped without editing rather than improvise, which is
+      exactly the behaviour the brief asked for on an unplanned fork.
+      Independent verification PASS (59 focused/555 full): candidate hashes matched at start and
+      end, `odd/tasks/f1show.md` re-derived as **clean** (two separate reports had mislabelled a
+      committed diff as a pending modification), and mutants for the relay, the mask and the
+      sanitization were killed. One mutant **survived** — dropping the exception branch's
+      `_exchange` clearing — and the honest classification is that it is a **behaviourally
+      equivalent** mutant rather than a coverage gap worth chasing: the next call's done-discard
+      path performs the same clearing, so only private-state introspection would observe the
+      difference, and a test that pokes a private attribute would couple the suite to internals.
+      Two relay paths (waiter cancelled after completion, exchange already done at attach) are
+      code-verified only, with no dedicated test. Native `review-3ed008e4aa1a106b` tiered **high**
+      (auth hot path) and ran four lenses, approving on the first attempt with four reviewers;
+      its first capture required no retry. Exact bound STATUS/ack returned authority **burned**;
+      consumed revision `sha256:143aadb1590e0fed0e96e9544656ce8e240c15d1c0b6062b7b3115be6af338b2`;
+      never query it again. Three informational findings with no correction opened and **no bodies
+      returned**, carried as later work and not reconstructed: `R4-001` a **warning** at
+      `auth.py:347`, `R3-001` a suggestion at `auth.py:375-383`, and `R2-magic-yield-count` a
+      suggestion at `tests/test_auth.py:558-559`.
   Honest limit unchanged: without the paid subscription the real exchange, the real expiry
   behaviour and real live responses remain unverified; a fake transport proves only our
   handling, and live validation belongs to F13 under its own authorization.
@@ -1509,17 +1539,17 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **close the in-flight auth hardening, then MVP step 1.** The auth hardening is complete and
-under **mandatory** independent verification (ASSESS tiers it high: auth is a hot path); it may not
-go to review until that verification returns. The **fixture recording is granted and planned above**,
-and starts only after the auth unit closes, because a second writer in this worktree would
-contaminate its review candidate — writes stay single-threaded. Order: verify → native review →
-local commit for the auth unit, then record fixtures, then F04 over the families those fixtures
-actually support. Seven deferred items are tracked as issues #3–#9, and the user chose **free mode**,
-so nothing on the MVP path may require authenticated or real-time access. `main` stays at
-`2c83a150`; nothing from F03-cleanup or the MVP is published. Housekeeping: the three-part ODD
-mirror has about 13 KB of headroom left in its final part, so a fourth record will be needed
-within a few units.
+Active: **MVP step 1 — record the fixtures.** The auth hardening is closed (`8b17df2`, independent
+verification and burned native authority, three informational findings carried), so the granted
+fixture recording starts now: read-only, unauthenticated, free-tier, paced, one 2024 race session at
+or after the United States Grand Prix, eight endpoints, raw JSON plus a provenance file, with the
+recorder kept out of the repository. `docs/EXTERNAL-CONTRACTS.md` is updated by the parent once the
+shapes are known, and F04 follows over the families those fixtures actually support. Seven deferred
+items stay tracked as issues #3–#9; the user chose **free mode**, so nothing on the MVP path needs
+authenticated or real-time access. `main` stays at `2c83a150` and nothing from F03-cleanup or the MVP
+is published; the auth work sits on the feature branch awaiting its own publication decision.
+Housekeeping: the three-part ODD mirror has about 10 KB of headroom left, so a fourth record is
+coming soon.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
