@@ -1274,6 +1274,32 @@ new real-service/model calls or automatic publication of the next source unit.
       **The warnings cluster on authentication material, retry amplification and token staleness,
       which is precisely the material that matters once this code runs against the live service**,
       so retrieving those bodies is real later work rather than bookkeeping.
+      **F03-cleanup, opened after publication at the user's request.**
+      (1) **The finding bodies are not recoverable, and that was proved rather than assumed.**
+      The terminal-consumption receipt in `.git/gentle-ai` is **259 bytes** holding only
+      `lineage`/`repository`/`schema`/`target`; **no provider state directory exists** on this
+      machine; and a bounded filesystem search for the finding ids found **only the parent's own
+      mirror file**, which mentions them because the parent wrote them there. The reviewer
+      results were relayed as **opaque bytes** and only their metadata survives the closure.
+      `review reopen-results` is **not** a retrieval path: it is a maintainer-authorized
+      same-lineage **quarantine for unusable reviewer results**, requiring an uncorrected
+      validating/correction-required revision plus an authorization emitted by `--prepare`, and
+      this lineage is approved and burned — invoking it would be an abuse and would return no
+      narrative anyway. `inspect-candidate` inspects the candidate, not the results. The durable
+      consequence: **finding bodies are ephemeral by design, so the location list is the only
+      durable signal, and this will recur for every future advisory.**
+      (2) **The declared Python 3.12 floor is now proven, not asserted.** Verifier
+      `mv2xtob9-1h-rkjv`: `uv run --frozen --python 3.12 pytest -q` → **548 passed** on CPython
+      **3.12.13**, and the same suite under **3.13.13** → **548 passed**; both exit 0, no failures
+      to classify, with `pyproject.toml`, `uv.lock` and `.python-version` hashes identical before
+      and after. `--frozen` was respected (no lock re-resolution); uv downloaded two wheels absent
+      from the cache (`duckdb`, `pydantic-core`) and rebuilt the gitignored `.venv`, which is the
+      disclosed side effect of the authorized command. A version-gated API audit found only
+      `asyncio.timeout` (3.11+), consistent with the floor, and every one of the 36 installed
+      distributions declares a floor at or below 3.12, so the lock is coherent with the claim.
+      **The honest limit stands:** this proves the floor is runnable today, not that a future
+      dependency bump preserves it, and no CI in this repository enforces it — a matrix job
+      pinning 3.12 would be needed to keep the claim honest over time.
   Honest limit unchanged: without the paid subscription the real exchange, the real expiry
   behaviour and real live responses remain unverified; a fake transport proves only our
   handling, and live validation belongs to F13 under its own authorization.
@@ -1392,21 +1418,22 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03 complete; F03d-2 closed locally and awaiting its own publication decision.**
-Every F03 unit is now closed: `F03a`, `F03b`/`F03b-1`, `F03c-1`, `F03c-2`, `F03c-3a`, `F03c-3b`,
-`F03c-4`, `F03d-1` and `F03d-2`, each with its own independent verification, native approval and
-exact-tree local commit. `F03c` and `F03d-1` are merged into `main` through PR #1 (`77f22466`);
-F03d-2 source `30f4fa4` plus two documentation commits (`620eb8c`, `b773217`) sit on the feature
-branch and are **not** in `main`. Publishing them is a separate human decision, exactly as the
-previous push and merge were. ASSESS is unassessable for candidates with undeclared new files, so
-that mandatory high-risk plan governs each such unit. Carried, not fixed: the fourteen
-informational F03d-2 findings above (six warnings), pre-existing `tests/test_fakes.py` and
-`conftest.py` findings, base lint findings, the unverified Python 3.12 floor, the unverified
-POST-retry assumption, scripted-only race coverage, the F03c-4 generation branch unreachable by
-the public API, probes-only CI gaps, the caller-owns-its-composition caveat, and the earlier
-informational advisories whose bodies were never returned. Forecast calibration remains a
-standing concern. **F04 onward stays unauthorized**, and no live, purchase, subscription or
-model call has been made or is implied by this work.
+Active: **F03-cleanup before F04.** The finding-body question is closed as
+**unrecoverable** with evidence, and the parent replaced it with its own labelled code analysis
+at the flagged locations rather than pretending to have retrieved provider intent. The declared
+Python 3.12 floor is now **proven** (548 passed under 3.12.13 and under 3.13.13). Writer
+`mv2xteps-1g-rqwl` is hardening `auth.py` in four self-standing changes — no secret materialized
+in `repr`, a detached failed exchange's exception retrieved, exchange transport/timeout/size
+failures brought into the `AuthError` taxonomy, and the composition caveat documented — each
+labelled as the parent's analysis, never as a provider finding. Still open: the base static
+findings in `tests/test_fakes.py` and `tests/conftest.py` (a separate unit, because writes stay
+single-threaded), the user's decision on 401/403 cache invalidation, and the live validation that
+only a purchased subscription can unblock. Carried without change: the fourteen advisory
+locations, the caller-owns-its-composition caveat, scripted-only race coverage, the F03c-4
+generation branch unreachable by the public API, probes-only CI gaps, the unverified POST-retry
+assumption, and forecast calibration. `main` is at `2c83a150` with all nine F03 units published;
+F03-cleanup work is **not** published and will need its own verification, review and
+authorization. F04 onward remains unauthorized.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
