@@ -618,7 +618,7 @@ and purchases are not authorized by these grants.
     Estimate 450–650 diff lines; verify hard timeout, bounded JSON body, status/header
     visibility, malformed success vs non-JSON error response, no implicit credentials,
     deep-copy parity and idempotent close. No retry implementation in this unit.
-  - **F03c-2 — Pacing/retries. R1 implemented; independent reverification pending.**
+  - **F03c-2 — Pacing/retries. Independently verified; native review/local commit pending.**
     User explicitly authorized: "ok, continua con F03c-2". Existing plan and allowed
     surfaces preceded source writes; no new dependency, config wiring or live calls.
     Separate `MonotonicClock.monotonic()/sleep()` from UTC `Clock.now()`: the shared
@@ -655,7 +655,7 @@ and purchases are not authorized by these grants.
     failed attempt 1025 with max_attempts 1100, replacing the promised typed transport
     error (`request_policy.py:263`; `/tmp/f03c2_probe/probe3_retries.py`).
     - [ ] **F03c-2-R1 — Preserve huge server advice and cap exponential arithmetic safely.**
-      Implementation returned; independent reverification and unit closure pending.
+      Independent functional verification passed; native review and unit commit pending.
       Continue one bounded writer on only `src/f1show/request_policy.py` and
       `tests/test_request_policy.py`. First add regressions and observe actual assertion/
       operation failures on the current defective bytes; collection failure is not RED.
@@ -683,7 +683,23 @@ and purchases are not authorized by these grants.
     Parent active LSP on the two R1 paths reported no primary findings and three auxiliary
     numeric-parse/typo findings, not an all-checks-clean claim. Ruff/mypy remain unavailable
     to the child; no static tools installed. Fresh ASSESS still returned unassessable for
-    untracked files and the exact high-risk independent-verifier plan, which remains due.
+    untracked files and the exact high-risk independent-verifier plan.
+    **Independent R1 reverification `mv2g6blq-y-uepo`: PASS, no proven defect.** Observed
+    focused 127/full 325, +1139/−3 = 1142 and all eight pre/post pins unchanged; the
+    independent-verifier fallback is fulfilled, not a native approval substitute.
+    Original D1/D2 probes now preserve server advice, response/error identity and the cap:
+    309/400/5000-digit advice returns 429/one call/no wait; 1100 retries reach the last
+    503 or original typed error, no post-exhaustion sleep. Long zeros, exact/fractional
+    budgets, dates, extreme finite/subnormal bases/caps and existing windows/concurrency/
+    cancellation/parity all passed. Original RED logs corroborate 7 failed/5 passed with
+    zero collection errors; a faithful old-parser mutant recreates four failures and an
+    old-pow mutant recreates three. Five final mutants killed, including minute-window,
+    retry-pacing and min-advice controls. A first incomplete old-parser mutant survived;
+    it omitted the defective non-finite-to-absent branch and was excluded, not hidden.
+    A pathological `10**5000` configured ceiling raises OverflowError during validation;
+    no specific rejection type is promised and it never reaches retry operations. Retain
+    as an edge observation, not a new corrective scope. Native review/acknowledgement and
+    source commit remain pending; no F03c-2 lineage started or source staged.
     Child static tools were unavailable, but a parent active LSP probe covered all seven
     changed paths: four primary findings (pre-existing root `SnapshotResult` export warning
     and three errors in untouched fake tests), plus auxiliary Protocol-ellipsis/numeric-
@@ -824,13 +840,13 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03c-2-R1 independent reverification pending** on the new pinned bytes.
-The writer observed genuine 7-failure corrective RED, then reported 127 focused/325 full;
-keep the work unit unaccepted until independent checks and native closure are observed.
+Active: **F03c-2 native review and local work-unit commit pending.** Independent R1
+reverification passed on the pinned bytes: 127 focused/325 full, both original defects
+fixed, five faithful behavioral mutants killed, no open functional defect.
+Keep the unit unchecked until native closure and the exact reviewed-byte commit.
 F03c-1 is closed at `32a55aa`; do not reuse or query its burned review lineage.
-After independent PASS, run fresh native inspect/review/acknowledgement and an exact
-reviewed-byte local commit. The earlier ready preflight was for the defective candidate;
-no F03c-2 lineage exists.
+Run fresh inspect with both intended new files, ordinary START without `lineageId`, exact
+capture/acknowledgement and reviewed-tree-matching commit. No F03c-2 lineage exists yet.
 Publication of F03c remains a separate human decision.
 F03c-3/4 and F03d injectable live seam remain pending and authorized for implementation.
 Their publication is a separate decision. F04 onward requires a new implementation grant.
