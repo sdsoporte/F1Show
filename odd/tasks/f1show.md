@@ -895,7 +895,7 @@ new real-service/model calls or automatic publication of the next source unit.
       forecasts are not caps or permission to expand areas; preserve meaningful tests.
     Session query empty-vs-404 behavior is not live-verified; valid empty remains accepted
     and non-2xx remains failure. F03c-4 owns lifecycle; future source publication is separate.
-  - **F03c-4 — Session lifecycle. Verified; fresh native review next.**
+  - **F03c-4 — Session lifecycle. Closed locally.**
     Requirement: explicit end/cancel/reset, fixed per-run session identity, late-response
     isolation and partial-family outcomes, caller-owned Store, no delete/transaction API.
     `ARCHITECTURE.md:46` already assigns "session lifecycle" to the `sync` service, so this
@@ -1005,6 +1005,22 @@ new real-service/model calls or automatic publication of the next source unit.
       ASSESS was unassessable for the undeclared new files, so the mandatory high-risk plan
       (writer self-verification **plus** a separate independent verifier) is now satisfied.
       No real-concurrency evidence exists anywhere in this unit.
+      Closed locally as `a0a3683e39e8fa071355d3d3934ed729337c5a50`, Conventional Commit
+      `feat(session): add run-scoped session lifecycle with stale-run isolation`, 3 paths
+      +917/−0. Reviewed = staged = committed tree `5a5e578d6f46d846848d6c198af35ea0b3402a83`;
+      all five hashes (three candidate plus the two protected reviewed files) checked before
+      staging; clean worktree after the commit; no push. Native `review-57365f025766ea65`,
+      medium/reliability/917 lines/budget 200, approved on the first reviewer run.
+      The consent path cost three expired bindings carrying **no lineage and no mutation**
+      before the human answered the host prompt; the relief was human, not retries, and the
+      third attempt had shown a ~38-minute blocked wait rather than an instant failure.
+      One resubmission was rejected as `capture-group-rejected` **without mutation** because
+      the binding had been re-typed by hand instead of passed verbatim; resubmitting the
+      provider's exact stored string succeeded in 235 s. Exact bound STATUS/ack returned
+      authority **burned**; consumed revision
+      `sha256:88908440fd210a9670b9ac2bfcb2d89e639fea7777f764c14eb0fb5443203b24`; burn evidence
+      `gentle-ai.review-acknowledged/v1`; never query this lineage again. Informational
+      advisory (body absent; do not infer/fix): `R3-001` tests/test_session.py:511-529.
   Per-unit checks: scoped pytest then full `uv run --frozen pytest -q`, observed
   RED/GREEN with coverage-only passes disclosed, native work-unit review under the
   user's enabled switch, local Conventional Commit and task/mirror/todo evidence.
@@ -1129,18 +1145,19 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03c-4 fresh native review**, after independent verifier PASS (121 focused/431 full,
-6/6 mutants killed, 53 probes) with its qualifications recorded: an unreachable-by-public-API
-generation branch, scripted rather than concurrent race tests, partly scaffold-shaped RED, and
-no real-concurrency evidence. Writer `mv2q1o7v-16-qn54` produced a 917-line three-path candidate
-(two new files, additive exports); index clean, protected 3a/3b bytes untouched, no push.
-F03c-3b source `d4e1bc4` and F03c-3a source `aca17e2` stay closed with burned authority and
-matched trees. Carried, not fixed: probes-only CI gaps, base `SnapshotResult` warning, harness
-Ruff I001, unverified Python 3.12 floor, and the disclosed forecast overruns (F03c authored
-total 2620 lines). Review workload risk is real: 917 diff lines in one unit, above the 400-line
-chaining guidance, retained as one coherent behavior for a reliability lens. ODD mirrors now
-span three records (#5666, #5747, and #5800) because the fully indented F03c region left no
-legal two-part boundary.
+Active: **F03c complete; F03d live seam next**, under the existing F03 authorization and
+with its own design registered before any source write. F03c-4 source `a0a3683` is closed
+locally after independent verifier PASS (121 focused/431 full, 6/6 mutants killed, 53 probes),
+native approval and exact acknowledgement, with reviewed/staged/committed tree equality.
+F03c now stands at four closed units: 3a `aca17e2`, 3b `d4e1bc4`, 3c-4 `a0a3683`, plus the
+retired 3c-1/3c-2 units, and the disclosed overruns (F03c authored total 2620 lines against
+one 350–550 and two 300–450 forecasts). Carried, not fixed: probes-only CI gaps, the base
+`SnapshotResult` warning, harness Ruff I001, unverified Python 3.12 floor, scripted-only race
+coverage, a generation branch unreachable by the public API, and three informational native
+suggestions whose bodies were never returned. No new source push; remote `3f52c33` and main
+`fc30084` remain as published. F03d's honest limit stands: real-service correctness cannot be
+established without the paid subscription, so it ships an injectable live seam and auth
+handling proven only against a fake transport, with live validation deferred to F13.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
