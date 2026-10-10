@@ -1477,6 +1477,38 @@ that a reader can see the two-persona commentary and a replay re-produces it.
    recorded session yields a stable event stream; lap 1 never appears as a lap-time record; a
    position change never surfaces as an overtake; and every event can be traced back to the exact
    fixture record that produced it.
+   **Implementation returned 2026-10-10; independent verification in flight.** Writer
+   `mv2z47jv-1m-vms1` produced `src/f1show/collector.py` (272 lines), `tests/test_collector.py`
+   (294) and additive root exports (+8): **574 additions, 0 deletions**, within the 300–600
+   forecast. Focused 18 / full **573**, with the 555 baseline green. Public surface:
+   `collect_session_events(session_key, payloads)` plus `classify_gap(raw)` as the intervals
+   normalization helper, with `DetectedEvent`, `GapKind`, `GapReading` exported additively.
+   Ordering is documented as a total order — timestamped events first by
+   `(timestamp_value, family_rank, record_index)`, untimestamped after by
+   `(family_rank, record_index)` — which matters because `stints` and `drivers` carry no timestamp
+   at all. Over the real fixtures it emits **1,648 events**, and the writer's evidence shows no
+   `overtake` event of any kind, lap 1 carrying no lap-time claim, all 1,331 `+1 LAP` strings
+   classified without a numeric cast, the three pit durations kept distinct, and the null
+   durations, null `date_start` and 846 partial segment arrays surviving as explicit unknowns.
+   **The writer declined to modify `events.py` and said why**: `EventEnvelope` requires an aware
+   `event_time`, which cannot represent a stint (no timestamp field) or the null-`date_start` lap
+   without inventing a clock, so the collector owns its own `DetectedEvent` and reuses `EventType`.
+   That is the right call, and it is recorded because editing an already-approved file to fit new
+   code is exactly the kind of drift this project keeps refusing.
+   **Two interpretation decisions the brief left open, disclosed rather than buried**: a
+   null-duration lap **still emits** a completion event carrying `lap_duration` as unknown instead
+   of being filtered out (reading "where a duration exists" as "no timed claim"), and position
+   events are emitted **per deduplicated record** with no cross-record previous-position state and
+   no cause claimed. Both are defensible against the registered design and both are the likeliest
+   review contention, so they are named here.
+   **The evidence weakness, stated plainly.** The collection RED was an `ImportError` recorded
+   separately, and the behavioural RED was **18 tests failing with `NotImplementedError` at their
+   first call against a no-logic stub** — so **no assertion in any test was ever observed failing
+   against a real implementation**. Disclosed by the writer, not discovered by the parent. It makes
+   this the weakest RED evidence in the project so far, and it means the acceptance tests' efficacy
+   rests entirely on the independent verifier's mutation testing rather than on any RED. Dedup has
+   the same shape of problem in miniature: it is **unexercisable on the real fixtures** because no
+   family repeats an update, so it is proven only synthetically.
 3. **F08 — Gemini gateway**, exercised against a fake provider, with one separately granted real
    generation to prove the wiring. One model call is a budget decision, not an assumption.
 4. **F09 — the two-person booth.** Lead and colour personas, explicit turn order, bounded context,
@@ -1609,17 +1641,18 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F04 implementation over the recorded fixtures.** Its design is registered above and is
-grounded in the real recorded field names and value types, with four blocking constraints recorded
-— the non-uniform `gap_to_leader` (numbers, nulls and `+1 LAP` strings), the partiality of `laps`
-including a null-duration lap 1, the three distinct pit durations, and the three different
-timestamping conventions across families. The MVP order after F04 is F08 against a fake provider
-with one separately granted real generation, then F09's two-person booth, then a thin single-process
-F10 that prints a transcript. Seven deferred items stay tracked as issues #3–#9, the user chose
-**free mode**, and nothing on the MVP path needs authenticated or real-time access. `main` stays at
-`2c83a150`: the F03-cleanup work and the fixtures sit on the feature branch awaiting their own
-publication decision. Housekeeping: the three-part ODD mirror is nearly full, so the fourth record
-is now due and the splitter already supports any number of parts.
+Active: **F04 independent verification**, then fresh native review and the exact-byte local unit
+commit. The candidate is three paths and **574 additions**, with 18 focused and **573** full tests
+green. ASSESS is unassessable for the two undeclared new files, so its mandatory high-risk plan
+applies and a separate verifier is running; that verifier carries unusual weight here because this
+unit's RED never exercised a single assertion against a real implementation, so mutation testing is
+the only efficacy evidence that exists. The MVP order after F04 is F08 against a fake provider with
+one separately granted real generation, then F09's two-person booth, then a thin single-process F10
+that prints a transcript. Seven deferred items stay tracked as issues #3–#9, the user chose **free
+mode**, and nothing on the MVP path needs authenticated or real-time access. `main` stays at
+`2c83a150`: the F03-cleanup work, the fixtures and F04 sit on the feature branch awaiting their own
+publication decision. Housekeeping: the three-part ODD mirror will need a fourth record at roughly
+the next unit, and the splitter already handles any number of parts.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
