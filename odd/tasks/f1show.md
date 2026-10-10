@@ -1881,6 +1881,61 @@ on whatever event families F04 actually delivers, **not** on the deferred F06/F0
   Generated text quality still needs a separately authorized real-model trial.
 - Depends on F06/F07/F08. Commit/checks: pending.
 
+**Assigned to this track on 2026-10-10 by the step-1/F04 session**, which reserves the integration of
+F08 into the shared branch and then thin F10. The F09 branch is therefore cut from **their integrated
+tip**, not from the F08 side track, so the booth lands on the same tree as the F04 events and the
+already-integrated gateway, and nothing (least of all `b56a2fe`) is cherry-picked twice. The design
+below is registered while that tip is pending, because it depends on no code.
+
+**Concrete design, registered before the first write.**
+
+- **One new module, `src/f1show/booth.py`**, plus `tests/test_booth.py` and additive root exports.
+  Allowed surfaces for the writer: those three paths and this document. **Not touched**:
+  `collector.py`, `test_collector.py` and `fixtures/` (the F04 track's), `gemini.py` and the other
+  F08 modules (frozen and already approved), and `dialogue.py`, whose `Speaker`, `Turn` and
+  `Transcript` contracts are consumed as they stand rather than reshaped.
+- **The booth composes, it does not transport.** Its inputs are injected: a `ModelClient` (the F08
+  gateway already satisfies that port, but nothing here imports it), an ordered sequence of
+  `DetectedEvent` from the F04 collector, `BoothSettings` for the model ID and the language — both
+  required with no default, and the language is exactly the F01 gate item that had to be settled
+  before F09 — and the bounds below. Wiring them together is F10's job, not this unit's.
+- **Two distinct personas as data, not as prose inside code paths.** A `Persona` record carries its
+  seat (`Speaker.lead` / `Speaker.color`), a display name and the register instruction that
+  differentiates it. The differentiation is asserted by test, not claimed in a docstring.
+- **Turn order is explicit and deterministic.** Lead first, then strict alternation, with a priority
+  band (flags and incidents) that lets the lead take the next slot instead of waiting its turn. No
+  randomness and no clock-driven choice, so one input always produces one order offline.
+- **Context is bounded, and the bound is a constructor argument**: the current event with its
+evidence, plus at most N prior turns and a character budget over their text. The immediately previous
+  turn is always included; anything older is dropped whole, never truncated mid-turn.
+- **Sourcing is evidence-only and structurally enforced.** Every emitted `Turn` carries a non-empty
+  `evidence` tuple taken from the event's own evidence references and from attributed enrichment. A
+  model answer that names no reference, or names one that was never supplied, is **refused** rather
+  than emitted with a guessed citation, and the prompt is assembled from the supplied references only.
+- **Repetition suppression and stale-context exclusion are acceptance behaviour, not polish.** A
+  candidate that repeats the immediately previous turn is dropped, and an event older than the
+  bounded window never reaches the model at all.
+- **Two F04 constraints are hard rules here.** There is **no overtake event**, so the booth must never
+  describe an on-track pass from a position change — it may report the position change itself and
+  nothing more. And **lap 1 is excluded from every time comparison**, so no fastest-lap or gap claim
+  may be anchored on it.
+- **Neutral degradation, never invented.** On any `ModelError` (timeout, rate limit, server,
+  transport, malformed or refused answer) the booth emits **no** turn for that event and records a
+  typed degradation outcome that stays observable. No filler, no apology, no fabricated attribution:
+  the transcript shows fewer turns, never a source that does not exist.
+- **Offline checks against a scripted model**: persona differentiation, the explicit and
+  priority-banded order, the bounded-window truncation rule, evidence propagation plus the refusal of
+  an uncited or invented citation, repetition suppression, stale-context exclusion, and one scripted
+  `ModelError` per family proving the neutral outcome. Every concurrency or ordering test bounds its
+  waits, per the F03d-2 lesson. A real generation to judge text quality needs its own grant, and
+  **no live call is authorized here**.
+- **Review-candidate rule learned the hard way, and it applies to this track too.** The controller
+  **refused** the F04 track's whole unpublished range with `lens_context_budget_exceeded` because the
+  candidate carried the 3.6 MB of fixtures. So **fixtures never enter a review candidate**, candidates
+  stay small, and an explicit `baseRef` is used instead of an accumulated range.
+- **Forecast**: F08 delivered 1758 lines for a smaller surface, so read any estimate here as a lower
+  bound — expect 500–900 authored lines, disclosed if exceeded rather than compressed.
+
 ### F10 — Wire bounded end-to-end orchestration
 
 - [ ] Correlate enrichment by event/session/version, apply bounded join deadlines,
