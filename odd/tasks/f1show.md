@@ -1564,6 +1564,27 @@ deletions** count, `events.py` and the `fixtures/` tree byte-identical, 18 focus
    a `.venv`-free tar shadow. The lesson generalises: a shadow test without an import proof can pass
    while proving nothing, which is precisely why every shadow instruction in this project demands
    that proof.
+   **Native review and closure.** Native `review-d4ba1e2b466ba724`, medium / one reliability lens /
+   3 files / 657 lines / budget 200, approved on the **first** reviewer run; exact bound STATUS/ack
+   returned authority **burned**; consumed revision
+   `sha256:67058111919ffbd55e420d1ee0816e6dea3f2e63f8550ef17c9700a99f2a680b`; never query it again.
+   Local unit commit **`893fa5b521ac894e23ab9ae707fe4a6cef8c2bf9`**, Conventional Commit
+   `feat(collector): derive deterministic session events from recorded fixtures`, three paths,
+   **+657/−0**, with reviewed = staged = committed tree
+   `93782d7536fe7174a1c58c444a15fa51c9b60874`.
+   Four informational findings, no correction opened and **no bodies returned**, carried rather than
+   reconstructed: `R3-unhashable-identity` a **warning** at `collector.py:245-249`,
+   `R3-gapreading-cross-kind` at `:121-131`, `R3-fromisoformat-version-tail` at `:170-175` and
+   `R3-fixtures-outside-candidate` at `tests/test_collector.py:26-33`.
+   **The warning was reproduced by the parent in one line and is being fixed, not carried.** The
+   dedup key is a member of a `set`, so a payload whose identity field holds a **list or a dict**
+   raises `TypeError: unhashable type` against the committed module. It is reachable precisely
+   because the signature declares `Mapping[str, object]` values and JSON can put a list or an object
+   anywhere, so the function is not total over the input type it advertises. That is the **same
+   defect class as the overflow**: a corrupt payload crashing the collector instead of being
+   handled, against a design whose spine is that unusable values stay unknown. The other three
+   suggestions are carried as informational, since they describe type-level invariants and a
+   version-dependent `fromisoformat` tail and none is a demonstrated defect.
 3. **F08 — Gemini gateway**, exercised against a fake provider, with one separately granted real
    generation to prove the wiring. One model call is a budget decision, not an assumption.
 4. **F09 — the two-person booth.** Lead and colour personas, explicit turn order, bounded context,
@@ -1711,18 +1732,20 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F04 fresh native review**, then the exact-byte local unit commit. The candidate is the
-whole F04 unit in one piece — `collector.py`, `test_collector.py` and the additive root exports —
-now carrying the classifier correction as well: 574 additions plus the fix, with 23 focused and
-**578** full tests green. Independent verification PASSED the original bytes with **8/8 mutants
-killed and no survivor**, and a focused re-verification PASSED the corrected bytes, proving the test
-change strictly append-only; that correction also produced the genuine RED the unit originally
-lacked. The MVP order after F04 is F08 against a fake provider with one separately granted real
-generation, then F09's two-person booth, then a thin single-process F10 that prints a transcript.
-Seven deferred items stay tracked as issues #3–#9, the user chose **free mode**, and nothing on the
-MVP path needs authenticated or real-time access. Housekeeping: the ODD mirror is four records —
-#5666, #5747, #5800 and #5838 (`odd/f1show/tasks-part4`) — and the splitter handles any number of
-parts.
+Active: **F04 closed as `893fa5b`; a bounded fix for the review's unhashable-identity warning is in
+flight.** F04 carried **657 additions** over three paths, passed independent verification with **8/8
+mutants killed and no survivor**, survived a focused re-verification of its classifier correction,
+and was approved by a medium-tier reliability review whose authority is **burned**. The remaining
+work on it is the parent-reproduced crash: a list- or dict-valued identity field raises `TypeError`
+out of the dedup set, so the function is not total over the `Mapping[str, object]` it advertises. The
+MVP order after that is F08 against a fake provider with one separately granted real generation, then
+F09's two-person booth, then a thin single-process F10 that prints a transcript. A parallel session
+implements F08 in an isolated worktree on `feat/f08-gemini-gateway`, with the integration contract
+agreed: this branch's task document wins, its design block arrives as `11f78c8` for a single
+`cherry-pick -n`, and the additive `__init__.py` conflict is resolved here. Seven deferred items stay
+tracked as issues #3–#9, the user chose **free mode**, and nothing on the MVP path needs
+authenticated or real-time access. `main` stays at `2c83a150`. Housekeeping: the ODD mirror is four
+records and the splitter handles any number of parts.
 **Parallel track, coordinated 2026-10-10.** A second session implements **F08** (the Gemini gateway)
 in an isolated worktree `/home/s/dev/projects/work/F1Show-f08`, branch `feat/f08-gemini-gateway`,
 based on `0b1f0c7`, registering its own design in that branch's copy of the F08 section. Verified
