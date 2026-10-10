@@ -1110,13 +1110,68 @@ new real-service/model calls or automatic publication of the next source unit.
       verifier works under `/tmp/f03d1_verify/`. Honest caveats carried into review: a retried
       POST may be sent more than once, which is an **unverified provider assumption** and not a
       proven property, and there is no Python 3.12 runtime proof.
-    - **F03d-2 — authentication and the live seam.** A token model accepting the documented
-      string-or-int `expires_in` and a `bearer` token type, an expiry-with-skew refresh policy,
-      a provider that exchanges credentials once through the extended port and caches until
-      refresh is due, an auth-injecting client that adds exactly one `Authorization` header
-      without opening, closing or replacing caller-owned objects, and strict redaction so
-      neither credentials nor tokens can reach logs, reprs, errors, outcomes or the store.
-      New surfaces: a new auth module and its tests, plus additive exports.
+      **Closed** as `d807cbcddcc1112197ec5e02961e7603ac638b33`, Conventional Commit
+      `feat(http): add request headers and form POST to the HTTP boundary`, ten paths
+      **+1050/−40 = 1090**; reviewed = staged = committed tree
+      `1e9ca9d6b4d088ceab66150bfa20b27d6d746a63`; clean worktree after the commit; no push.
+      Independent verifier `mv2v9og5-1b-t0dn` **PASS**: 243 focused/496 full, thirteen tracked
+      hashes identical at start and end, the ten-path scope confirmed, and **7/7 mutants killed
+      with no survivor** — no header forwarding, lowercased header names, POST following
+      redirects, POST skipping the shared limiter, overwriting a caller-supplied content type,
+      embedding a header value in a transport error, and the fake's form path reading the GET
+      script — each named with the test that caught it, control 244 passing before and after.
+      It also confirmed the header-non-leakage assertion is **non-vacuous** (the placeholder is
+      asserted present on the wire before its absence is asserted) and that the two
+      previously masked helper rules are now genuinely asserted (`tests/test_ports.py:184-198`),
+      so the reconstructed RED does not establish TDD but the rules are covered. It judged the
+      three narrow `S105` suppressions appropriately scoped.
+      Native `review-b2c24c7f0978166b`, medium/10 files/1090 lines/budget 200, approved on the
+      first reviewer run in 224 s; exact bound STATUS/ack returned authority **burned**;
+      consumed revision `sha256:9837983512df6d0d8a4e1b39e845990eb2d71a5798c2306d66b1da36d6c00424`;
+      never query it again. It raised three informational suggestions with no correction opened
+      and no bodies provided, carried as later work: `R3-fake-form-registration-shape`
+      (`fakes.py:159-190`), `R3-form-content-type-fallback` (`http.py:227-228`) and
+      `R3-port-header-retention-wording` (`ports.py:130-138`). The third independently matches
+      the verifier's own observation that the "no client-level default header" wording is
+      slightly overstated because httpx still attaches its own defaults — a real, if cosmetic,
+      inaccuracy in a docstring, not in behavior.
+    - **F03d-2 — authentication and the live seam. Concrete design registered before writes.**
+      New module `src/f1show/auth.py` (no change to `config.py`; `CredentialsSettings` already
+      carries `openf1_username`/`openf1_password` as `SecretStr`, and no new configuration is
+      invented) plus its tests and additive exports. Design decisions, derived from the verified
+      first-party contract and from the port F03d-1 just published:
+      - `DEFAULT_OPENF1_TOKEN_URL = "https://api.openf1.org/token"` lives in the new module, not
+        in `config.py`.
+      - A token response model accepting the documented **string-or-int** `expires_in` and a
+        case-insensitive `bearer` type, refusing an empty/missing `access_token` and an expired-
+        or-negative lifetime, and treating unknown extra fields as ignorable external input the
+        way source records already are. No message, body or credential may appear in a failure.
+      - A token value holding the secret through the project's existing redaction/`SecretStr`
+        machinery so `repr`, `str` and formatting cannot reveal it, and so a diagnostic can name
+        the token's state without its value.
+      - A provider that exchanges credentials by calling `post_form_json` on the caller's raw
+        client exactly when there is no valid cached token, caches until
+        `issued_at + expires_in − skew` (skew a documented constant, and the arithmetic done with
+        the injected `Clock`, never a private clock), performs at most one in-flight exchange so
+        concurrent callers await the same one, and adds no retry policy of its own because the
+        injected client may already be the paced retrying wrapper. Typed failures for non-2xx,
+        decode and validation problems; the password is read from the secret only when the form
+        is built and is never stored, logged or cached.
+      - An auth-injecting client that adds exactly ONE `Authorization: Bearer <token>` header to
+        `get_json`, refuses a caller who supplied their own `Authorization` header rather than
+        silently mixing credentials, forwards `post_form_json` unchanged (the token endpoint
+        authenticates with credentials in the body, never with a bearer header), and neither
+        opens, closes nor replaces caller-owned objects — following the existing wrapper
+        convention in `request_policy.py` and documenting which object owns the inner client.
+      - Checks: a scripted fake and `MockTransport` only, offline. Cover the documented
+        string `expires_in` and integer form, rejection of a bad type/empty token/unknown token
+        type, refresh exactly at the skew boundary and not one call earlier, at-most-one
+        in-flight exchange under concurrent callers, a non-2xx and a malformed exchange body
+        becoming typed failures, no credential or token value reachable from any raised error,
+        `repr` or outcome, exactly one header added and no duplicate, the caller-supplied
+        `Authorization` refusal, and caller ownership. Honest limit unchanged: the real
+        exchange, the real expiry behaviour and real live responses stay unverified without the
+        paid subscription, and live validation belongs to F13.
   Honest limit unchanged: without the paid subscription the real exchange, the real expiry
   behaviour and real live responses remain unverified; a fake transport proves only our
   handling, and live validation belongs to F13 under its own authorization.
@@ -1235,18 +1290,19 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03d-1 independent verification**, then fresh native review and the exact-byte local
-unit commit. The candidate is ten modified tracked paths, **+1050/−40 = 1090**, with 243 focused
-and **496** full tests green and the static state back to its base findings after the parent
-detected and had corrected an 18-error protocol break in two approved test files. ASSESS returned
-medium and did not require a separate verifier; the parent chose one because the writer's RED was
-reconstructed rather than observed. F03d-2 owns auth and the live seam afterwards. Carried, not
-fixed: the 3 pre-existing `tests/test_fakes.py` static errors, two base `I001` findings, the
-unverified Python 3.12 floor, the unverified POST-retry assumption, probes-only CI gaps, and
-informational native suggestions whose bodies were never returned. Forecast calibration is now a
-standing concern: F03c ran 2620 against ~1000 forecast and F03d-1 1090 against 450, so the next
-units need either recalibrated forecasts or chaining. No new source push; remote `3f52c33` and
-main `fc30084` remain as published. F04 onward stays unauthorized.
+Active: **F03d-2 authentication and the live seam**, one bounded writer after this F03d-1
+closure and design registration, under the existing F03 authorization. F03d-1 is closed as
+`d807cbc` — ten paths, +1050/−40 = 1090, independent verifier PASS with 7/7 mutants killed and
+no survivor, native approval and exact acknowledgement, reviewed = staged = committed tree
+`1e9ca9d6b4d088ceab66150bfa20b27d6d746a63`. F03d-2 adds a new auth module with a token model, an
+expiry-with-skew refresh policy, a caching provider and an auth-injecting client, all offline
+against a fake or `MockTransport`. Carried, not fixed: the 3 pre-existing `tests/test_fakes.py`
+static errors, two base `I001` findings, the overstated `http.py` header-default wording the
+reviewer independently flagged, the unverified Python 3.12 floor, the unverified POST-retry
+assumption, probes-only CI gaps, and informational native suggestions whose bodies were never
+returned. Forecast calibration remains a standing concern: F03c ran 2620 against ~1000 forecast
+and F03d-1 1090 against 450. No new source push; remote `3f52c33` and main `fc30084` remain as
+published. F04 onward stays unauthorized.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
