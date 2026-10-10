@@ -1438,6 +1438,45 @@ that a reader can see the two-persona commentary and a replay re-produces it.
    actually support, rather than all 18 endpoints. Deduplicate updates, keep evidence timestamps
    and source fields, and prove no false first-lap record and no inferred overtake from a position
    change alone.
+   **Design registered before the first write, grounded in the recorded fields rather than assumed
+   ones.** The parent inspected every family's real keys and value types, and four of the findings
+   are blocking constraints rather than trivia:
+   - **`intervals.gap_to_leader` is not uniform**: 19,604 numbers, 106 nulls and **1,331 strings**
+     (`+1 LAP`). Any code that casts it to a number is wrong. `interval` is numeric or null, with no
+     strings.
+   - **`laps` is partial**: `lap_duration` null twice, `date_start` null once, sector 1 null three
+     times, sector 3 once, and **846 of 3,177 segment arrays contain nulls**. The very first record
+     is a lap-1 row with null `date_start` and null `lap_duration` — the first-lap trap the
+     acceptance names, sitting in the data rather than in theory.
+   - **`pit` carries three different durations** — `lane_duration`, `pit_duration` and
+     `stop_duration` — and they are not the same number; the sample row has 34.983, 34.983 and 12.5.
+     Conflating them would misreport a stop.
+   - **`stints`, `drivers` and `position` differ in timestamping**: `stints` and `drivers` have no
+     timestamp field at all, `position` has `date`, `laps` has `date_start`.
+   **Event families for the MVP, each carrying its source evidence** (session key, driver number,
+   the actual timestamp field name and value, and the source record identity): `position_changed`
+   from `position`; `lap_completed` from `laps` where a duration exists; `pit_stop` from `pit` with
+   the three durations kept distinct; `stint_started` from `stints`; and race-control entries from
+   `race_control`, preserving `category`, `flag`, `scope`, `sector`, `lap_number` and the provider
+   `message` **as evidence, never as instruction** (the recorded categories are `Other` 71, `Flag`
+   42, `Drs` 3, `SessionStatus` 2, `SafetyCar` 2, and the flags are dominated by `BLUE` at 20 of
+   42, so a naive "flag event" would be noise).
+   **What the MVP deliberately does not claim.** No `overtake` event: nothing in these fixtures
+   proves an on-track pass, and a position change can come from a pit stop, a penalty, a retirement
+   or a car being lapped. No fastest-lap or record claim: a record needs a comparison corpus that
+   does not exist, sector data is partial, and lap 1 is a standing start — so lap 1 is excluded from
+   any lap-time comparison rather than silently winning one. `intervals` is **normalized but derives
+   no events** in the MVP, because gap semantics (`+1 LAP` versus numbers) and their tactical reading
+   belong to the deferred F06; the large fixture is used for normalization coverage rather than
+   speculation.
+   **Determinism and honesty requirements.** Identical fixtures must produce an identical event
+   sequence, byte for byte, in a fixed order. A missing value is represented as **unknown**, never
+   coerced to zero or dropped silently — not the 106 null gaps, not the two null lap durations, not
+   the one null `date_start`, not the partial segment arrays. Deduplicate repeated updates by source
+   identity and observation time rather than by guessing intent. Acceptance: a replay over the
+   recorded session yields a stable event stream; lap 1 never appears as a lap-time record; a
+   position change never surfaces as an overtake; and every event can be traced back to the exact
+   fixture record that produced it.
 3. **F08 — Gemini gateway**, exercised against a fake provider, with one separately granted real
    generation to prove the wiring. One model call is a budget decision, not an assumption.
 4. **F09 — the two-person booth.** Lead and colour personas, explicit turn order, bounded context,
@@ -1570,18 +1609,17 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **MVP step 2 — F04, deterministic events over the recorded fixtures.** Step 1 is complete:
-eight free-tier families recorded verbatim, integrity re-verified by the parent, the size gate
-closed by measurement, and the observed shapes and the six newly exercised paths now written into
-the external-contracts file. F04 starts from what the fixtures actually support, and it must honour
-the three recorded shape facts — no uniform timestamp field, one null `date_start` in `laps`, and
-point-in-time fixtures. The remaining MVP order is F04, then F08 against a fake provider with one
-separately granted real generation, then F09's two-person booth, then a thin single-process F10
-that prints a transcript. Seven deferred items stay tracked as issues #3–#9, the user chose **free
-mode**, and nothing on the MVP path needs authenticated or real-time access. `main` stays at
+Active: **F04 implementation over the recorded fixtures.** Its design is registered above and is
+grounded in the real recorded field names and value types, with four blocking constraints recorded
+— the non-uniform `gap_to_leader` (numbers, nulls and `+1 LAP` strings), the partiality of `laps`
+including a null-duration lap 1, the three distinct pit durations, and the three different
+timestamping conventions across families. The MVP order after F04 is F08 against a fake provider
+with one separately granted real generation, then F09's two-person booth, then a thin single-process
+F10 that prints a transcript. Seven deferred items stay tracked as issues #3–#9, the user chose
+**free mode**, and nothing on the MVP path needs authenticated or real-time access. `main` stays at
 `2c83a150`: the F03-cleanup work and the fixtures sit on the feature branch awaiting their own
-publication decision. Housekeeping: the three-part ODD mirror is down to roughly 6 KB of headroom,
-so the fourth record is now imminent.
+publication decision. Housekeeping: the three-part ODD mirror is nearly full, so the fourth record
+is now due and the splitter already supports any number of parts.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
