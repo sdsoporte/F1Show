@@ -908,11 +908,14 @@ new real-service/model calls or automatic publication of the next source unit.
       - `RunState` vocabulary `active`/`ended`/`cancelled`, reported as data.
       - `SessionRun(identity, generation)`: `generation` changes only through this object's
         own transitions so a superseded run is distinguishable from a live one.
-      - `async run.sync(http, store, clock, *, base_url=DEFAULT_OPENF1_BASE_URL)` performs at
-        most ONE `sync_session` while the run is `active` and returns its `SessionSyncResult`
+      - `async run.sync(http, store, clock, *, base_url=DEFAULT_OPENF1_BASE_URL)` uses the run's
+        own `identity.session_key` and performs exactly ONE `sync_session` per call: repeat
+        calls are the ~3s live cadence, not an error. It returns the `SessionSyncResult`
         unchanged, preserving the fixed identity and the ordered partial-family outcomes.
-      - `run.end()` and `run.cancel()` are terminal (cancel additionally requests cancellation
-        of an in-flight sync; the caller still owns the task and `CancelledError` propagates).
+      - `run.end()` and `run.cancel()` are terminal. `cancel()` requests isolation rather than
+        reaching into the caller's task: it marks the run terminal so an in-flight `sync` can
+        no longer commit, while the caller still owns its task and any `CancelledError`
+        propagates unchanged.
         `run.reset(session_key)` returns a NEW `SessionRun` with a new caller-supplied
         `run_id` and never reads, rewrites, deletes or truncates committed store rows.
       - Refusal is typed data: a `sync` after `end`/`cancel`, or under a superseded
@@ -928,15 +931,16 @@ new real-service/model calls or automatic publication of the next source unit.
       - Two runs sharing one `session_key` stay independent: a late response from run N can
         never advance run N+1's checkpoint or records.
       Checks: behavioral RED on the new lifecycle behavior (collection-compatible scaffold if
-      needed; collection failure recorded separately), then GREEN/refactor. Cover end/cancel/
-      reset transitions and idempotence; refusal before effects with zero fetch/write/checkpoint
-      calls; stale-write isolation raced against `reset`; cancellation/BaseException propagation
-      with no fabricated outcome; unchanged `SessionSyncResult` partial outcomes and honest
-      counts; caller ownership of HTTP and Store; no schema/deletion/transaction surface; no
-      text or serialized-payload leakage. Offline only, reusing the published fakes,
-      `MockTransport` and shared limiter. 3a/3b reviewed bytes (`ingest.py`, `test_ingest.py`)
-      are protected and must stay unchanged. Independent/native review and local unit commit
-      due. Forecast 300–500 total diff lines including tests and exports.
+      needed; collection failure recorded separately), then GREEN/refactor. Cover repeated
+      active syncs and end/cancel/reset transitions with idempotence; refusal before effects
+      with zero fetch/write/checkpoint calls; stale-write isolation raced against `reset` and
+      `cancel`; cancellation/BaseException propagation with no fabricated outcome; unchanged
+      `SessionSyncResult` partial outcomes and honest counts; caller ownership of HTTP and
+      Store; no schema/deletion/transaction surface; no text or serialized-payload leakage.
+      Offline only, reusing the published fakes, `MockTransport` and shared limiter. 3a/3b
+      reviewed bytes (`ingest.py`, `test_ingest.py`) are protected and must stay unchanged.
+      Independent/native review and local unit commit due.
+      Forecast 300–500 total diff lines including tests and exports.
   Per-unit checks: scoped pytest then full `uv run --frozen pytest -q`, observed
   RED/GREEN with coverage-only passes disclosed, native work-unit review under the
   user's enabled switch, local Conventional Commit and task/mirror/todo evidence.
