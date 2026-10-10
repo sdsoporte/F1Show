@@ -38,10 +38,17 @@ from f1show.fakes import (
     InMemoryStore,
     ScriptedModelClient,
 )
+from f1show.http import HttpxJsonClient
 from f1show.ports import (
     Bus,
     Clock,
+    HttpDecodeError,
+    HttpError,
     HttpClient,
+    HttpResponse,
+    HttpResponseTooLargeError,
+    HttpTimeoutError,
+    HttpTransportError,
     ModelClient,
     ModelRequest,
     ModelResponse,
@@ -56,7 +63,9 @@ __all__ = [
     "DEFAULT_OPENF1_BASE_URL", "DEFAULT_REQUEST_TIMEOUT_SECONDS", "DEFAULT_STORE_PATH", "REDACTED",
     "Attribution", "BoothSettings", "Bus", "Clock", "CredentialsSettings", "DriverRecord",
     "EnrichmentKind", "EnrichmentRecord", "EventEnvelope", "EventType", "FakeHttpClient",
-    "FrozenClock", "HttpClient", "InMemoryBus", "InMemoryStore", "Mode", "ModelClient",
+    "FrozenClock", "HttpClient", "HttpDecodeError", "HttpError", "HttpResponse",
+    "HttpResponseTooLargeError", "HttpTimeoutError", "HttpTransportError", "HttpxJsonClient",
+    "InMemoryBus", "InMemoryStore", "Mode", "ModelClient",
     "ModelProvider", "ModelRequest", "ModelResponse", "Provenance", "RedactingFilter",
     "ReplaySettings", "SQLiteStore", "ScriptedModelClient", "SessionMismatchError", "SessionRecord",
     "Settings", "SnapshotReplaySource", "SnapshotResult", "SourceSettings", "Speaker", "Store",

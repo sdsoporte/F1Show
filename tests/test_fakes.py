@@ -24,6 +24,8 @@ from f1show.ports import (
     Bus,
     Clock,
     HttpClient,
+    HttpResponse,
+    HttpTimeoutError,
     ModelClient,
     ModelRequest,
     ModelResponse,
@@ -98,16 +100,103 @@ def test_frozen_clock_normalises_any_aware_offset_to_utc() -> None:
 
 
 @pytest.mark.anyio
-async def test_fake_http_returns_registered_payload_and_records_calls() -> None:
+async def test_fake_http_returns_a_success_response_and_records_calls() -> None:
+    """The port returns a typed response now, so the payload is asserted through
+    ``.payload``; the URL-``params`` lookup and the call recording are unchanged."""
     client = FakeHttpClient()
     url = "https://example.invalid/v1/sessions"
     client.register(url, [{"session_key": 9462}], params={"year": "2024"})
-    assert await client.get_json(url, params={"year": "2024"}) == [{"session_key": 9462}]
+    response = await client.get_json(url, params={"year": "2024"})
+    assert isinstance(response, HttpResponse)
+    assert response.status_code == 200
+    assert response.headers == {}
+    assert response.payload == [{"session_key": 9462}]
     assert client.calls == [(url, {"year": "2024"})]
 
 
 @pytest.mark.anyio
+async def test_fake_http_never_lets_caller_mutation_poison_later_answers() -> None:
+    client = FakeHttpClient()
+    url = "https://example.invalid/v1/sessions"
+    payload: dict[str, Any] = {"session_key": 9462, "tags": ["fast"]}
+    headers = {"Retry-After": "2"}
+    client.register(url, payload, headers=headers)
+    # Mutating the fixtures handed to the fake must not reach stored state.
+    payload["tags"].append("poisoned")
+    headers["Retry-After"] = "999"
+    first = await client.get_json(url)
+    assert first.payload == {"session_key": 9462, "tags": ["fast"]}
+    assert first.header("retry-after") == "2"
+    # Mutating a returned payload must not reach stored state either.
+    returned = first.payload["tags"]
+    assert isinstance(returned, list)
+    returned.append("also-poisoned")
+    second = await client.get_json(url)
+    assert second.payload == {"session_key": 9462, "tags": ["fast"]}
+    assert second.header("Retry-After") == "2"
+
+
+@pytest.mark.anyio
+async def test_fake_http_can_register_a_non_2xx_status_with_headers() -> None:
+    client = FakeHttpClient()
+    url = "https://example.invalid/v1/sessions"
+    client.register(url, None, status_code=503, headers={"Retry-After": "9"})
+    response = await client.get_json(url)
+    assert response.status_code == 503
+    assert response.payload is None
+    assert response.header("retry-after") == "9"
+
+
+@pytest.mark.anyio
+async def test_fake_http_delivers_scripted_outcomes_in_order_then_refuses() -> None:
+    """A scripted queue wins over the static registration and never falls back or
+    repeats: once it is drained the fake refuses instead of inventing an answer."""
+    client = FakeHttpClient()
+    url = "https://example.invalid/v1/sessions"
+    client.register(url, "static")
+    client.enqueue(url, HttpResponse(429, {"Retry-After": "1"}))
+    client.enqueue(url, HttpResponse(200, {"Content-Type": "application/json"}, [{"record_id": "1"}]))
+    first = await client.get_json(url)
+    assert (first.status_code, first.header("retry-after")) == (429, "1")
+    second = await client.get_json(url)
+    assert (second.status_code, second.payload) == (200, [{"record_id": "1"}])
+    with pytest.raises(RuntimeError, match="exhausted"):
+        await client.get_json(url)
+    assert len(client.calls) == 3, "the refused attempt is still recorded"
+
+
+@pytest.mark.anyio
+async def test_fake_http_raises_a_scripted_typed_error_and_records_the_call() -> None:
+    client = FakeHttpClient()
+    url = "https://example.invalid/v1/sessions"
+    client.enqueue(url, HttpTimeoutError("scripted deadline"))
+    with pytest.raises(HttpTimeoutError, match="scripted deadline"):
+        await client.get_json(url)
+    assert client.calls == [(url, None)]
+
+
+def test_fake_http_refuses_a_scripted_outcome_that_is_not_a_response_or_error() -> None:
+    client = FakeHttpClient()
+    with pytest.raises(TypeError):
+        client.enqueue("https://example.invalid/v1/x", "not-an-outcome")
+
+
+@pytest.mark.anyio
+async def test_fake_http_close_is_idempotent_and_refuses_further_reads() -> None:
+    client = FakeHttpClient()
+    url = "https://example.invalid/v1/sessions"
+    client.register(url, [])
+    await client.close()
+    await client.close()
+    with pytest.raises(RuntimeError):
+        await client.get_json(url)
+    assert client.calls == [], "a closed client records no call"
+
+
+
+@pytest.mark.anyio
 async def test_fake_http_raises_on_an_unregistered_url() -> None:
+
     client = FakeHttpClient()
     with pytest.raises(LookupError) as excinfo:
         await client.get_json("https://example.invalid/v1/never-registered")

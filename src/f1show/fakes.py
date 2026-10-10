@@ -13,7 +13,7 @@ import datetime as dt
 from collections.abc import Mapping, Sequence
 
 from f1show.events import EventEnvelope
-from f1show.ports import ModelRequest, ModelResponse
+from f1show.ports import HttpResponse, ModelRequest, ModelResponse
 
 
 class FrozenClock:
@@ -43,28 +43,105 @@ class FrozenClock:
 
 
 class FakeHttpClient:
-    """Answers only registered URLs and logs every call.
+    """Answers registered URLs, or the outcomes scripted for them, and logs every call.
 
-    An unregistered URL raises, so an accidental network call cannot go unnoticed.
+    Three guarantees make it usable as a policy double rather than a stub:
+
+    * An unregistered URL raises, so an accidental network call cannot go unnoticed.
+    * A registered payload and its headers are copied in both directions, so mutating
+      what was passed in, or what came back, cannot poison a later answer.
+    * Scripted outcomes are delivered strictly in order and never repeat; once the
+      queue is drained the fake refuses instead of falling back to a static answer.
     """
 
     def __init__(self) -> None:
-        self._responses: dict[tuple[str, tuple[tuple[str, str], ...]], object] = {}
+        self._responses: dict[tuple[str, tuple[tuple[str, str], ...]], HttpResponse] = {}
+        self._scripts: dict[
+            tuple[str, tuple[tuple[str, str], ...]], list[HttpResponse | BaseException]
+        ] = {}
+        self._closed = False
         self.calls: list[tuple[str, dict[str, str] | None]] = []
 
     def register(
-        self, url: str, payload: object, *, params: Mapping[str, str] | None = None
+        self,
+        url: str,
+        payload: object,
+        *,
+        params: Mapping[str, str] | None = None,
+        status_code: int = 200,
+        headers: Mapping[str, str] | None = None,
     ) -> None:
-        """Register ``payload`` as the answer for ``url`` with exactly ``params``."""
-        self._responses[(url, self._key(params))] = payload
+        """Register the answer for ``url`` with exactly ``params``.
 
-    async def get_json(self, url: str, *, params: Mapping[str, str] | None = None) -> object:
-        """Return the registered payload or raise; the URL-``params`` pair is the key."""
+        The default is a success response wrapping ``payload``. A non-2xx status with
+        ``payload=None`` models a source failure whose status and headers the caller
+        must inspect; a ``headers`` mapping is copied so a mutable fixture cannot
+        change an already-registered answer.
+        """
+        self._responses[(url, self._key(params))] = HttpResponse(
+            status_code=status_code,
+            headers=dict(headers) if headers is not None else {},
+            payload=copy.deepcopy(payload),
+        )
+
+    def enqueue(
+        self,
+        url: str,
+        outcome: HttpResponse | BaseException,
+        *,
+        params: Mapping[str, str] | None = None,
+    ) -> None:
+        """Append one scripted outcome for the ``url``/``params`` pair.
+
+        A queued outcome wins over any static registration and is consumed in order:
+        an ``HttpResponse`` is returned, an exception instance is raised, and
+        exhausting the queue raises instead of repeating or falling back. Nothing here
+        retries, so a policy test sees exactly the sequence it scripted.
+        """
+        if not isinstance(outcome, (HttpResponse, BaseException)):
+            raise TypeError(
+                "a scripted outcome must be an HttpResponse or an exception instance, "
+                f"got {type(outcome).__name__}"
+            )
+        self._scripts.setdefault((url, self._key(params)), []).append(outcome)
+
+    async def get_json(
+        self, url: str, *, params: Mapping[str, str] | None = None
+    ) -> HttpResponse:
+        """Return the next answer for the ``url``/``params`` pair, or raise.
+
+        The call is recorded before the outcome is delivered, including when the
+        outcome is a scripted exception, so an exhausted queue still shows the attempt.
+        """
+        if self._closed:
+            raise RuntimeError("FakeHttpClient is closed")
         self.calls.append((url, dict(params) if params is not None else None))
         key = (url, self._key(params))
+        if key in self._scripts:
+            queue = self._scripts[key]
+            if not queue:
+                raise RuntimeError(
+                    f"FakeHttpClient scripted outcomes for {url!r} with {params!r} are exhausted"
+                )
+            outcome = queue.pop(0)
+            if not isinstance(outcome, HttpResponse):
+                raise outcome
+            return self._copy(outcome)
         if key not in self._responses:
             raise LookupError(f"FakeHttpClient has no registered response for {url!r} with {params!r}")
-        return self._responses[key]
+        return self._copy(self._responses[key])
+
+    async def close(self) -> None:
+        """Mark the fake closed; safe to call repeatedly."""
+        self._closed = True
+
+    @classmethod
+    def _copy(cls, response: HttpResponse) -> HttpResponse:
+        return HttpResponse(
+            status_code=response.status_code,
+            headers=dict(response.headers),
+            payload=copy.deepcopy(response.payload),
+        )
 
     @staticmethod
     def _key(params: Mapping[str, str] | None) -> tuple[tuple[str, str], ...]:

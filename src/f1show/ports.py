@@ -12,7 +12,9 @@ style as ``f1show.events``; no model ID is written here, it comes from config.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
+from types import MappingProxyType
 from typing import Annotated, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -31,16 +33,87 @@ class Clock(Protocol):
     def now(self) -> datetime: ...
 
 
+class HttpError(Exception):
+    """Base of every HTTP failure raised at this boundary.
+
+    A transport library's own exception never crosses the port: callers catch these
+    types, so replacing the adapter cannot change a caller's error handling.
+    """
+
+
+class HttpTransportError(HttpError):
+    """The request could not be completed: connection, protocol or send failure."""
+
+
+class HttpTimeoutError(HttpError):
+    """The request, or the overall deadline, expired before the answer was complete.
+
+    Deliberately a sibling of ``HttpTransportError`` rather than a subtype: the retry
+    policy must be able to tell a slow endpoint from a broken one.
+    """
+
+
+class HttpDecodeError(HttpError):
+    """A successful status returned a body that is not one JSON document."""
+
+
+class HttpResponseTooLargeError(HttpError):
+    """A successful response body exceeded the configured byte bound."""
+
+
+@dataclass(frozen=True)
+class HttpResponse:
+    """One completed HTTP exchange, as every role above the transport sees it.
+
+    ``status_code`` and ``headers`` are always present, including for failures and
+    redirects, so a 429 or a 503 stays visible instead of being flattened into an
+    exception. ``headers`` is published as a read-only mapping with lower-case names,
+    which is what lets ``Retry-After`` be read without guessing the server's
+    capitalisation; ``header`` applies that lookup.
+
+    ``payload`` is the parsed JSON of a success response. A JSON ``null`` parses to
+    ``None``, which is why the status is the first thing a consumer must read: a
+    non-2xx response also carries ``payload=None``, because its body is deliberately
+    never read.
+    """
+
+    status_code: int
+    headers: Mapping[str, str]
+    payload: object | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "headers",
+            MappingProxyType(
+                {str(name).lower(): str(value) for name, value in self.headers.items()}
+            ),
+        )
+
+    def header(self, name: str) -> str | None:
+        """Return ``name`` case-insensitively, or ``None`` when it is absent."""
+        return self.headers.get(name.lower())
+
+
 @runtime_checkable
 class HttpClient(Protocol):
-    """Provisional outbound HTTP boundary; grows at F03.
+    """Outbound HTTP boundary; grows at F03c-2 with pacing and retries.
 
     The single place the app reaches the network, so no role builds its own client.
+
+    ``get_json`` makes exactly one attempt and returns the whole exchange - status,
+    canonical headers and payload - instead of raising for an HTTP status, because a
+    retry policy has to see a 429 or a 503 first. Only transport, timeout, decode and
+    body-size failures raise, and they raise ``HttpError`` subtypes so no transport
+    library's exception ever crosses this port. ``close`` releases what the
+    implementation owns, is safe to repeat, and makes ``get_json`` refuse.
     """
 
     async def get_json(
         self, url: str, *, params: Mapping[str, str] | None = None
-    ) -> object: ...
+    ) -> HttpResponse: ...
+
+    async def close(self) -> None: ...
 
 
 @runtime_checkable
