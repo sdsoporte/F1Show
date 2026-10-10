@@ -567,6 +567,20 @@ and purchases are not authorized by these grants.
     precisely. Re-verification on the new bytes is required before acceptance.
     Re-pinned: the candidate is measured against HEAD `b592ae5` (docs-only concurrent
     commit); the seven source bytes are unchanged by it.
+    **F03c-1-R2 implemented; re-verification in flight, still not accepted.** Writer
+    `mv1tz6c2-t-m8eu` normalized foreign transport exceptions at exactly two loci —
+    `_send` and the streamed read in `_read_bounded` — through
+    `_is_foreign_transport_failure`, which excludes `HttpError`, `httpx.HTTPError`,
+    `TimeoutError` and cancellation. That keeps the size and decode errors from being
+    re-wrapped and lets `KeyboardInterrupt`/`SystemExit` propagate raw. Close-failure
+    detection runs before normalization and the close helpers and bounds are byte-identical.
+    RED 2 failed/5 passed with the predicate forced False, then GREEN 100 focused/247 full;
+    three of the five new tests are disclosed coverage-only over-wrapping guards. One
+    previously verified R1 test was ADAPTED because it encoded the raw escape; parent
+    structural readback confirms it still asserts cause identity, no message or note leak
+    and type-only annotation, and the mutation round must prove the guarantee survived.
+    Whole candidate is now +1606/−17 = **1,623 diff lines** against `b592ae5`. Static
+    checks remain unverified except two cleared pi-lens I001 findings.
     Grow the single `get_json` contract to a typed status/headers/payload response;
     migrate the fake, add scripted outcomes,
     an owned httpx adapter and shared parity tests. Clock stays unchanged. Scope:
@@ -710,9 +724,9 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: F03c-1-R2 normalization of transport-origin read errors `mv1tz6c2-t-m8eu`,
-within the first historical-sync work unit. Acceptance still needs re-verification on the
-new bytes, native review and a local work-unit commit.
+Active: F03c-1-R2 independent re-verification `mv1ujie7-u-cl34` of the new bytes,
+within the first historical-sync work unit. Acceptance still needs that round, native
+review and a local work-unit commit.
 F03c-2..4 and F03d injectable live seam remain pending and authorized for implementation.
 Their publication is a separate decision. F04 onward requires a new implementation grant.
 
