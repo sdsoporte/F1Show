@@ -741,19 +741,54 @@ new real-service/model calls or automatic publication of the next source unit.
     `git ls-remote` matched the intended tip and proved remote main stayed `fc30084`.
     No force-push, main update, PR or merge. Evidence: `/tmp/f1show_push_f03c_refs_before.txt`
     and `/tmp/f1show_push_f03c_refs_after.txt`. Future source publication is a new decision.
-  - [ ] **F03c-2-ADVICE — Review the three latest suggestions read-only.** Retrieve the
-    actual stored reviewer descriptions without querying/reopening burned authority;
-    compare code/tests, assess practical risk and register separate follow-ups. If text
-    cannot be recovered, name the limitation rather than inventing the finding's meaning.
-    No fixes authorized by "revisa". Explorer `mv2hchsk-z-n6zl` reviews these first,
-    then maps the next unit; source remains unchanged until the bounded writer is planned.
-  - **F03c-3 — Ingest/checkpoints. Authorized; read-only mapping in progress.**
+  - [x] **F03c-2-ADVICE — Read-only registered-region review completed, with a limit.**
+    Complete explorer handoff `mv2hming-10-u3ah` found no reviewer RESULT bodies in the
+    inspected clone artifacts: only old candidate data and terminal-consumption receipts;
+    repo references contain the same name-only IDs. Original native intent remains
+    unverified outside this local scope. The following are independent code observations,
+    **not reconstructed native messages**: `RetryPolicy` admits any positive retry status
+    integer (defaults valid; low-risk follow-up), the monotonic fake models exact waits
+    rather than early wakes (limiter recomputation already independently verified), and
+    date/float advice paths remain consistent with downstream wait caps (existing coverage).
+    None is required for F03c-3. No fixes, authority STATUS or reopened review.
+  - **F03c-3 — Ingest/checkpoints. Authorized; split into two cohesive work units.**
     User explicitly requested continuation on 2026-10-10 after publication/advisory review.
-    Validate whole endpoint batch and session
-    before mutation; data commit precedes observation checkpoint. A failed checkpoint
-    allows idempotent repeat. Valid empty arrays advance the successful observation
-    checkpoint; malformed/failing responses do not. Explicit per-endpoint outcomes,
-    not a false global-success flag; static overlap/resume tests. Estimate 350–550.
+    Scout mapped only evidenced `SessionRecord`/`DriverRecord`, source identities and
+    per-batch atomic Store writes with separate watermarks. A single whole-unit 350–550
+    estimate was understated (scout 650–830); preserve tests and split by behavior.
+    - [ ] **F03c-3a — Single-endpoint validation, persistence and observation checkpoint.**
+      In progress; one bounded writer after this plan/mirror/todo reconciliation.
+      Surfaces: new `src/f1show/ingest.py`, new `tests/test_ingest.py`, additive exports only
+      in `src/f1show/__init__.py`. Other source/tests/config/ports/fakes remain untouched.
+      Public `ingest_endpoint(store, clock, *, endpoint, session_key, payload)` supports
+      canonical `sessions`/`drivers` only, derives family/record IDs, validates the complete
+      list through existing models and refuses any other session before mutations.
+      Use existing model JSON projection (`extra="ignore"`); no lossless raw-archive or
+      F04 event-normalization promise. Valid `[]` is an empty successful observation,
+      not a missing-session failure; null/non-list/invalid/mixed-session batches fail.
+      Capture one aware UTC observation stamp for valid batches, write records before
+      watermark with the same stamp, never derive provider filters from that checkpoint.
+      `EndpointOutcome`: ok/empty/failed, explicit failure stage and safe exception type,
+      checkpoint-written flag, optional timestamp/count when unknown. Checkpoint failure
+      retains the acknowledged record count and leaves the checkpoint false; write failure
+      does not pretend a known zero persisted count. No false aggregate-success flag.
+      Caller owns Store; no close/delete/new transaction API. Cancellation/process-control
+      exceptions propagate. Repeat after failed checkpoint re-upserts idempotently.
+      Checks: genuine behavior RED after collection-compatible scaffold (collection failure
+      recorded separately), shared fake/SQLite parity, whole-batch/session refusal, empty
+      checkpoint, write/checkpoint faults, repeat/ownership/UTC/cancellation and full suite.
+      Forecast 450–650 total diff lines including tests/exports; retain meaningful evidence.
+      Independent checks, native work-unit review and local Conventional Commit due.
+    - [ ] **F03c-3b — Fixed sessions/drivers HTTP composition. Pending 3a closure.**
+      Assemble explicit per-endpoint outcomes using published typed HTTP/pacing ports,
+      stable session-key queries, no extra retries or invented paging/event-date filters.
+      Tests use scripted fake and MockTransport chains, retry exhaustion/429 recovery,
+      status/null/malformed/partial outcomes, exactly-once checkpoint and caller ownership.
+      Same module/test/export surfaces; no optional family registry or new fake surfaces.
+      Forecast 300–450 total diff lines; combined 750–1100 reflects the explicit outcome
+      and adversarial matrix, not a hard cap or permission to expand areas. No real calls.
+    Session query empty-vs-404 behavior is not live-verified; valid empty remains accepted
+    and non-2xx remains failure. F03c-4 owns lifecycle; future source publication is separate.
   - **F03c-4 — Session lifecycle. Pending.** Explicit end/cancel/reset, fixed per-run
     session identity, late-response isolation and partial-family outcomes; retain
     caller-owned Store and never invent a delete/transaction API. Estimate 300–500.
@@ -881,15 +916,14 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **read-only review of the three F03c-2 suggestions, then F03c-3 mapping** by
-explorer `mv2hchsk-z-n6zl`; no source writer launched. Both approved source units and their
-tracking history were normally pushed through `3f52c33`; exact remote SHA and unchanged
-remote main were verified. F03c-2 is closed at `badfa54`: independently verified
-127 focused/325 full, both numeric defects fixed, five faithful mutants killed and exact
-reviewed-tree commit. F03c-1/F03c-2 authorities are burned; never query/reuse them.
-No advisory fix is authorized. After the map, derive narrow source/test surfaces and
-register the concrete F03c-3 plan before writing: whole-endpoint/session validation,
-record commit before observation checkpoint, idempotent repeat and explicit partial outcomes.
+Active: **F03c-3a single-endpoint ingestion core**, planned before source writes; then
+F03c-3b HTTP composition after 3a's independent/native checks and local unit commit.
+The three registered advisory regions were examined read-only; native descriptions were
+not found locally, observations are explicitly independent, no fixes authorized or made.
+Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
+review authorities are burned; never query/reuse them. Keep writes single-threaded and
+limit 3a to ingest.py/test_ingest.py/additive package exports, with genuine behavior RED,
+shared Store parity, records-before-observation-checkpoint and honest partial outcomes.
 Future source publication remains a separate human decision.
 F03c-3/4 and F03d injectable live seam remain pending and authorized for implementation.
 Their publication is a separate decision. F04 onward requires a new implementation grant.
