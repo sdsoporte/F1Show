@@ -825,7 +825,34 @@ new real-service/model calls or automatic publication of the next source unit.
       checkpoint, write/checkpoint faults, repeat/ownership/UTC/cancellation and full suite.
       Forecast 450–650 total diff lines including tests/exports; retain meaningful evidence.
       Independent/native checks and local source work-unit commit complete, not published.
-    - [ ] **F03c-3b — Fixed sessions/drivers HTTP composition. In progress.**
+    - [ ] **F03c-3b — Fixed sessions/drivers HTTP composition. Native review next.**
+      Writer `mv2le0ri-15-l6k5` returned implementation, not acceptance. Parent confirms
+      three modified tracked paths, empty index and HEAD `faa116c4`, protected files unchanged.
+      Candidate **831 additions +7 deletions = 838** total diff lines: source +107/−2,
+      tests +722/−3, exports +2/−2. Above 300–450 forecast by 388 at the upper bound;
+      parity/transport/error/partial/cancel matrix and test-local helpers retained, no new area.
+      Actual combined 3a/3b authored size is 1703, not the earlier prospective 1165–1315.
+      SHA256 source `ef372e9b35975fec534bdeb5c5bc2fce661334c617bcf857784421149bc7b25a`,
+      test `75eecddb07778885e9baeead62053b81478c7034318b5afdf026e1a5fd4afd52`,
+      root `141622b78a30d16ae44bc3b571d8e3b4aca66ba97359b0a2a68a28ae10e5415e`.
+      Writer tests: **86 focused/396 full**, existing 48/358 preserved; HTTP/policy 124.
+      Import RED exit 2/one collection error recorded separately, not behavioral evidence.
+      Collection-compatible scaffold RED **38 failed/48 passed**, zero collection errors;
+      later in-body freeze/hash/other assertions were unreached at RED, not backdated.
+      GREEN matrix passed; no additional refactor change. Logs `/tmp/f1show_f03c3b_*.txt`.
+      Writer Fake/MockTransport proves 429 recovery/1s wait, ordered queries, no duplicate
+      checkpoint, explicit core-stage partial counts, caller ownership/cancel/type-only errors.
+      Composition exhaustion cases use max_attempts=1, not a new multi-retry exhaustion proof;
+      underlying published retry tests cover exhaustion. Real provider behavior unverified.
+      **ASSESS medium / runtime large writer:** self-verification stands, structuralReadbackOnly
+      false, independentVerifier **false**; follow exact returned plan, not 3a's former high
+      fallback. RDD on/outcome unknown/candidate unconsumed; reviewDue slice_budget_reached.
+      Native continuation relayed unchanged: `gentle-ai review status --cwd=/home/s/dev/projects/work/F1Show --contract=gentle-ai.review-integration/v2 --next-transition=true`.
+      Parent source spot-check confirms fixed loop/query, one delegated ingest call, no new
+      retry/ownership/watermark query behavior. Active LSP: no new primary errors; base
+      SnapshotResult warning/NED typo carried. Writer cached Ruff/base I001 and dependency-
+      aware Pyright/base warning are config-specific; no project lint/floor-runtime claim.
+      Fresh native inspect/start and exact-byte local work-unit commit pending; no new push.
       3a closed before this bounded writer; source/test hashes above form its baseline.
       Same allowed surfaces only: `src/f1show/ingest.py`, `tests/test_ingest.py`, additive
       exports in `src/f1show/__init__.py`; other source/tests/config/ports/fakes untouched.
@@ -847,7 +874,8 @@ new real-service/model calls or automatic publication of the next source unit.
       Tests use scripted fake and MockTransport chains, retry exhaustion/429 recovery,
       status/null/malformed/partial outcomes, exactly-once checkpoint and caller ownership.
       Shared backend parity where meaningful; cancellation/BaseException and no-error-text
-      leakage remain explicit. No real calls. Independent/native review and local commit due.
+      leakage remain explicit. No real calls. ASSESS decides any separate verifier; this
+      medium/large candidate requires writer self-verification plus native/local closure.
       Forecast 300–450 total diff lines including tests/exports. With 3a's actual 865, the
       prospective combined size is 1165–1315, replacing the earlier 750–1100 estimate;
       forecasts are not caps or permission to expand areas; preserve meaningful tests.
@@ -980,12 +1008,12 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03c-3b fixed two-endpoint HTTP composition**, one bounded writer after this
-closure/plan/mirror/todo reconciliation. F03c-3a source `aca17e2` is closed locally:
-48 focused/358 full, 8/8 viable mutation kills, native approval/exact acknowledgement,
-reviewed/staged/committed tree equality; probes-only gaps/base warnings carried. Three
-new informational suggestions have no returned bodies and are not fixes in 3b.
-No new source push. F03c-3b implementation/checks/native review/local unit commit remain.
+Active: **F03c-3b fresh native review** after writer 86 focused/396 full/124 HTTP-policy.
+Parent confirms 838 diff lines/three paths/no new LSP errors. ASSESS medium/large accepts
+writer self-verification and requires no separate verifier; native candidate unconsumed.
+F03c-3a source `aca17e2` remains closed locally, authority burned, exact tree matched;
+probes-only gaps/base warnings carried. Native suggestion bodies absent, no advisory fixes.
+No new source push. F03c-3b native approval/acknowledgement and local unit commit remain.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
