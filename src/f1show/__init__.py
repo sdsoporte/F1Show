@@ -40,7 +40,7 @@ from f1show.fakes import (
     ScriptedModelClient,
 )
 from f1show.http import HttpxJsonClient
-from f1show.ingest import EndpointOutcome, ingest_endpoint
+from f1show.ingest import EndpointOutcome, SessionSyncResult, ingest_endpoint, sync_session
 from f1show.ports import (
     Bus,
     Clock,
@@ -82,5 +82,5 @@ __all__ = [
     "SessionMismatchError", "SessionRecord",
     "Settings", "SnapshotReplaySource", "SnapshotResult", "SourceSettings", "Speaker", "Store",
     "StoreSettings", "TimeWindowSettings", "Transcript", "Turn", "attach_redacting_filter",
-    "ingest_endpoint", "redact", "write_session_snapshot",
+    "SessionSyncResult", "ingest_endpoint", "redact", "sync_session", "write_session_snapshot",
 ]
