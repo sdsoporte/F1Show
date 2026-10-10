@@ -756,8 +756,18 @@ new real-service/model calls or automatic publication of the next source unit.
     Scout mapped only evidenced `SessionRecord`/`DriverRecord`, source identities and
     per-batch atomic Store writes with separate watermarks. A single whole-unit 350–550
     estimate was understated (scout 650–830); preserve tests and split by behavior.
-    - [ ] **F03c-3a — Single-endpoint validation, persistence and observation checkpoint.**
-      Implementation returned; negative-test annotations complete; independent checks active.
+     - [x] **F03c-3a — Single-endpoint validation, persistence and observation checkpoint.**
+      Closed locally: independent PASS, native approval/burn and exact-tree source commit.
+      Source `aca17e2b81eb9589ae97970d93f5fe869be1b473`, Conventional Commit
+      `feat(ingest): add endpoint ingestion and observation checkpoints`, 3 paths +864/−1.
+      Reviewed = staged = committed tree `2e33953b9d5dea2945a478b53535cdc0e0db3ad6`;
+      all three source hashes checked before staging; clean worktree after commit, no push.
+      Native `review-aed203157651fcdd`, medium/reliability/865 lines/budget 200, approved
+      on the first reviewer run; exact bound STATUS/ack returned authority **burned**.
+      Consumed revision `sha256:e148770b3e1ba63ca8517632e8f019f09455739146f91e96cd994927ae018a13`;
+      burn evidence `gentle-ai.review-acknowledged/v1`; never query/reopen this lineage.
+      Informational advisories (bodies absent; do not infer/fix): R3-001 ingest.py:126-128,
+      R3-002 ingest.py:218-225, R3-003 test_ingest.py:520. Approval stands; later scope only.
       Writer `mv2i885h-11-842l` reports scaffold assertion RED 33 failed/0 passed, zero
       collection errors; GREEN/refactor 33, focused 48/full 358 (baseline 325). A large
       shared parity body stops at its first RED assertion, so all tests failing does not
@@ -792,7 +802,8 @@ new real-service/model calls or automatic publication of the next source unit.
       Omitting `-t` caused resolution artifacts, not proof 3.12/Pyright unsupported. No project
       lint config added; declared Python 3.12 runtime floor remains untested.
       ASSESS was unassessable for new files; mandatory independent high-risk path completed.
-      Fresh native review and exact-byte local commit pending; no 3a acceptance/new push.
+      Native/exact-byte local closure is recorded above. Accepted F03c-3a, not all F03c;
+      probes-only CI gaps/base warnings remain disclosed and source publication ungranted.
       Surfaces: new `src/f1show/ingest.py`, new `tests/test_ingest.py`, additive exports only
       in `src/f1show/__init__.py`. Other source/tests/config/ports/fakes remain untouched.
       Public `ingest_endpoint(store, clock, *, endpoint, session_key, payload)` supports
@@ -813,15 +824,33 @@ new real-service/model calls or automatic publication of the next source unit.
       recorded separately), shared fake/SQLite parity, whole-batch/session refusal, empty
       checkpoint, write/checkpoint faults, repeat/ownership/UTC/cancellation and full suite.
       Forecast 450–650 total diff lines including tests/exports; retain meaningful evidence.
-      Independent checks, native work-unit review and local Conventional Commit due.
-    - [ ] **F03c-3b — Fixed sessions/drivers HTTP composition. Pending 3a closure.**
-      Assemble explicit per-endpoint outcomes using published typed HTTP/pacing ports,
-      stable session-key queries, no extra retries or invented paging/event-date filters.
+      Independent/native checks and local source work-unit commit complete, not published.
+    - [ ] **F03c-3b — Fixed sessions/drivers HTTP composition. In progress.**
+      3a closed before this bounded writer; source/test hashes above form its baseline.
+      Same allowed surfaces only: `src/f1show/ingest.py`, `tests/test_ingest.py`, additive
+      exports in `src/f1show/__init__.py`; other source/tests/config/ports/fakes untouched.
+      Add frozen `SessionSyncResult(session_key, outcomes)` with an ordered tuple of two
+      EndpointOutcomes (sessions then drivers), no aggregate-success flag. Public async
+      `sync_session(http, store, clock, *, session_key, base_url=DEFAULT_OPENF1_BASE_URL)`.
+      Validate requested identity before effects; GET each fixed endpoint once via caller's
+      published HttpClient, `session_key` string query only, delegate admitted 2xx payloads
+      once to existing ingest_endpoint. Non-2xx/regular fetch errors produce failed outcomes
+      with known zero writes/no stamp/no checkpoint, safe stable type/code and stage `fetch`.
+      Minimally extend failure-stage literal; preserve every existing 3a pipeline invariant.
+      Continue the second endpoint after an ordinary first failure; propagate cancellation/
+      process-control exceptions with no fabricated result. Caller owns HTTP client and Store.
+      Reuse published RetryingHttpClient/RateLimiter externally in integration tests, never
+      add retries/rate policy, open/close clients, read checkpoints as provider filters, or
+      invent paging, optional family registries, config wiring or lifecycle behavior.
+      Observe behavioral RED on the new sync behavior (collection-compatible scaffold if
+      needed), GREEN/refactor; distinguish later unreached assertions/coverage-only cases.
       Tests use scripted fake and MockTransport chains, retry exhaustion/429 recovery,
       status/null/malformed/partial outcomes, exactly-once checkpoint and caller ownership.
-      Same module/test/export surfaces; no optional family registry or new fake surfaces.
-      Forecast 300–450 total diff lines; combined 750–1100 reflects the explicit outcome
-      and adversarial matrix, not a hard cap or permission to expand areas. No real calls.
+      Shared backend parity where meaningful; cancellation/BaseException and no-error-text
+      leakage remain explicit. No real calls. Independent/native review and local commit due.
+      Forecast 300–450 total diff lines including tests/exports. With 3a's actual 865, the
+      prospective combined size is 1165–1315, replacing the earlier 750–1100 estimate;
+      forecasts are not caps or permission to expand areas; preserve meaningful tests.
     Session query empty-vs-404 behavior is not live-verified; valid empty remains accepted
     and non-2xx remains failure. F03c-4 owns lifecycle; future source publication is separate.
   - **F03c-4 — Session lifecycle. Pending.** Explicit end/cancel/reset, fixed per-run
@@ -951,10 +980,12 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03c-3a fresh native review**, after independent PASS (48 focused/358 full),
-8/8 viable mutation kills and six extra probes; some assertions remain probes-only, not CI.
-Candidate 865 diff lines on three paths; reviewed-byte local unit commit follows approval.
-No acceptance or new push yet. F03c-3b HTTP composition waits for 3a native/local closure.
+Active: **F03c-3b fixed two-endpoint HTTP composition**, one bounded writer after this
+closure/plan/mirror/todo reconciliation. F03c-3a source `aca17e2` is closed locally:
+48 focused/358 full, 8/8 viable mutation kills, native approval/exact acknowledgement,
+reviewed/staged/committed tree equality; probes-only gaps/base warnings carried. Three
+new informational suggestions have no returned bodies and are not fixes in 3b.
+No new source push. F03c-3b implementation/checks/native review/local unit commit remain.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
