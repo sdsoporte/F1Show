@@ -1704,6 +1704,80 @@ Jolpica pagination work is unrelated to proving the booth.
   that no hard cost stop exists before F13.
 - Depends on F01/F02. Commit/checks: pending.
 
+**Parallel track, authorized 2026-10-10: F08 runs in an isolated linked worktree.**
+The fixture recording (MVP step 1) is committed on its own branch in the main worktree, so
+F08 must not touch that tree: it works in `../F1Show-f08` on branch `feat/f08-gemini-gateway`,
+cut from `0b1f0c7`. This is a side track, not a chain slice — F08 declares no dependency on
+the fixtures and reads none of them. Every commit stages **explicit paths**, never
+`git add -A`, so untracked or committed fixture artifacts are never swept into an unrelated
+commit. The shared task file and its Engram mirror are the collision surface: the parent edits
+this file on its own branch and records the F08 track under `f1show/f08-gemini-gateway` rather
+than rewriting the split tasks mirror while the step-1 session owns it.
+
+**Concrete design, registered before the first write.**
+
+- **Two classes in one new module, `src/f1show/gemini.py`, both implementing the existing
+  `ModelClient` port.** `GoogleGenAIClient` is the thin adapter over an **injected** async
+  `google-genai` client: the caller constructs `genai.Client(api_key=...)` at wiring time from
+  `CredentialsSettings.gemini_api_key`, so this module never reads, stores or formats a
+  credential (composition-ownership precedent: `auth.py`). `SafeguardedModelClient` wraps any
+  inner `ModelClient` and owns timeout, bounded attempts, bounded concurrency and usage
+  accounting, mirroring the wrapper convention of `request_policy.py`. Splitting them is what
+  makes the safeguards testable offline: the whole policy layer runs against scripted doubles,
+  and only the adapter's mapping touches the SDK.
+- **Attempt budget reuses `RetryPolicy`** from `request_policy.py` for `max_attempts`,
+  `base_backoff_seconds` and `max_backoff_seconds`, so the backoff arithmetic, the no-jitter
+  rule and the attempt accounting are not re-implemented. Its HTTP-only fields
+  (`retryable_statuses`, `max_retry_after_seconds`) are unused on this path, and that is stated
+  in the code rather than papered over with a parallel policy type; retryability is decided by
+  the **typed** errors below, not by an HTTP status. Waits are spent through the injected
+  `MonotonicClock.sleep`, never a private clock, so tests observe exact virtual durations.
+- **Timeout is enforced once**, by `asyncio.timeout(request.timeout_seconds)` around a single
+  attempt, and becomes `ModelTimeoutError`. No second SDK-level timeout knob is invented: two
+  budgets would be two behaviours to reason about.
+- **Bounded concurrency** is an `asyncio.Semaphore` of caller-supplied size, with no default
+  that silently serialises or silently unlimits. Every concurrency test bounds its waits with
+  `asyncio.wait_for(..., timeout=...)` plus `pytest.fail` naming the hazard, because the
+  F03d-2 lesson is that an unbounded wait turns a suite that should fail into one that hangs.
+- **Typed, sanitized failures**, all exported, under a `ModelError` base:
+  `ModelTimeoutError`, `ModelRateLimitedError` (429, carrying an optional server-advised
+  delay), `ModelServerError` (5xx), `ModelTransportError` and `ModelResponseError`. Retryable:
+  rate-limited, server, timeout, transport. Not retried: a malformed or blank response, on the
+  `HttpDecodeError` precedent. **No raised error, `repr` or log line may carry the prompt text,
+  the API key or the raw provider payload.**
+- **Output bounds**: `max_output_tokens` from the request is mapped into the SDK generation
+  config, and a missing, blank or non-text response becomes `ModelResponseError` instead of an
+  empty turn. `ModelResponse.model_id` **echoes the requested id**; the provider's own model
+  naming is never trusted or rewritten into our transcript.
+- **Usage accounting and alerting**: a new pydantic `ModelUsage` (model id, input, output,
+  total, attempts) plus an in-process accumulator, an optional `on_usage` observer called once
+  per successful call, and a warning through the redacting logger when a caller-supplied token
+  threshold is crossed. The threshold is a constructor argument, not a new configuration
+  section, so `config.py` and its tests are untouched. **Measured usage is not a hard spend
+  limit and no cost stop exists before F13** — that sentence belongs to the module's own
+  documentation, not only to this file.
+- **Model IDs stay injected.** `model_id` has no default and no literal appears in this module
+  or its tests, per the standing rule that no model ID may enter code or configuration before
+  account enumeration and current documentation verify it; the earlier enumeration attempt
+  (401 with `GEMINI_API_KEY`, `IndexError` through the local proxy) did not verify one. The
+  separately granted real generation that proves the wiring stays a future grant.
+- **Offline checks, with the honest limit stated.** The policy layer runs against
+  `ScriptedModelClient` plus local scripted failing doubles and `FakeMonotonicClock`; the
+  adapter runs against a local fake with the SDK's async surface, plus one **contract probe**
+  that imports the installed `google-genai==2.29.0` and asserts the callables and config fields
+  this mapping depends on exist. That probe is a version-pinned assumption about a third party,
+  not proof: real 429 shapes, `usage_metadata` presence and truncation semantics stay
+  unverified offline and belong to F13.
+- **Allowed edit surfaces** for the writer: `src/f1show/gemini.py` (new),
+  `tests/test_gemini.py` (new), and additive exports in `src/f1show/__init__.py`. **Do not
+  touch** `config.py`, `ports.py`, `fakes.py`, `request_policy.py`, the fixture artifacts, or
+  any other module. No new dependency and no lock change: `google-genai==2.29.0` is already
+  pinned and installed.
+- **Forecast**: 350–550 authored diff lines. The recorded history of this project is that
+  forecasts are lower bounds, so an oversize diff is disclosed rather than compressed by
+  dropping tests or documentation. Verification, native review and the work-unit commit follow
+  the usual path.
+
 ### F09 — Implement the two-person commentary booth
 
 **MVP-critical.** Its dependency line below is superseded by the cut: the booth depends on F08 and
