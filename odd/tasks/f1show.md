@@ -1319,6 +1319,51 @@ new real-service/model calls or automatic publication of the next source unit.
   assumption the architecture rests on would have been false in production while every
   test stayed green. The mode is now read back and a non-`wal` mode is refused.
 
+## MVP cut, decided 2026-10-10
+
+The user asked how far the project is from an MVP, whether the remaining tasks should be reduced,
+and chose **option A**: prove the product's promise before building more plumbing. They also chose
+**free mode** — no subscription — so nothing on the MVP path may require authenticated or
+real-time access.
+
+**Honest position first.** F00–F03 delivered roughly 5,700 lines of verified plumbing and **zero
+user-visible capability**: nothing in this repository produces commentary. F03d in particular
+— 883 lines of OAuth2 and authenticated-client code — was built **ahead of need** for a live path
+free mode cannot exercise. It is reviewed and tested, but it is the clearest symptom of building
+bottom-up without a product check, and this cut is the correction.
+
+**The MVP is:** one session's data → deterministic events → **two distinct, evidence-grounded
+personas** → a visible transcript, reproducible offline from recorded fixtures. Its acceptance is
+that a reader can see the two-persona commentary and a replay re-produces it.
+
+**MVP units, in order:**
+1. **Record the fixtures** (blocking step). Only `sessions` and `drivers` response shapes have ever
+   been observed, so honest collector work needs recorded fixtures from the **free, unauthenticated
+   historical API**. That is an actual OpenF1 call, so it needs its own small grant. The fixtures
+   are the production artifact: the same immutable snapshots serve as replay input and as the
+   regression corpus.
+2. **F04 — deterministic events.** A **subset of families** that the recorded fixtures can
+   actually support, rather than all 18 endpoints. Deduplicate updates, keep evidence timestamps
+   and source fields, and prove no false first-lap record and no inferred overtake from a position
+   change alone.
+3. **F08 — Gemini gateway**, exercised against a fake provider, with one separately granted real
+   generation to prove the wiring. One model call is a budget decision, not an assumption.
+4. **F09 — the two-person booth.** Lead and colour personas, explicit turn order, bounded context,
+   evidence-only sourcing, degradation that is neutral rather than invented.
+5. **Thin F10.** One command that runs replay → events → booth → a transcript. Not the
+   multi-service orchestration: the MVP runs in one process.
+
+**Deferred from the MVP, with the reason:** **F05** Redis fan-out is infrastructure for services
+that do not exist in a single-process MVP; **F06** tactical analysis is value added on top of
+rather than a precondition for commentary; **F07** Jolpica enrichment adds historical colour but
+not the core claim; **F11** Docker packaging is deployment, not demonstration; **F12**'s CI job is
+tracked as issue #7; **F13** live is gated on a purchase the user declined for now. F03d's auth and
+live seam sit **off the MVP path entirely** under free mode.
+
+**Forecasts are lower bounds.** This project has overrun them consistently — F03c 2,620 against
+~1,000, F03d-1 998 against 450, F03d-2 883 against 300–500 — so the MVP estimate must be read with
+that multiplier in mind, and each unit still runs its own verification, native review and commit.
+
 ### F04 — Implement deterministic collector and event detection
 
 - [ ] Normalize positions, laps, sectors, flags, intervals and pit/stint data;
@@ -1330,6 +1375,9 @@ new real-service/model calls or automatic publication of the next source unit.
 
 ### F05 — Implement Redis Streams delivery and fan-out
 
+**Deferred from the MVP** (see the MVP cut above): single-process fan-out is not needed to prove
+the two-persona commentary claim.
+
 - [ ] Define stream names, versioned envelopes, separate consumer groups for
   analyst/historian, acknowledgements, idempotency, recovery and retention limits.
 - Acceptance/checks: local Redis tests show both enrichers receive each event,
@@ -1337,6 +1385,9 @@ new real-service/model calls or automatic publication of the next source unit.
 - Depends on F02/F04. Commit/checks: pending.
 
 ### F06 — Implement deterministic tactical analysis
+
+**Deferred from the MVP** (see the MVP cut above): tactical alerts add value on top of commentary
+but are not a precondition for it.
 
 - [ ] Calculate contextual gap/pace/stint alerts with configurable circuit/session
   parameters. Treat tyre-life and pit-loss estimates as assumptions, not facts.
@@ -1346,6 +1397,9 @@ new real-service/model calls or automatic publication of the next source unit.
 - Depends on F04/F05. Commit/checks: pending.
 
 ### F07 — Implement evidence-grounded historical enrichment
+
+**Deferred from the MVP** (see the MVP cut above): historical colour is not the core claim, and its
+Jolpica pagination work is unrelated to proving the booth.
 
 - [ ] Query Jolpica-style archives with verified driver/circuit mappings, bounded
   caching and source/as-of attribution. Remove fabricated circuit defaults.
@@ -1367,6 +1421,9 @@ new real-service/model calls or automatic publication of the next source unit.
 
 ### F09 — Implement the two-person commentary booth
 
+**MVP-critical.** Its dependency line below is superseded by the cut: the booth depends on F08 and
+on whatever event families F04 actually delivers, **not** on the deferred F06/F07.
+
 - [ ] Implement lead/color personas, explicit turns, bounded history and structured
   transcript output using only current events and attributed enrichment.
 - Acceptance/checks: fake-model tests prove ordering, evidence propagation,
@@ -1384,6 +1441,9 @@ new real-service/model calls or automatic publication of the next source unit.
 - Depends on F05/F09. Commit/checks: pending.
 
 ### F11 — Package the services and Redis in Docker Compose
+
+**Deferred from the MVP** (see the MVP cut above): packaging is deployment, not demonstration, and
+it depends on the deferred F05/F10 multi-service shape.
 
 - [ ] Build `sync`, collector, analyst, historian and booth images, plus Redis and the
   local SQLite store volume; configure internal networking, persistence,
@@ -1418,22 +1478,20 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03-cleanup before F04.** The finding-body question is closed as
-**unrecoverable** with evidence, and the parent replaced it with its own labelled code analysis
-at the flagged locations rather than pretending to have retrieved provider intent. The declared
-Python 3.12 floor is now **proven** (548 passed under 3.12.13 and under 3.13.13). Writer
-`mv2xteps-1g-rqwl` is hardening `auth.py` in four self-standing changes — no secret materialized
-in `repr`, a detached failed exchange's exception retrieved, exchange transport/timeout/size
-failures brought into the `AuthError` taxonomy, and the composition caveat documented — each
-labelled as the parent's analysis, never as a provider finding. Still open: the base static
-findings in `tests/test_fakes.py` and `tests/conftest.py` (a separate unit, because writes stay
-single-threaded), the user's decision on 401/403 cache invalidation, and the live validation that
-only a purchased subscription can unblock. Carried without change: the fourteen advisory
-locations, the caller-owns-its-composition caveat, scripted-only race coverage, the F03c-4
-generation branch unreachable by the public API, probes-only CI gaps, the unverified POST-retry
-assumption, and forecast calibration. `main` is at `2c83a150` with all nine F03 units published;
-F03-cleanup work is **not** published and will need its own verification, review and
-authorization. F04 onward remains unauthorized.
+Active: **MVP, option A chosen by the user.** The cut is registered above: record fixtures from the
+free historical API (needs its own small grant), then F04 over the families those fixtures support,
+F08 against a fake provider, F09's two-person booth, and a thin single-process F10 that prints a
+transcript. F05, F06, F07, F11 and F13 are deferred with reasons, and F03d's auth/live seam is off
+the MVP path under free mode. The user chose **free mode**: no subscription, so nothing on the MVP
+path may require authenticated or real-time access, and the live gaps are tracked as issue #3.
+Seven open items were deferred into tracked issues (#3 live/subscription, #4 401/403 token
+invalidation, #5 the fourteen advisory locations whose bodies are unrecoverable, #6 the remaining
+pre-existing static findings, #7 offline CI with a 3.12 matrix, #8 probe-only coverage and the
+unreachable generation branch, #9 the retried-POST question). A small in-flight hardening of
+`auth.py` continues because it fixes a real defect — a transport failure's message leaked server
+text — and it will take its own verification, review and commit like every other unit. `main` is at
+`2c83a150` with all nine F03 units published; nothing from F03-cleanup or the MVP is published.
+F04's estimates are lower bounds, given the project's consistent two-to-four-times overrun.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
