@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from f1show.config import Mode, ModelProvider
+from f1show.config import DEFAULT_STORE_PATH, Mode, ModelProvider
 
 #: A fictional model ID. No real model ID may appear in this repository until it
 #: is enumerated with the account and its GA status is confirmed (see F01).
@@ -310,3 +310,25 @@ def test_live_mode_rejects_empty_openf1_credentials(make_settings: Any) -> None:
 def test_settings_are_forbidden_from_accepting_unknown_keys(make_settings: Any) -> None:
     with pytest.raises(ValidationError):
         make_settings(**{**REPLAY, "unknown_section": {"anything": 1}})
+
+
+# --------------------------------------------------------------------------
+# Store settings: a documented path default, unlike a model ID or a secret
+# --------------------------------------------------------------------------
+
+
+def test_store_path_has_a_documented_default(make_settings: Any) -> None:
+    settings = make_settings(**REPLAY)
+    assert DEFAULT_STORE_PATH == "var/f1show.sqlite3"
+    assert settings.store.path == DEFAULT_STORE_PATH
+
+
+def test_store_path_is_overridable(make_settings: Any) -> None:
+    settings = make_settings(**{**REPLAY, "store": {"path": "var/other.sqlite3"}})
+    assert settings.store.path == "var/other.sqlite3"
+
+
+def test_store_path_must_not_be_blank(make_settings: Any) -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        make_settings(**{**REPLAY, "store": {"path": "   "}})
+    assert "path" in str(excinfo.value)

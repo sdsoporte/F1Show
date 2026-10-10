@@ -8,13 +8,29 @@ network, no disk and no model call is involved.
 
 from __future__ import annotations
 
+import inspect
 import pathlib
-from typing import Any
+from typing import Any, get_type_hints
 
 import pytest
 from pydantic import ValidationError
 
-from f1show.ports import ModelRequest, ModelResponse, Store
+from f1show.ports import (
+    Clock,
+    HttpDecodeError,
+    HttpError,
+    HttpClient,
+    HttpResponse,
+    HttpResponseTooLargeError,
+    HttpTimeoutError,
+    HttpTransportError,
+    ModelRequest,
+    ModelResponse,
+    MonotonicClock,
+    Store,
+    copy_form_fields,
+    copy_request_headers,
+)
 
 #: Obviously fictional: a real model ID must come from typed configuration.
 MODEL_ID = "test-model-not-real"
@@ -106,3 +122,90 @@ def test_no_store_method_annotation_names_a_storage_engine() -> None:
         rendered = " ".join(str(value) for value in annotations.values()).lower()
         for engine in STORAGE_ENGINES:
             assert engine not in rendered, f"Store.{name} leaks the {engine!r} storage engine"
+
+
+def test_ports_source_names_no_http_transport_library() -> None:
+    """The HTTP port stays engine-free for the same reason the store port does:
+    a transport library mentioned here would tempt every role to import it."""
+    lowered = PORTS_SOURCE.read_text(encoding="utf-8").lower()
+    assert "httpx" not in lowered, "ports.py must not name the httpx transport library"
+
+
+def test_http_response_canonicalises_headers_for_case_insensitive_lookup() -> None:
+    response = HttpResponse(status_code=429, headers={"Retry-After": "3", "X-A": "1"})
+    assert response.headers == {"retry-after": "3", "x-a": "1"}
+    assert response.header("Retry-After") == "3"
+    assert response.header("retry-after") == "3"
+    assert response.header("RETRY-AFTER") == "3"
+    assert response.header("absent") is None
+    assert (response.status_code, response.payload) == (429, None)
+
+
+def test_http_response_headers_are_read_only_and_payload_is_the_callers() -> None:
+    payload = [{"record_id": "1"}]
+    response = HttpResponse(status_code=200, headers={"a": "1"}, payload=payload)
+    with pytest.raises(TypeError):
+        response.headers["a"] = "2"  # type: ignore[index]
+    # The payload crosses the boundary as the caller's own value, unlike the fake's,
+    # which deep-copies on registration and on read.
+    assert response.payload is payload
+
+
+def test_http_error_types_are_distinct_typed_siblings() -> None:
+    """Every HTTP failure is an ``HttpError``, and no subtype swallows another, so
+    the retry policy in the next unit can tell a timeout from a transport failure."""
+    errors = [HttpTransportError, HttpTimeoutError, HttpDecodeError, HttpResponseTooLargeError]
+    assert len(set(errors)) == 4
+    for error in errors:
+        assert issubclass(error, HttpError)
+        assert error is not HttpError
+        for other in errors:
+            assert other is error or not issubclass(error, other)
+
+
+def test_http_client_port_declares_a_typed_response_and_a_close() -> None:
+    assert get_type_hints(HttpClient.get_json)["return"] is HttpResponse
+    assert any(name == "params" for name in get_type_hints(HttpClient.get_json))
+    assert get_type_hints(HttpClient.close)["return"] is type(None)
+
+
+def test_http_client_port_declares_the_form_post_and_optional_request_headers() -> None:
+    """The additive F03d surface: optional request headers on GET, and one form POST."""
+    get_params = inspect.signature(HttpClient.get_json).parameters
+    assert "headers" in get_params and get_params["headers"].default is None
+    post_params = inspect.signature(HttpClient.post_form_json).parameters
+    assert post_params["form"].default is inspect.Parameter.empty, "the form is required"
+    assert post_params["headers"].default is None
+    post_hints = get_type_hints(HttpClient.post_form_json)
+    assert post_hints["return"] is HttpResponse
+    assert "form" in post_hints and "headers" in post_hints
+
+
+def test_request_headers_and_form_helpers_share_one_input_rule() -> None:
+    """Both implementations must refuse the same shapes with the same error type."""
+    assert copy_request_headers(None) is None
+    assert copy_request_headers({"X-Trace": "t"}) == {"X-Trace": "t"}
+    assert copy_form_fields({"a": "b"}) == {"a": "b"}
+    bad_shapes: tuple[Any, ...] = ("x", [("a", "b")], {"a": 1}, {1: "a"})
+    for bad in bad_shapes:
+        with pytest.raises(TypeError):
+            copy_request_headers(bad)
+    # ``None`` headers mean "no extra headers"; a form has no such absent shape.
+    bad_forms: tuple[Any, ...] = (*bad_shapes, None)
+    for bad in bad_forms:
+        with pytest.raises(TypeError):
+            copy_form_fields(bad)
+
+
+def test_copying_a_request_header_mapping_never_rewrites_the_names() -> None:
+    copied = copy_request_headers({"Authorization": "Bearer placeholder", "X-Trace": "t"})
+    assert copied == {"Authorization": "Bearer placeholder", "X-Trace": "t"}
+
+
+def test_monotonic_clock_port_separates_pacing_time_from_utc_observation_time() -> None:
+    """Pacing and retry backoff need elapsed duration, which the UTC observation
+    clock cannot supply: a rate limit measured on wall time would follow a step in
+    that time. The two seams must therefore stay distinct types."""
+    assert get_type_hints(MonotonicClock.monotonic)["return"] is float
+    assert get_type_hints(MonotonicClock.sleep)["return"] is type(None)
+    assert MonotonicClock is not Clock

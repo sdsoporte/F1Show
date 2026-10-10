@@ -7,15 +7,23 @@ roles: deterministic collector, tactical analyst and historian, plus two Gemini
 commentator personas. Run four role services plus a dedicated sync writer, and Redis,
 with Docker Compose.
 
-**Authorization is per task and does not accumulate.** Repository bootstrap,
-source-document preservation, current documentation and this ODD plan were authorized
-together with preparation and closure commits and the initial push to `main` after
-verification; that initial publication happened at F00 and **nothing has been pushed
-since**. F01 (external-contract validation) was separately authorized and closed on
-2026-10-09. **Application implementation remains unauthorized**: F02 onward needs a new
-explicit grant, and live API or model calls, paid subscriptions, deployment, later
-pushes, pull requests and automated merges are not authorized by anything recorded
-here.
+**Authorization is per task and does not accumulate.** F00, F01 and F02 were
+separately authorized and completed. The user explicitly approved publishing F01+F02
+to `main`, followed by MIT licensing and `SECURITY.md`; the published tip is
+`fc30084`. F03 implementation was authorized on 2026-10-09, including local work-unit
+commits, and the user separately authorized the four F03b advisory fixes: "si continua
+con los arreglos para que quede de forma correcta." The user then explicitly requested
+fresh native consent, approval flow, commit and push, and selected publication of the
+current F03a + F03b + F03b-1 advance on **`feat/f03-source-adapters` only**. Approval
+must come from native review; `main` must not change. F04–F13 implementation, publication
+of later units, pull requests, merges, deployment, authenticated/live API or model calls
+and purchases are not authorized by these grants.
+
+On 2026-10-10 the user explicitly requested: "ok, procede con el push, revisa la tres
+sugerencias y luego procede con F03c-3". That authorizes a normal feature-branch push of
+the reviewed F03c-1/F03c-2 advance, read-only examination of the three latest suggestions,
+then F03c-3 implementation. It does not authorize advisory fixes, force-push, main/PR/merge,
+new real-service/model calls or automatic publication of the next source unit.
 
 ## Baseline and decisions
 
@@ -24,6 +32,19 @@ here.
   `sdsoporte/F1Show`, created with the existing SSH/gh configuration.
 - Repository-local Git identity (user-selected; no global identity exists on this
   machine): `sdsoporte <211432262+sdsoporte@users.noreply.github.com>`.
+- **Publication.** `main` was fast-forwarded to F02's tip and pushed on 2026-10-09:
+  `413a75d..8cbe94b`, 15 commits, no merge commit. Independent audit passed 8/8,
+  including all 36 published blobs matching local Git and 131 offline tests from a
+  clean archive installation. MIT `LICENSE` and `SECURITY.md` followed in `fc30084`;
+  local `main` and `origin/main` both resolve to that tip. The separately authorized
+  F03a + F03b + F03b-1 advance is published on `origin/feat/f03-source-adapters`
+  through `3ec02ea`; `git ls-remote` matched the local commit exactly. Main was unchanged.
+  On 2026-10-10 a normal feature push published the 14 later commits through `3f52c33`,
+  including native-approved source units `32a55aa` and `badfa54`. Before/after remote
+  checks matched `3f52c33889dd02ab63eecfce1880a0cc8f448fb5`; remote main stayed `fc30084`.
+- **Branch chain.** `feat/f1show-bootstrap` (F00–F01) → `feat/f02-python-foundation`
+  (F02) → `feat/f03-source-adapters` (F03), each cut from the branch that had already
+  landed, so a slice is never reviewed as part of an accumulated chain.
 - The unrelated `/home/s/.git` is not this project's repository. Never stage it.
 - User chose the full documented architecture, current SDK/models, deterministic
   analyst/historian, and archiving the original Word documents now.
@@ -62,8 +83,10 @@ here.
 
 ## ODD execution rules
 
-1. Reconcile this file, the full Engram mirror `odd/f1show/tasks` and the visible
-   todo projection before resuming. Keep stable IDs and one active task.
+1. Reconcile this file, the Engram mirror and the visible todo projection before
+   resuming. Keep stable IDs and one active task. This file has outgrown the ~49.8 KB
+   Engram record cap, so the mirror is split: `odd/f1show/tasks` holds the prefix and
+   `odd/f1show/tasks-part2` holds the remainder. The on-disk file is authoritative.
 2. Explore each bounded unit and resolve product uncertainty before source edits.
    Use a read-only explorer when evidence exceeds a small targeted read.
 3. Derive narrow edit surfaces; delegate multi-file changes to one writer. Writers
@@ -77,7 +100,8 @@ here.
 7. Native review runs only under the user's RDD switch and provider continuations,
    against a work-unit commit or bounded PR slice, never a checkbox or the entire
    project backlog. Review does not authorize push, PR creation or merge.
-8. Update this file, its full mirror and todo after each actual task transition.
+8. Update this file, its split mirror (both parts) and todo after each actual task
+   transition.
    Never close a task with failing required checks or missing implementation.
 
 ## Review workload and routing
@@ -381,19 +405,791 @@ here.
   `except Exception`, which is deliberate because it fails toward *more* redaction, but
   would also swallow an unrelated error raised while rebuilding a container. Close both
   if either file is touched again.
-- **Next: F03**, needing fresh explicit authorization. It is the first unit that writes
-  real data paths: the SQLite WAL store behind the `Store` port, the immutable Parquet
-  session snapshots, and the `sync` writer with its historical and live adapters.
+- **Next: F03**, explicitly authorized after F02 publication. It writes real data
+  paths: the SQLite WAL store behind the `Store` port, immutable Parquet session
+  snapshots and the `sync` writer with historical and injectable live adapters.
 
 ### F03 — Implement source adapters and replay/session lifecycle
 
-- [ ] Build the sync writer's source adapters (httpx for historical and REST, MQTT or
-  WebSocket for live), the SQLite WAL store with Parquet snapshot export, deterministic
-  replay and explicit session selection; seed mid-session state and handle
-  end/cancel/reset without mixing sessions.
+- [ ] Build the sync writer's source adapters, the SQLite WAL store with Parquet
+  snapshot export, deterministic replay and explicit session selection; seed mid-session
+  state and handle end/cancel/reset without mixing sessions.
 - Acceptance/checks: fake HTTP/clock tests cover history vs live auth, timeouts,
   429/backoff, empty data, invalid responses and per-endpoint watermarks/overlap.
-- Depends on F02. Commit/checks: pending.
+- Depends on F02 (closed).
+
+**Work units, planned before the first source write (2026-10-09):**
+
+- **F03a — the SQLite store behind the `Store` port. Done** (commits `6df4def` and
+`318bec9`; suite 131 → 151). Schema for source records and
+  watermarks, create-if-absent, WAL mode, upsert semantics that deduplicate by family,
+  session and record identity, deterministic read windows by observation time, and
+  `close()`. Tests run against a real temporary database, fully offline. A store-path
+  setting joins the typed configuration, with the same rule as elsewhere: a documented
+  default for the path, no default for anything that identifies a model or a secret.
+  The port's contract is fixed already, so this unit must satisfy it rather than reshape
+  it — a test asserts the implementation is substitutable for the in-memory double.
+- **F03b — Parquet snapshots and deterministic replay. Done.** Dependency commit
+  `2165b64` pins DuckDB 1.5.6; behavior commit `6d3a907` exports per-session Parquet,
+  returns a SHA-256, refuses unintended overwrite and provides deterministic replay
+  with explicit session selection. `Store.read_source_records` now returns
+  `(observed_at, record)` pairs in both implementations, retaining inclusive windows;
+  the shared parity body proves the time channel. Seeding partitions retained rows by
+  observation time, **not full historical positions/stints/lap reconstruction**: upserts
+  keep the latest row per identity, and endpoint-specific derivation belongs to F04.
+  Writer RED: 21 failed, 30 passed, no collection errors; GREEN: 164 full-suite tests,
+  51 focused. Three parent time-channel mutations were caught, with byte-exact
+  restoration and 164 passing afterwards. Native review `review-355e17c45ef3ad37`
+  accepted the complete 772-line, ten-file candidate at medium risk; approved and
+  acknowledged, authority burned. Its four informational findings do not reopen it.
+- **F03b-1 — Snapshot publication and replay boundary hardening. Done.** Commit
+  `3ec02ea4ea670baa764e27f727061c5fe1739ef5`, published on the feature branch. New,
+  separately authorized work unit for those four findings: atomic same-directory
+  publication without unintended overwrite; reject an empty family declaration;
+  align UTC boundary validation; prove mixed-session refusal. Route: delegated explorer
+  (multi-module mapping), one delegated writer (multiple non-trivial files), delegated
+  independent verification spot check. Forecast: about 200–400 authored diff lines
+  for the complete follow-up versus `6d3a907`, not the correction delta or file lengths;
+  retain useful tests/docs even if that advisory estimate is exceeded.
+  - Explorer `mv1d5odw-g-yzn3` confirmed a direct-to-target COPY failure hazard plus a
+    check-then-write overwrite race. Mixed-session refusal already works and needs
+    coverage only. Naive UTC in the Parquet TIMESTAMP versus aware UTC in replay is
+    intentional; share validation in a small internal helper, retaining explicit
+    conversion at the Parquet boundary. Do not refactor store/fakes/config in this unit.
+  - Edit surfaces: `src/f1show/snapshot.py`, `src/f1show/replay.py`, new
+    `src/f1show/_time.py`, `tests/test_snapshot.py`, `tests/test_replay.py`.
+  - Acceptance: failed/cancelled export leaves no partial target; failed explicit
+    overwrite preserves previous bytes; a competing publisher is not overwritten
+    without permission; handled failures clean staging files. Atomic visibility is
+    required, not an unverified power-loss durability guarantee.
+  - Reject `families=()` before filesystem mutation; timestamp boundaries must reject
+    naive/invalid aware datetimes and compare equivalent offset instants consistently;
+    a mixed-session Parquet file is refused, not filtered into apparent validity.
+  - Preserve byte-identical exports, observation-time partitioning, deterministic
+    tie-breaks, deep-copy behavior and existing session/overwrite rules. Distinguish
+    genuine RED from coverage-only tests that pass against the baseline.
+  - Writer `mv1dbgol-h-sd84` returned five allowed files, **605 authored diff lines**
+    (509 additions + 54 deletions tracked, plus 42 new helper lines); the estimate was
+    exceeded by failure/race/UTC tests, not scope expansion or cosmetic compression.
+    Reported RED: snapshot 8 failures and replay 1, zero collection errors; coverage-only
+    passes named separately. Reported GREEN/refactor: focused 29, full 180 tests. It also
+    fixed DuckDB's empty `executemany` rejection so declared zero-row families can export.
+  - Verifier `mv1dmx4o-i-0b51` independently passed focused 29/full 180 and corroborated
+    race/failure/UTC/session tests, but **failed acceptance**: cleanup-only unlink errors
+    are silently swallowed because `sys.exc_info()` inside `except OSError` sees that
+    cleanup error, not the caller's prior state. It also found staging-path ownership
+    lost if `os.close` fails before `_staging_path` returns. No closure is claimed.
+  - [x] **F03b-1-R1 — Correct cleanup exception context and staging ownership.** Continue
+    the same writer, narrowed to `snapshot.py` and `tests/test_snapshot.py`; add genuine
+    RED for cleanup-only failure and initial-close failure, preserve any primary export
+    failure, and do not blindly retry a possibly closed descriptor. Document unavoidable
+    cleanup failures and a completed target remaining valid if post-publication cleanup
+    fails. Independent revalidation must pass before native freeze and commit.
+    Writer follow-up `mv1dsbab-j-n1ui` reported three assertion-level RED failures,
+    then focused 34/full 185 passing. Explicit per-call primary capture avoids both
+    cleanup-handler and already-handling-caller contamination; secondary unlink errors
+    are noted on the preserved primary. Initial-close failure removes the owned name
+    without unsafe close retry. Caller-contamination mutation was caught and source
+    SHA-256 restored byte-exactly. Complete candidate is **774 authored diff lines**
+    (679 additions + 53 deletions tracked, plus 42 helper lines); independent verifier
+    follow-up `mv1dz637-k-8da5` settled: focused 34/full 185 passed; the independent
+    probe now surfaces cleanup-only errors and preserves/notates the primary object.
+    It confirmed initial-close ownership recovery and all non-regression checks.
+    R1 closed with the unit's observed native approval/acknowledgement and `3ec02ea`.
+  - Native assessment remained unassessable for the untracked helper and returned mandatory
+    independent verification (high-risk fallback); that plan is fulfilled by the verifier's
+    observed 34/185 tests and cleanup probe, not by a native approval claim.
+  - [x] **F03b-1-RDD — Fresh native review and exact acknowledgement.** Previous two
+    consent expiries created no authority and were never replayed. On the user's return,
+    fresh consent created `review-202a61df64e578a0`: medium risk, all five intended paths,
+    774 authored diff lines. First reviewer produced no text (`stopReason: length`);
+    fresh bound STATUS reoffered the exact slot, and one forecasted retry approved.
+    Exact acknowledgement returned **authority burned**; no STATUS followed the burn.
+    The staged Git tree matched reviewed tree `7b9a8616bc1c8389920f4b0bcd96bda7cc11ab9b`
+    exactly before the source/test commit. No correction transition was offered.
+  - [x] **F03b-1-PUB — Authorized feature-branch publication.** Normal push published
+    `3ec02ea` on `origin/feat/f03-source-adapters`; independent `git ls-remote` matched
+    the local SHA. Local and remote `main` remained `fc30084` before/after. No force-push,
+    PR or merge. Final task-closure metadata follows under this same delivery grant.
+  - **Five new informational advisories**, all non-blocking and not reasons to reopen
+    this approved review: `R3-addnote-floor` (`snapshot.py:183`, SUGGESTION),
+    `R3-global-close-patch` (`tests/test_snapshot.py:575-579`, WARNING),
+    `R3-hash-memory` (`snapshot.py:280`, SUGGESTION),
+    `R3-staging-suffix-drift` (`tests/test_snapshot.py:91`, SUGGESTION),
+    `R3-writer-instant-coverage` (`snapshot.py:239`, SUGGESTION). Registered for later
+    scoped work; none was silently fixed outside the reviewed candidate.
+  - Authorized findings: `R3-nonatomic-snapshot-write` (`snapshot.py:120-145`, WARNING),
+    `R3-empty-families-silent-fixture` (`snapshot.py:96-101`, SUGGESTION),
+    `R3-duplicate-utc-helper-divergent` (`replay.py:38-44`, SUGGESTION),
+    `R3-mixed-session-refusal-unproved` (`replay.py:72-77`, SUGGESTION).
+- **F03c — Historical sync. Authorized and in progress.** User: "ok, pasemos a F03c".
+  Baseline `e7247b7`, 185 tests. Explorer `mv1hctp2-l-sfku` mapped ports/ownership.
+  Public docs were consulted, not data APIs: `https://openf1.org/docs`, `/auth`, and
+  HTTPX 0.28.1 first-party docs. No OpenF1 pagination contract was found; use supported
+  filters, never invented `limit/offset`. Observation checkpoints are **not source date
+  cursors**. Static families resume by re-query/upsert; no fake date filtering from
+  `Clock.now()`. Source models currently cover sessions/drivers only; any extension
+  needs an explicit, evidenced family adapter. No cross-family atomicity is promised.
+  Four bounded units, planned before source writes; roughly 1,450–2,250 authored diff
+  lines total, split by behavior, not a hard limit. Existing auto-chain/feature-branch
+  strategy applies; **no F03c push was authorized by the original planning grant**.
+  The later F03c-1/F03c-2 publication grant and proof are recorded below; F03c-3 publication
+  remains separately gated. One writer; tests-first offline.
+  - **F03c-1 — HTTP response/adapter. Done, reviewed and locally committed.**
+    Independent verifier `mv1ir20g-n-ov7w`: 86 focused/233 full tests PASS, but FAIL on
+    primary-error masking, raw cleanup-only errors and unbounded close after deadline/
+    cancel (`http.py:146-148`). Existing tests used no-op close. Native review not started.
+    Machine-counted candidate: 1,016 additions +17 deletions = **1,033 diff lines**
+    (forecast 450–650 exceeded; seven planned paths, tests retained). ASSESS remains
+    unassessable for undeclared new files: high-risk fallback. Static checks unverified.
+    **F03c-1-R1 implemented; independent reverification in flight, not accepted.**
+    Writer `mv1j7w77-o-lggk` reports RED 9 failed/37 passed, then 95 focused/242 full
+    (baseline 185). User shell independently re-ran the focused file: 46 passed, and
+    `-k close` 9 passed/deselected 37 — user-run evidence, not independent verification.
+    Pinned candidate at HEAD `0b8cb9f`, empty index, seven paths: 1,430 additions +17
+    deletions = **1,447 diff lines** (2.23× the 450–650 forecast; overage accepted by the
+    parent, tests not trimmed). `http.py` 343 and `test_http.py` 766; sha256 pinned:
+    `http.py:e49fe5d1…`, `test_http.py:b105dde7…`. Verifier `mv1tlpc8-s-3yux` re-probes
+    the four original failures, measures the real `timeout_seconds + min(timeout,1s)`
+    bound, attacks the `is_closed` reclassification heuristic in both false-positive and
+    false-negative directions, and mutation-tests the 9 regressions on a `/tmp` copy with
+    proof of the imported module path. Static checks remain unverified (no ruff/mypy).
+    **Independent reverification `mv1tlpc8-s-3yux`: 7 of 8 criteria PASS, one proven
+    contract defect; NOT accepted.** Re-ran 95 focused/242 full (baseline 185) and
+    `-k close` 9/37 on the pinned bytes, and reproduced the four original failures as
+    fixed. Measured the real bound: stalled read plus stalled close returned in 0.602s at
+    timeout 0.3 (`timeout_seconds + min(timeout,1s)`, no hidden wait beyond that); a
+    synchronous closer took 1.000s at timeout 0.2 and is an honest, documented,
+    unboundable case. Sanitization held (`_target` strips query and userinfo). External
+    cancel: done + cancelled, no lingering task, and no `create_task`/`ensure_future`
+    anywhere in `src`. The `is_closed` heuristic survived a two-directional attack
+    (`is_closed` is True when httpx awaits `stream.aclose()` after EOF) with no
+    reproducible false positive or negative. Mutation testing on a `/tmp` copy with the
+    imported module path proven: allowance cap → 1 failed, reclassification → 2 failed,
+    `add_note` dropped → 2 failed, so the 9 close cases assert behavior, not internals.
+    **Proven defect, in scope:** a custom injected transport raising a NON-httpx
+    exception mid-read with the response still open escapes `get_json` raw and untyped,
+    contradicting the module docstring. Real httpx transports raise `httpx.*` and are
+    typed correctly, so reachability is narrow — but the adapter accepts an injected
+    transport by design, and F03c-2's retry policy must classify typed errors. Corrective
+    **F03c-1-R2** normalizes only transport-origin exceptions from the send and the
+    streamed body read, keeps `HttpDecodeError` for our own parse failures so an internal
+    bug is never masked, keeps cancellation propagating, and states the contract
+    precisely. Re-verification on the new bytes is required before acceptance.
+    Re-pinned: the candidate is measured against HEAD `b592ae5` (docs-only concurrent
+    commit); the seven source bytes are unchanged by it.
+    **F03c-1-R2 implemented; re-verification in flight, still not accepted.** Writer
+    `mv1tz6c2-t-m8eu` normalized foreign transport exceptions at exactly two loci —
+    `_send` and the streamed read in `_read_bounded` — through
+    `_is_foreign_transport_failure`, which excludes `HttpError`, `httpx.HTTPError`,
+    `TimeoutError` and cancellation. That keeps the size and decode errors from being
+    re-wrapped and lets `KeyboardInterrupt`/`SystemExit` propagate raw. Close-failure
+    detection runs before normalization and the close helpers and bounds are byte-identical.
+    RED 2 failed/5 passed with the predicate forced False, then GREEN 100 focused/247 full;
+    three of the five new tests are disclosed coverage-only over-wrapping guards. One
+    previously verified R1 test was ADAPTED because it encoded the raw escape; parent
+    structural readback confirms it still asserts cause identity, no message or note leak
+    and type-only annotation, and the mutation round must prove the guarantee survived.
+    Whole candidate is now +1606/−17 = **1,623 diff lines** against `b592ae5`. Static
+    checks remain unverified except two cleared pi-lens I001 findings.
+    **R2 independently re-verified: PASS on every criterion, no open defect.** Verifier
+    `mv1ujie7-u-cl34` recomputed +1606/−17 = 1,623; focused 100 / full 247; the prior probe
+    set held (worst case 0.602 s at timeout 0.3; sync closer 1.000 s documented; no
+    `create_task` in `src`). The new normalization passed a raw-vs-typed matrix in both
+    directions: foreign send and read errors become typed with the cause preserved, malformed
+    JSON stays `HttpDecodeError`, an over-bound body stays `HttpResponseTooLargeError`, the
+    privileged base exceptions propagate raw, and close detection demonstrably precedes
+    normalization. Five mutations of the new machinery were all caught (predicate disabled,
+    cause chain dropped, allowance cap removed, reclassification disabled, note dropped), and
+    the adapted test retained every R1 guarantee. Ruff is genuinely unavailable on this
+    machine, so the I001 formatting claim is the one item that stays unverified.
+    **Native review approved and burned.** A plain START created lineage
+    `review-28a0fc5740cbe93d` (medium, seven files, 1,623 lines, one lens
+    `review-reliability`, correction budget 200). Lesson recorded: passing `lineageId` to a
+    NEW ordinary START projected only the five tracked files and its consent binding expired;
+    `lineageId` belongs to status/advance, not to a fresh start. Forecast: one model run over
+    `pi_host_relay`. The first reviewer run failed `pi-host-relay-transport-failure` /
+    `reviewer-empty-output` (`stopReason: length`, 604 s, no mutation, no findings); fresh
+    STATUS reoffered the same slot, and the retry closed `approved`. Acknowledgement burned
+    authority: consumed revision `sha256:feea4e3e…`, `burn_evidence
+    gentle-ai.review-acknowledged/v1`, delivery under ordinary repository policy. No STATUS
+    was issued after the burn.
+    **Committed as `32a55aa7949a38408163618772922b5ae2115aca`.** `git write-tree` before the
+    commit and the commit tree both equal the reviewed tree
+    `9b92cacdbaa82880722385cba752654897150a97`, so the reviewed bytes are exactly the
+    committed bytes: seven files, +1606/−17. Not pushed.
+    Three informational advisories carried as separate later work, none blocking and none
+    reopening this review; the closure envelope named them without descriptions:
+    `R3-001` (`src/f1show/http.py:286-293`, WARNING), `R3-002` (`src/f1show/fakes.py:81-85`,
+    SUGGESTION), `R3-003` (`src/f1show/http.py:186-190`, SUGGESTION).
+    Grow the single `get_json` contract to a typed status/headers/payload response;
+    migrate the fake, add scripted outcomes,
+    an owned httpx adapter and shared parity tests. Clock stays unchanged. Scope:
+    `src/f1show/{ports,fakes,http,__init__}.py`, `tests/test_{http,fakes,ports}.py`.
+    Estimate 450–650 diff lines; verify hard timeout, bounded JSON body, status/header
+    visibility, malformed success vs non-JSON error response, no implicit credentials,
+    deep-copy parity and idempotent close. No retry implementation in this unit.
+  - **F03c-2 — Pacing/retries. Done, reviewed and locally committed.**
+    User explicitly authorized: "ok, continua con F03c-2". Existing plan and allowed
+    surfaces preceded source writes; no new dependency, config wiring or live calls.
+    Separate `MonotonicClock.monotonic()/sleep()` from UTC `Clock.now()`: the shared
+    `RateLimiter` owns one monotonic source for pacing and backoff; UTC is used only
+    to derive a duration from an HTTP-date `Retry-After`.
+    `PacingPolicy` defaults to 3/second and 30/minute with both rolling windows enforced
+    globally across endpoints. `RetryPolicy`: three total attempts including the first,
+    exponential backoff 0.5s capped at 8s, no jitter, admitted retry wait at most 60s;
+    statuses 408/429/500/502/503/504 and typed transport/timeout errors are retryable.
+    Every attempt must pass the limiter. Retry waits take the maximum of backoff and
+    valid server advice; invalid advice falls back to backoff, and over-budget advice
+    never causes an early retry. Exhausted/over-budget statuses return the last response;
+    exhausted/over-budget transport errors re-raise. Decode, size and cancellation never
+    retry. Wrapper close delegates once and refuses requests after closure.
+    Seven narrow surfaces: `src/f1show/{ports,fakes,request_policy,__init__}.py` and
+    `tests/test_{request_policy,fakes,ports}.py`; the reviewed `http.py` is untouched.
+    Writer `mv2eorwl-v-pave` reported **115 focused/313 full tests**, baseline 247;
+    claimed RED was an import/collection error, **not an observed behavioral RED**.
+    Coverage-only validation variants were disclosed; no retrospective TDD claim is made.
+    Whole candidate reported **924 additions +3 deletions = 927 diff lines** versus
+    `4dc1e9e`, including both new files (304 policy/515 test lines). Original 350–550
+    estimate exceeded by the required test matrix; tests must not be trimmed to fit it.
+    ASSESS is unassessable until new files are declared natively; its returned high-risk
+    fallback requires independent command-running verification before acceptance.
+    **Independent verifier `mv2f7w1r-w-x88s`: FAIL on two proven defects.** Observed
+    focused 115/full 313, +924/−3 = 927, all eight source pins unchanged and index empty.
+    Both rolling windows (half-open intervals), shared/concurrent endpoint budgets,
+    early-wake recomputation, cancellation, response/error identity and fake/adapter parity
+    passed. Six isolated mutations were killed; they are efficacy evidence, not historical RED.
+    D1: RFC-valid delay-seconds with 309+ digits overflows `float()` to infinity, becomes
+    absent advice and retries after 0.5s instead of returning the over-budget response
+    (`request_policy.py:293-294`; `/tmp/f03c2_probe/probe1_retry_after.py`).
+    D2: multiplying by `2**(failed_attempt-1)` before capping raises `OverflowError` at
+    failed attempt 1025 with max_attempts 1100, replacing the promised typed transport
+    error (`request_policy.py:263`; `/tmp/f03c2_probe/probe3_retries.py`).
+    - [x] **F03c-2-R1 — Preserve huge server advice and cap exponential arithmetic safely.**
+      Independent functional verification, native closure and exact-byte unit commit observed.
+      Continue one bounded writer on only `src/f1show/request_policy.py` and
+      `tests/test_request_policy.py`. First add regressions and observe actual assertion/
+      operation failures on the current defective bytes; collection failure is not RED.
+      Valid integer server advice must never become absent through overflow or Python's
+      integer-string digit limit; include long leading-zero and all-zero forms. Backoff
+      must reach its existing cap without first evaluating an overflowing exponential.
+      Preserve existing defaults, status-as-data, exception identity, cancellation, both
+      windows and parity; do not trim tests or fix unrelated advisories. Reverify the new
+      bytes independently before fresh native inspect/START/acknowledgement/local commit.
+    **R1 writer `mv2fui68-x-uccu` returned only the two permitted paths.** New regressions
+    first ran against the defective source: **7 failed/5 passed**, zero collection errors;
+    four huge-advice assertions and three high-attempt overflow operations are genuine RED.
+    Five already-passing parser guards are coverage-only. Corrective set then passed 12;
+    reported GREEN **127 focused/325 full**, baseline 313. The original R0 TDD gap remains.
+    ASCII integer advice strips leading zeros and uses significant-digit admission before
+    conversion, with infinity denoting over-budget rather than absent advice; invalid
+    numeric extensions and HTTP-date paths remain unchanged. Backoff doubles only until
+    the existing cap, without unbounded exponentiation or restricting `max_attempts`.
+    Writer reran the original D1/D2 probes: huge advice returned 429/one call/no sleeps,
+    and 1100 transport failures raised the original typed error instead of OverflowError.
+    Parent re-pinned the complete candidate: **1139 additions +3 deletions = 1142 diff
+    lines**, policy 343/test 691 lines, other five source paths and reviewed `http.py`
+    unchanged. New SHA256 pins: policy `6c35023e57c4ef0030da0085011a7050e3135fce3f82517d515faf03e0e9eeb9`,
+    test `4cbf717abe1912ac0d1086a832acf87641319c38175122d77fb28c36eff33160`.
+    Parent active LSP on the two R1 paths reported no primary findings and three auxiliary
+    numeric-parse/typo findings, not an all-checks-clean claim. Ruff/mypy remain unavailable
+    to the child; no static tools installed. Fresh ASSESS still returned unassessable for
+    untracked files and the exact high-risk independent-verifier plan.
+    **Independent R1 reverification `mv2g6blq-y-uepo`: PASS, no proven defect.** Observed
+    focused 127/full 325, +1139/−3 = 1142 and all eight pre/post pins unchanged; the
+    independent-verifier fallback is fulfilled, not a native approval substitute.
+    Original D1/D2 probes now preserve server advice, response/error identity and the cap:
+    309/400/5000-digit advice returns 429/one call/no wait; 1100 retries reach the last
+    503 or original typed error, no post-exhaustion sleep. Long zeros, exact/fractional
+    budgets, dates, extreme finite/subnormal bases/caps and existing windows/concurrency/
+    cancellation/parity all passed. Original RED logs corroborate 7 failed/5 passed with
+    zero collection errors; a faithful old-parser mutant recreates four failures and an
+    old-pow mutant recreates three. Five final mutants killed, including minute-window,
+    retry-pacing and min-advice controls. A first incomplete old-parser mutant survived;
+    it omitted the defective non-finite-to-absent branch and was excluded, not hidden.
+    A pathological `10**5000` configured ceiling raises OverflowError during validation;
+    no specific rejection type is promised and it never reaches retry operations. Retain
+    as an edge observation, not a new corrective scope. Native review/acknowledgement and
+    source commit remain pending; no F03c-2 lineage started or source staged.
+    Child static tools were unavailable, but a parent active LSP probe covered all seven
+    changed paths: four primary findings (pre-existing root `SnapshotResult` export warning
+    and three errors in untouched fake tests), plus auxiliary Protocol-ellipsis/numeric-
+    parse/typo findings. This is not a clean static result; no tools were installed.
+    `SnapshotResult` missing from root imports is pre-existing at HEAD and HEAD~1 and
+    stays a separate follow-up. Concurrent close-vs-wait semantics remain unspecified;
+    neither observation silently expands this corrective unit.
+    **Native review approved and exactly acknowledged; authority burned.** Fresh inspect
+    selected both new files; plain ordinary START created `review-23515ec290540af0`
+    (medium, seven files, 1142 lines, one `review-reliability` lens, correction budget 200).
+    Forecast of one model run over `pi_host_relay` was relayed before capture. The first
+    run prepared/submitted one reviewer and closed approved; no retry/correction needed.
+    Fresh bound STATUS offered the exact acknowledgement; its returned envelope consumed
+    revision `sha256:407096f0481044d71031c2c52742a7d561d1d5f1603ba5834340976963ad3731`,
+    authority `burned`, evidence `gentle-ai.review-acknowledged/v1`. No STATUS after burn.
+    **Source unit committed as `badfa5421153d04f4c27cf0d3a9b86c8d2f03386`**, message
+    `feat(http): add global pacing and bounded retry`. Reviewed tree, staged `git write-tree`
+    and committed tree all exactly `d4f44ce8dbd085316e1b74eb68d6452e1cdea13f`; seven files,
+    +1139/−3. Post-commit worktree clean. No push, PR, merge or main update.
+    Three informational native suggestions, descriptions absent from the closure envelope,
+    registered for separate later work and never reasons to reopen this approved candidate:
+    `R3-1` (`request_policy.py:109-122`), `R3-2` (`fakes.py:63-71`),
+    `R3-3` (`request_policy.py:314-322`), all SUGGESTION/non-blocking.
+  - [x] **F03c-PUB — Publish the reviewed HTTP/pacing advance.** Explicit user grant on
+    2026-10-10. Normal push advanced remote `feat/f03-source-adapters` from `e7247b7`
+    to `3f52c33889dd02ab63eecfce1880a0cc8f448fb5`, 14 commits. Parent required expected
+    root/branch/HEAD/origin, clean worktree/index and remote ancestor; before/after
+    `git ls-remote` matched the intended tip and proved remote main stayed `fc30084`.
+    No force-push, main update, PR or merge. Evidence: `/tmp/f1show_push_f03c_refs_before.txt`
+    and `/tmp/f1show_push_f03c_refs_after.txt`. Future source publication is a new decision.
+  - [x] **F03c-2-ADVICE — Read-only registered-region review completed, with a limit.**
+    Complete explorer handoff `mv2hming-10-u3ah` found no reviewer RESULT bodies in the
+    inspected clone artifacts: only old candidate data and terminal-consumption receipts;
+    repo references contain the same name-only IDs. Original native intent remains
+    unverified outside this local scope. The following are independent code observations,
+    **not reconstructed native messages**: `RetryPolicy` admits any positive retry status
+    integer (defaults valid; low-risk follow-up), the monotonic fake models exact waits
+    rather than early wakes (limiter recomputation already independently verified), and
+    date/float advice paths remain consistent with downstream wait caps (existing coverage).
+    None is required for F03c-3. No fixes, authority STATUS or reopened review.
+  - **F03c-3 — Ingest/checkpoints. Authorized; split into two cohesive work units.**
+    User explicitly requested continuation on 2026-10-10 after publication/advisory review.
+    Scout mapped only evidenced `SessionRecord`/`DriverRecord`, source identities and
+    per-batch atomic Store writes with separate watermarks. A single whole-unit 350–550
+    estimate was understated (scout 650–830); preserve tests and split by behavior.
+     - [x] **F03c-3a — Single-endpoint validation, persistence and observation checkpoint.**
+      Closed locally: independent PASS, native approval/burn and exact-tree source commit.
+      Source `aca17e2b81eb9589ae97970d93f5fe869be1b473`, Conventional Commit
+      `feat(ingest): add endpoint ingestion and observation checkpoints`, 3 paths +864/−1.
+      Reviewed = staged = committed tree `2e33953b9d5dea2945a478b53535cdc0e0db3ad6`;
+      all three source hashes checked before staging; clean worktree after commit, no push.
+      Native `review-aed203157651fcdd`, medium/reliability/865 lines/budget 200, approved
+      on the first reviewer run; exact bound STATUS/ack returned authority **burned**.
+      Consumed revision `sha256:e148770b3e1ba63ca8517632e8f019f09455739146f91e96cd994927ae018a13`;
+      burn evidence `gentle-ai.review-acknowledged/v1`; never query/reopen this lineage.
+      Informational advisories (bodies absent; do not infer/fix): R3-001 ingest.py:126-128,
+      R3-002 ingest.py:218-225, R3-003 test_ingest.py:520. Approval stands; later scope only.
+      Writer `mv2i885h-11-842l` reports scaffold assertion RED 33 failed/0 passed, zero
+      collection errors; GREEN/refactor 33, focused 48/full 358 (baseline 325). A large
+      shared parity body stops at its first RED assertion, so all tests failing does not
+      prove every later assertion/variant was exercised; verifier must distinguish this.
+      Original candidate 858 additions +1 deletion = 859 exceeded the 450–650 forecast.
+      Follow-up `mv2it6uo-12-wb8x` added only six explanatory lines and three argument-line
+      `pyright: ignore[reportArgumentType]` directives, preserving inputs/assertions/types.
+      Parent confirmed AST equality (69,113 characters) against the preannotation copy,
+      empty index, three paths, **864 additions +1 deletion = 865** total diff lines
+      (module 266/test 595; exports +3/−1), source and root pins unchanged.
+      SHA256: ingest `d86b48ff5151324258088404cfb566878a7269b4759c4f2f444b3d5d170513c9`,
+      test `e50229ea765f9159997bb879ed96e283406ed834a1726cb116e4d8129606b66b`.
+      Independent `mv2jke8c-13-znju` **PASS**: 48 focused/358 full on Python 3.14.4;
+      exact scope/pins/index unchanged before/after; control2 39 passed (33 + proof + 6 probes).
+      Nine isolated semantic mutant runs: **8/8 viable assertion-killed**, zero collection
+      errors; one equivalent claimed-ID mutant excluded because model `extra="ignore"`
+      removes `record_id` before projection. A viable driver-ID prefix mutant was killed.
+      Other killed changes: mixed-session acceptance, first-row-only validation, checkpoint
+      before write, second Clock read, skipped empty checkpoint, swallowed cancellation,
+      zero rather than unknown write-failure count. Same-process import proof recorded.
+      **Probes only, not shipped CI tests:** empty checkpoint from a distinct prior stamp,
+      checkpoint-await cancellation, direct-await KI/SystemExit, no-prior-watermark write
+      failure, drivers input immutability/mixed-session refusal. No concurrent/crash proof.
+      Direct await establishes process-control propagation at ingestion; nested-task cancel
+      observations do not prove KI conversion or ingestion swallowing. No historical RED added.
+      Logs: `/tmp/f03c3a_verify/{focused,full,control2}.log`, `mut_*/result.log` and probes.
+      Parent active LSP: no new primary errors; base `SnapshotResult` warning/NED typo carried.
+      Ruff 0.16.3/harness config: new module/test clean; root I001 reproduced at HEAD.
+      Exact worker Pyright 3.12 command **with CLI `-t` typeshed** corroborated: test 0/0.
+      Its no-venv config on all three files has one unresolved pydantic import + base warning;
+      dependency-aware verifier config (venv/3.13/explicit typeshed) gives 0 errors/base warning.
+      Omitting `-t` caused resolution artifacts, not proof 3.12/Pyright unsupported. No project
+      lint config added; declared Python 3.12 runtime floor remains untested.
+      ASSESS was unassessable for new files; mandatory independent high-risk path completed.
+      Native/exact-byte local closure is recorded above. Accepted F03c-3a, not all F03c;
+      probes-only CI gaps/base warnings remain disclosed and source publication ungranted.
+      Surfaces: new `src/f1show/ingest.py`, new `tests/test_ingest.py`, additive exports only
+      in `src/f1show/__init__.py`. Other source/tests/config/ports/fakes remain untouched.
+      Public `ingest_endpoint(store, clock, *, endpoint, session_key, payload)` supports
+      canonical `sessions`/`drivers` only, derives family/record IDs, validates the complete
+      list through existing models and refuses any other session before mutations.
+      Use existing model JSON projection (`extra="ignore"`); no lossless raw-archive or
+      F04 event-normalization promise. Valid `[]` is an empty successful observation,
+      not a missing-session failure; null/non-list/invalid/mixed-session batches fail.
+      Capture one aware UTC observation stamp for valid batches, write records before
+      watermark with the same stamp, never derive provider filters from that checkpoint.
+      `EndpointOutcome`: ok/empty/failed, explicit failure stage and safe exception type,
+      checkpoint-written flag, optional timestamp/count when unknown. Checkpoint failure
+      retains the acknowledged record count and leaves the checkpoint false; write failure
+      does not pretend a known zero persisted count. No false aggregate-success flag.
+      Caller owns Store; no close/delete/new transaction API. Cancellation/process-control
+      exceptions propagate. Repeat after failed checkpoint re-upserts idempotently.
+      Checks: genuine behavior RED after collection-compatible scaffold (collection failure
+      recorded separately), shared fake/SQLite parity, whole-batch/session refusal, empty
+      checkpoint, write/checkpoint faults, repeat/ownership/UTC/cancellation and full suite.
+      Forecast 450–650 total diff lines including tests/exports; retain meaningful evidence.
+      Independent/native checks and local source work-unit commit complete, not published.
+    - [x] **F03c-3b — Fixed sessions/drivers HTTP composition. Closed locally.**
+      Source `d4e1bc4186b5401454413c39abc3b0ac905df143`, Conventional Commit
+      `feat(ingest): compose fixed session endpoint sync over HTTP`, 3 paths +831/−7 = 838.
+      Reviewed = staged = committed tree `097f3bf7f7e6aaef71f10597c6f8718a2123c20a`;
+      all three source hashes checked before staging; clean worktree after commit, no push.
+      Native `review-af79c3ab0d550c27`, medium/reliability/838 lines/budget 200, approved on
+      the first reviewer run after one pre-lineage consent expiry (that attempt created no
+      lineage, attempted no invocation and mutated nothing; the exact provider follow-up was
+      a fresh START, never a replayed binding).
+      Exact bound STATUS/ack returned authority **burned**; consumed revision
+      `sha256:551a025b0be6edf7a6a6635ae2edc16632a923363c9f094adfa8dbd5ac8a69b5`;
+      burn evidence `gentle-ai.review-acknowledged/v1`; never query this lineage again.
+      Informational advisories (bodies absent; do not infer/fix): `R3-empty-base-url`
+      ingest.py:329, `R3-fetch-catch-breadth` ingest.py:336-342. Approval stands.
+      Writer `mv2le0ri-15-l6k5` returned implementation, not acceptance. Parent confirms
+      three modified tracked paths, empty index and HEAD `faa116c4`, protected files unchanged.
+      Candidate **831 additions +7 deletions = 838** total diff lines: source +107/−2,
+      tests +722/−3, exports +2/−2. Above 300–450 forecast by 388 at the upper bound;
+      parity/transport/error/partial/cancel matrix and test-local helpers retained, no new area.
+      Actual combined 3a/3b authored size is 1703, not the earlier prospective 1165–1315.
+      SHA256 source `ef372e9b35975fec534bdeb5c5bc2fce661334c617bcf857784421149bc7b25a`,
+      test `75eecddb07778885e9baeead62053b81478c7034318b5afdf026e1a5fd4afd52`,
+      root `141622b78a30d16ae44bc3b571d8e3b4aca66ba97359b0a2a68a28ae10e5415e`.
+      Writer tests: **86 focused/396 full**, existing 48/358 preserved; HTTP/policy 124.
+      Import RED exit 2/one collection error recorded separately, not behavioral evidence.
+      Collection-compatible scaffold RED **38 failed/48 passed**, zero collection errors;
+      later in-body freeze/hash/other assertions were unreached at RED, not backdated.
+      GREEN matrix passed; no additional refactor change. Logs `/tmp/f1show_f03c3b_*.txt`.
+      Writer Fake/MockTransport proves 429 recovery/1s wait, ordered queries, no duplicate
+      checkpoint, explicit core-stage partial counts, caller ownership/cancel/type-only errors.
+      Composition exhaustion cases use max_attempts=1, not a new multi-retry exhaustion proof;
+      underlying published retry tests cover exhaustion. Real provider behavior unverified.
+      **ASSESS medium / runtime large writer:** self-verification stands, structuralReadbackOnly
+      false, independentVerifier **false**; follow exact returned plan, not 3a's former high
+      fallback. RDD on/outcome unknown/candidate unconsumed; reviewDue slice_budget_reached.
+      Native continuation relayed unchanged: `gentle-ai review status --cwd=/home/s/dev/projects/work/F1Show --contract=gentle-ai.review-integration/v2 --next-transition=true`.
+      Parent source spot-check confirms fixed loop/query, one delegated ingest call, no new
+      retry/ownership/watermark query behavior. Active LSP: no new primary errors; base
+      SnapshotResult warning/NED typo carried. Writer cached Ruff/base I001 and dependency-
+      aware Pyright/base warning are config-specific; no project lint/floor-runtime claim.
+      Native approval/acknowledgement and the exact-byte local work-unit commit are recorded
+      above; writer/independent-style evidence below is the historical record for this unit.
+      3a closed before this bounded writer; source/test hashes above form its baseline.
+      Same allowed surfaces only: `src/f1show/ingest.py`, `tests/test_ingest.py`, additive
+      exports in `src/f1show/__init__.py`; other source/tests/config/ports/fakes untouched.
+      Add frozen `SessionSyncResult(session_key, outcomes)` with an ordered tuple of two
+      EndpointOutcomes (sessions then drivers), no aggregate-success flag. Public async
+      `sync_session(http, store, clock, *, session_key, base_url=DEFAULT_OPENF1_BASE_URL)`.
+      Validate requested identity before effects; GET each fixed endpoint once via caller's
+      published HttpClient, `session_key` string query only, delegate admitted 2xx payloads
+      once to existing ingest_endpoint. Non-2xx/regular fetch errors produce failed outcomes
+      with known zero writes/no stamp/no checkpoint, safe stable type/code and stage `fetch`.
+      Minimally extend failure-stage literal; preserve every existing 3a pipeline invariant.
+      Continue the second endpoint after an ordinary first failure; propagate cancellation/
+      process-control exceptions with no fabricated result. Caller owns HTTP client and Store.
+      Reuse published RetryingHttpClient/RateLimiter externally in integration tests, never
+      add retries/rate policy, open/close clients, read checkpoints as provider filters, or
+      invent paging, optional family registries, config wiring or lifecycle behavior.
+      Observe behavioral RED on the new sync behavior (collection-compatible scaffold if
+      needed), GREEN/refactor; distinguish later unreached assertions/coverage-only cases.
+      Tests use scripted fake and MockTransport chains, retry exhaustion/429 recovery,
+      status/null/malformed/partial outcomes, exactly-once checkpoint and caller ownership.
+      Shared backend parity where meaningful; cancellation/BaseException and no-error-text
+      leakage remain explicit. No real calls. ASSESS decides any separate verifier; this
+      medium/large candidate requires writer self-verification plus native/local closure.
+      Forecast 300–450 total diff lines including tests/exports. With 3a's actual 865, the
+      prospective combined size is 1165–1315, replacing the earlier 750–1100 estimate;
+      forecasts are not caps or permission to expand areas; preserve meaningful tests.
+    Session query empty-vs-404 behavior is not live-verified; valid empty remains accepted
+    and non-2xx remains failure. F03c-4 owns lifecycle; future source publication is separate.
+  - **F03c-4 — Session lifecycle. Closed locally.**
+    Requirement: explicit end/cancel/reset, fixed per-run session identity, late-response
+    isolation and partial-family outcomes, caller-owned Store, no delete/transaction API.
+    `ARCHITECTURE.md:46` already assigns "session lifecycle" to the `sync` service, so this
+    unit is the seam F03d/F10 will drive rather than a new subsystem.
+    **Design decision (parent, derived from that requirement):** a new module
+    `src/f1show/session.py` whose run identity is supplied by the caller — no hidden
+    entropy, uuid or clock read — so behavior stays deterministic and testable.
+      - Frozen `SessionRunIdentity(run_id, session_key)`; `run_id` is a non-empty caller
+        string. No provider field, no store column, no schema change.
+      - `RunState` vocabulary `active`/`ended`/`cancelled`, reported as data.
+      - `SessionRun(identity, generation)`: `generation` changes only through this object's
+        own transitions so a superseded run is distinguishable from a live one.
+      - `async run.sync(http, store, clock, *, base_url=DEFAULT_OPENF1_BASE_URL)` uses the run's
+        own `identity.session_key` and performs exactly ONE `sync_session` per call: repeat
+        calls are the ~3s live cadence, not an error. It returns the `SessionSyncResult`
+        unchanged, preserving the fixed identity and the ordered partial-family outcomes.
+      - `run.end()` and `run.cancel()` are terminal. `cancel()` requests isolation rather than
+        reaching into the caller's task: it marks the run terminal so an in-flight `sync` can
+        no longer commit, while the caller still owns its task and any `CancelledError`
+        propagates unchanged.
+        `run.reset(session_key, run_id)` returns a NEW `SessionRun` with the caller-supplied
+        `run_id` and advanced generation, and never reads, rewrites, deletes or truncates
+        committed store rows. The design shorthand omitted the `run_id` parameter; the
+        implementation resolves it as `reset(session_key, run_id)` because the new identity is
+        caller-supplied by contract, not generated by this layer.
+      - Refusal is typed data: a `sync` after `end`/`cancel`, or under a superseded
+        generation, raises a distinct `RunNotActiveError` **before any fetch or persistence
+        effect**, and never carries a payload, URL, secret or message text.
+      - Late-response isolation: a sync whose run was ended, cancelled or superseded while
+        its request was in flight must not commit. `sync_session` receives a run-scoped
+        `Store` view that refuses `write_source_batch`/`set_watermark` with a stable
+        `StaleRunError` once the run is not active, so the honest `failed` outcome with
+        `failure_type="StaleRunError"` is reported instead of a committed write. The view
+        never closes or replaces the caller's store and never exposes a delete/transaction
+        API; `CancelledError`/`BaseException` still propagate.
+      - Two runs sharing one `session_key` stay independent: a late response from run N can
+        never advance run N+1's checkpoint or records.
+      Checks: behavioral RED on the new lifecycle behavior (collection-compatible scaffold if
+      needed; collection failure recorded separately), then GREEN/refactor. Cover repeated
+      active syncs and end/cancel/reset transitions with idempotence; refusal before effects
+      with zero fetch/write/checkpoint calls; stale-write isolation raced against `reset` and
+      `cancel`; cancellation/BaseException propagation with no fabricated outcome; unchanged
+      `SessionSyncResult` partial outcomes and honest counts; caller ownership of HTTP and
+      Store; no schema/deletion/transaction surface; no text or serialized-payload leakage.
+      Offline only, reusing the published fakes, `MockTransport` and shared limiter. 3a/3b
+      reviewed bytes (`ingest.py`, `test_ingest.py`) are protected and must stay unchanged.
+      Independent/native review and local unit commit due.
+      Forecast 300–500 total diff lines including tests and exports.
+      **Writer `mv2q1o7v-16-qn54` returned implementation; this is not acceptance.** Parent
+      confirms two untracked new files plus one additive tracked edit, index identical to HEAD
+      and HEAD `1b6eb92` unchanged; the writer's forbidden `git add -N` left no residue
+      (`git diff --cached` empty, protected/reviewed paths byte-identical).
+      Candidate **917 additions + 0 deletions**: new `src/f1show/session.py` 254 lines,
+      new `tests/test_session.py` 653 lines, additive `__init__.py` exports +10. Overrun vs the
+      300–500 forecast by more than double, disclosed; the matrix was ordered by the parent
+      brief and no meaningful test was trimmed. F03c authored total is now 865 + 838 + 917=2620.
+      SHA256: session `ad6134a90a22ceb977c58ee9012586fdde724c39f8c8df8d5122b1e94efb9fb6`,
+      test `a4c162e10fbbdeb5d5a667a910242e7c3d150104720a540ca4c3157ccf77906f`,
+      root `719e297427d9fb2fe9c955788e45faa170205d427fe395ef08ab48c9313c69f9`;
+      reviewed `ingest.py`/`test_ingest.py` pins unchanged (`ef372e9b…`, `75eecddb…`).
+      Writer tests: **121 focused/431 full** (baseline 396 green). Collection RED recorded
+      separately (module import error, exit 2), then collection-compatible scaffold behavioral
+      RED **34 failed/1 passed/35**; the single pass is a constants-only assertion and every
+      later in-body assertion was unreached at RED, not backdated. GREEN then refactor with no
+      behavior change. Logs `/tmp/f1show_f03c4_{red_collection,red_behavioral,focused,full}.txt`.
+      Reported proofs: cancel/reset/end mid-flight → honest `failed`/`write`/`StaleRunError`
+      with `records_written=None`, zero store writes, rows and watermarks empty, zero closes;
+      refusal after end/cancel/superseded → `RunNotActiveError` with empty `args` and zero
+      fetch/clock/store calls; end/cancel idempotent and first-terminal-wins; `CancelledError`
+      and `KeyboardInterrupt` propagate with nothing written; caller store reusable and never
+      closed. Public names: `RunState`, `SessionRunIdentity`, `SessionRun`, `RunNotActiveError`,
+      `StaleRunError`, `StoreOwnershipError`.
+      ASSESS is again **unassessable** for undeclared new files, so its mandatory high-risk
+      fallback applies: writer self-verification **and** a separate independent verifier.
+      Writer static claims are configuration-specific: cached Ruff clean on both new files with
+      the base root I001 only, and cached Pyright 0 errors + the base `SnapshotResult` warning.
+      No active LSP was available in the writer; the parent probe saw two clean paths and one
+      inconclusive timeout, to be re-probed. No Python 3.12 runtime proof; tests ran on 3.14.4.
+      **Independent verifier `mv2qfl09-17-b9o9`: PASS, with qualifications that stand.**
+      Confirmed 121 focused/431 full on Python 3.14.4 and the 917 additions/0 deletions count;
+      scope, index and pins identical before and after its work; reviewed 3a/3b bytes untouched.
+      53 independent probes (its own harness, not the shipped tests) passed, plus **6/6
+      mutants assertion-killed** with a pristine control of 36 passing and no survivor:
+      dropped state check, bypassed run-scoped view, stale `set_watermark` allowed, `reset`
+      not terminating the old run, `close()` delegating to the caller store, and a stale write
+      inventing a count. Logs under `/tmp/f03c4_verify/`.
+      **Qualifications carried, not smoothed over.** The generation-mismatch branch is
+      *publicly unreachable*: the public API cannot change a live run's generation, so it is
+      exercised only through a stand-in run — that proves the invariant is coded, not that any
+      public flow reaches it. The mid-flight race tests are *scripted*: hooks run synchronously
+      inside `get_json` before the response is processed, so they prove refusal of responses
+      arriving after the terminal flip and prove **nothing** about a write already delegated to
+      the store when `end()`/`cancel()` fires, which under true concurrency could still commit.
+      The `set_watermark` staleness guard is likewise only killed through the stand-in branch.
+      The constants-only start test and the structural view-surface assertion could pass against
+      a stub; the mutants are what make the suite require real logic.
+      TDD is judged **partly scaffold-shaped**: the 15 `DID NOT RAISE ValueError` failures are
+      meaningful behavioral RED for admission validation, while the async lifecycle tests failed
+      through scaffold `NotImplementedError`, so their in-body assertions were never observed
+      RED on real logic. Their efficacy rests on the mutations above, not on TDD; nothing was
+      backdated and the writer's RED logs were not independently re-observed.
+      Static, configuration-scoped: cached Ruff clean on both new files with a base-only `I001`
+      on `__init__.py` reproduced identically on a HEAD copy; cached Pyright 0 errors and the
+      pre-existing `SnapshotResult` `reportUnsupportedDunderAll` warning only. The timed-out LSP
+      path was re-probed with Pyright scoped to all three files (`session.py` clean) — that is a
+      substitute, not the same probe as the parent's LSP tool. No Python 3.12 runtime proof.
+      ASSESS was unassessable for the undeclared new files, so the mandatory high-risk plan
+      (writer self-verification **plus** a separate independent verifier) is now satisfied.
+      No real-concurrency evidence exists anywhere in this unit.
+      Closed locally as `a0a3683e39e8fa071355d3d3934ed729337c5a50`, Conventional Commit
+      `feat(session): add run-scoped session lifecycle with stale-run isolation`, 3 paths
+      +917/−0. Reviewed = staged = committed tree `5a5e578d6f46d846848d6c198af35ea0b3402a83`;
+      all five hashes (three candidate plus the two protected reviewed files) checked before
+      staging; clean worktree after the commit; no push. Native `review-57365f025766ea65`,
+      medium/reliability/917 lines/budget 200, approved on the first reviewer run.
+      The consent path cost three expired bindings carrying **no lineage and no mutation**
+      before the human answered the host prompt; the relief was human, not retries, and the
+      third attempt had shown a ~38-minute blocked wait rather than an instant failure.
+      One resubmission was rejected as `capture-group-rejected` **without mutation** because
+      the binding had been re-typed by hand instead of passed verbatim; resubmitting the
+      provider's exact stored string succeeded in 235 s. Exact bound STATUS/ack returned
+      authority **burned**; consumed revision
+      `sha256:88908440fd210a9670b9ac2bfcb2d89e639fea7777f764c14eb0fb5443203b24`; burn evidence
+      `gentle-ai.review-acknowledged/v1`; never query this lineage again. Informational
+      advisory (body absent; do not infer/fix): `R3-001` tests/test_session.py:511-529.
+      That advisory is now **actioned as a bounded follow-up**, not absorbed into this unit:
+      the provider never returned its text, so the parent inspected the named region itself and
+      found the genuine gap a reliability lens would flag there — that one test asserted the
+      refused endpoint's status and failure label but not its honest-partial fields
+      (`records_written is None`, `checkpoint_written is False`, a real `observed_at` stamp) or
+      the run state or the absent drivers records, while sibling tests do assert those fields.
+      The hardening is test-only and its correctness was checked against `ingest.py`'s actual
+      write-failure branch before editing. It cannot be claimed to match the provider's unstated
+      intent; it is verified as correct and load-bearing for the refused-write contract.
+      **Closed** as `f13757b64c9fb2f668f9511c65f1aebeb6e24b`, Conventional Commit
+      `test(session): assert honest partial fields on the refused endpoint`, 1 path +9/−0;
+      reviewed = staged = committed tree `a180bb216066cd3947acf7c602dc733eee852a57`.
+      Independent verifier `mv2ucsd7-18-bsr6` PASS: 121 focused/431 full unchanged; candidate
+      `4e59c7ef3d22f4b0e97561a2d001146b992a849aaf1734b9be4f3dba1f22de4a` (662 lines);
+      **three mutants killed**, each failing the hardened test by name — `records_written=0`
+      (`assert 0 is None`), `observed_at=None` (`assert None is not None`) and
+      `checkpoint_written=True` (`assert True is False`) — with a pristine control at 122 and the
+      shadow's `ingest.py` restored to its pinned hash. The verifier also reported, honestly,
+      that HEAD moved mid-run (`bee9881a`→`d2cf6da`, docs-only, the parent's commit) rather than
+      hiding it. Native `review-3717be5e3cd796bb`, medium/1 file/9 lines/budget 5, approved on
+      the first run in 25 s; exact bound STATUS/ack returned authority **burned**; consumed
+      revision `sha256:a3d889bc877d85b44353a518b811fcf55657e647ec04382e93ded78cc05eb09c`; never
+      query it again. The reviewer raised a NEW non-blocking suggestion we did not anticipate,
+      `R3-observed-at-assertion-weak` at `tests/test_session.py:535`, judging the added
+      `observed_at is not None` assertion weak. That is a fair point — a stronger assertion
+      would compare the stamp to the clock's actual value — and it is carried as later work
+      rather than reopening this candidate or rewriting approved bytes.
+  Per-unit checks: scoped pytest then full `uv run --frozen pytest -q`, observed
+  RED/GREEN with coverage-only passes disclosed, native work-unit review under the
+  user's enabled switch, local Conventional Commit and task/mirror/todo evidence.
+- **F03d — the live seam, in two bounded units.** The documented live contract is now
+  first-party verified (documentation reading only — no subscription, purchase, credential use
+  or live/authenticated call was made): `POST https://api.openf1.org/token` with
+  `Content-Type: application/x-www-form-urlencoded` and `username`/`password` form fields,
+  returning `{"expires_in": "3600", "access_token": "…", "token_type": "bearer"}` — the
+  documented `expires_in` is a **string**, which strict parsing must accept without inventing
+  a different type. Authenticated REST requests add `Authorization: Bearer <token>`, and
+  tokens expire after one hour, so the client must refresh rather than fail silently.
+  The same page recommends **MQTT/WebSocket** for live data (`mqtt.openf1.org:8883`,
+  `wss://mqtt.openf1.org:8084/mqtt`, token as the password) and calls it the more efficient
+  option. **That streaming path is deliberately not adopted here**, because the project fixed a
+  ~3 s REST polling cadence and streaming would add a new transport, dependency and lifecycle;
+  the recommendation is recorded as an unadopted alternative for F10/F13 rather than silently
+  ignored or silently implemented. `config.py` already carries
+  `CredentialsSettings.openf1_username`/`openf1_password` as `SecretStr`, so no new credential
+  configuration is invented.
+  The obstacle is the reviewed `HttpClient` port: `get_json(url, *, params=…)` has no header
+  parameter and the port has no form POST, so neither an authenticated GET nor a token exchange
+  can be expressed without extending it. Instead of turning that into one large multi-area
+  change, F03d is split into two units, each with its own independent/native review and local
+  commit:
+    - **F03d-1 — HTTP boundary extension.** Additive `headers` support on `get_json` plus one
+      form-POST method, forwarded by the retrying wrapper and mirrored by the fake, with every
+      existing retry, pacing, cleanup and error contract preserved and only the new surface
+      tested. Surfaces: `src/f1show/{ports,http,fakes,request_policy}.py` and
+      `tests/test_{http,fakes,request_policy}.py`. These bytes were reviewed before, but the
+      burned F03c-1/F03c-2 authorities are never reused: this is a new candidate and a new
+      review. Secrets or credential values must never appear in these files or their tests.
+      **Implementation returned; independent verification in flight.** Writer `mv2undvu-19-zgla`
+      produced ten modified paths, **+1050/−40 = 1090** total against the 250–450 forecast
+      (2.4×, disclosed, no test trimmed); focused 243 / full **496** (baseline 431 + 65).
+      The writer disclosed three process weaknesses honestly rather than hiding them:
+      (1) **RED was reconstructed, not observed** — tests were authored first but the first
+      pytest run happened after implementation, so RED came from running the new tests against
+      base sources in a /tmp tree (75 failed/168 passed: 124 `AttributeError`, 24 `TypeError`,
+      2 `DID NOT RAISE`), preceded by a collection error (`ImportError: copy_form_fields`) and a
+      no-logic stub that **masked two helper-rule cases**; (2) the shared-path extraction
+      (`_perform`/`_run`) landed on the GREEN implementation with no separate pre-refactor
+      snapshot; (3) the protocol growth **structurally broke 18 Pyright errors in files it was
+      not allowed to touch**.
+      The parent confirmed the third point independently with its own active LSP and treated it
+      as a defect of this unit rather than carried debt: fixing after review would invalidate the
+      candidate and burn a human consent round, and asking a reviewer to look at bytes already
+      known to be statically wrong wastes the reviewer. Follow-up `mv2v6cvj-1a-gcfv` conformed
+      five local doubles by signature only — `headers` forwarded on `get_json`, `post_form_json`
+      forwarding for wrappers and a loud `NotImplementedError` naming the double for the
+      exploding ones — with counts unchanged at 121/496, the R3-001 hardening assertions
+      untouched, and the 18 errors reduced to **0**, with the same 18 reproduced against the base
+      copies to prove the cause was the protocol growth. The parent's re-probe now shows only the
+      **3 pre-existing** `tests/test_fakes.py` errors and the two base `I001` findings, so the
+      static state did not regress. Pins: `tests/test_session.py`
+      `47466f3c34e5c3b5ddd9251c72a4b017c6e66db4420b1373ff88535b7ef1ca02`, `tests/test_ingest.py`
+      `5fba8a28202dbff369f8c579dec98a63bdd37a2443f6b872823f8e3ff327701b`.
+      ASSESS returned medium/10 paths/1090 lines, and its plan does **not** require a separate
+      verifier; the parent runs one anyway, because with a reconstructed RED the unit would
+      otherwise rest entirely on the writer's self-report. Logs `/tmp/f1show_f03d1_*.txt`; the
+      verifier works under `/tmp/f03d1_verify/`. Honest caveats carried into review: a retried
+      POST may be sent more than once, which is an **unverified provider assumption** and not a
+      proven property, and there is no Python 3.12 runtime proof.
+      **Closed** as `d807cbcddcc1112197ec5e02961e7603ac638b33`, Conventional Commit
+      `feat(http): add request headers and form POST to the HTTP boundary`, ten paths
+      **+1050/−40 = 1090**; reviewed = staged = committed tree
+      `1e9ca9d6b4d088ceab66150bfa20b27d6d746a63`; clean worktree after the commit; no push.
+      Independent verifier `mv2v9og5-1b-t0dn` **PASS**: 243 focused/496 full, thirteen tracked
+      hashes identical at start and end, the ten-path scope confirmed, and **7/7 mutants killed
+      with no survivor** — no header forwarding, lowercased header names, POST following
+      redirects, POST skipping the shared limiter, overwriting a caller-supplied content type,
+      embedding a header value in a transport error, and the fake's form path reading the GET
+      script — each named with the test that caught it, control 244 passing before and after.
+      It also confirmed the header-non-leakage assertion is **non-vacuous** (the placeholder is
+      asserted present on the wire before its absence is asserted) and that the two
+      previously masked helper rules are now genuinely asserted (`tests/test_ports.py:184-198`),
+      so the reconstructed RED does not establish TDD but the rules are covered. It judged the
+      three narrow `S105` suppressions appropriately scoped.
+      Native `review-b2c24c7f0978166b`, medium/10 files/1090 lines/budget 200, approved on the
+      first reviewer run in 224 s; exact bound STATUS/ack returned authority **burned**;
+      consumed revision `sha256:9837983512df6d0d8a4e1b39e845990eb2d71a5798c2306d66b1da36d6c00424`;
+      never query it again. It raised three informational suggestions with no correction opened
+      and no bodies provided, carried as later work: `R3-fake-form-registration-shape`
+      (`fakes.py:159-190`), `R3-form-content-type-fallback` (`http.py:227-228`) and
+      `R3-port-header-retention-wording` (`ports.py:130-138`). The third independently matches
+      the verifier's own observation that the "no client-level default header" wording is
+      slightly overstated because httpx still attaches its own defaults — a real, if cosmetic,
+      inaccuracy in a docstring, not in behavior.
+    - **F03d-2 — authentication and the live seam. Concrete design registered before writes.**
+      New module `src/f1show/auth.py` (no change to `config.py`; `CredentialsSettings` already
+      carries `openf1_username`/`openf1_password` as `SecretStr`, and no new configuration is
+      invented) plus its tests and additive exports. Design decisions, derived from the verified
+      first-party contract and from the port F03d-1 just published:
+      - `DEFAULT_OPENF1_TOKEN_URL = "https://api.openf1.org/token"` lives in the new module, not
+        in `config.py`.
+      - A token response model accepting the documented **string-or-int** `expires_in` and a
+        case-insensitive `bearer` type, refusing an empty/missing `access_token` and an expired-
+        or-negative lifetime, and treating unknown extra fields as ignorable external input the
+        way source records already are. No message, body or credential may appear in a failure.
+      - A token value holding the secret through the project's existing redaction/`SecretStr`
+        machinery so `repr`, `str` and formatting cannot reveal it, and so a diagnostic can name
+        the token's state without its value.
+      - A provider that exchanges credentials by calling `post_form_json` on the caller's raw
+        client exactly when there is no valid cached token, caches until
+        `issued_at + expires_in − skew` (skew a documented constant, and the arithmetic done with
+        the injected `Clock`, never a private clock), performs at most one in-flight exchange so
+        concurrent callers await the same one, and adds no retry policy of its own because the
+        injected client may already be the paced retrying wrapper. Typed failures for non-2xx,
+        decode and validation problems; the password is read from the secret only when the form
+        is built and is never stored, logged or cached.
+      - An auth-injecting client that adds exactly ONE `Authorization: Bearer <token>` header to
+        `get_json`, refuses a caller who supplied their own `Authorization` header rather than
+        silently mixing credentials, forwards `post_form_json` unchanged (the token endpoint
+        authenticates with credentials in the body, never with a bearer header), and neither
+        opens, closes nor replaces caller-owned objects — following the existing wrapper
+        convention in `request_policy.py` and documenting which object owns the inner client.
+      - Checks: a scripted fake and `MockTransport` only, offline. Cover the documented
+        string `expires_in` and integer form, rejection of a bad type/empty token/unknown token
+        type, refresh exactly at the skew boundary and not one call earlier, at-most-one
+        in-flight exchange under concurrent callers, a non-2xx and a malformed exchange body
+        becoming typed failures, no credential or token value reachable from any raised error,
+        `repr` or outcome, exactly one header added and no duplicate, the caller-supplied
+        `Authorization` refusal, and caller ownership. Honest limit unchanged: the real
+        exchange, the real expiry behaviour and real live responses stay unverified without the
+        paid subscription, and live validation belongs to F13.
+  Honest limit unchanged: without the paid subscription the real exchange, the real expiry
+  behaviour and real live responses remain unverified; a fake transport proves only our
+  handling, and live validation belongs to F13 under its own authorization.
+- **Decision carried from F01:** the store is SQLite in WAL mode with DuckDB over
+  Parquet, not DuckDB as the live store, because DuckDB supports one read-write process
+  or many read-only processes and every Compose service is a separate process.
+- **F03a lesson, and the rule it produced.** A parity pass aligned the double's upsert and
+  its identity rejection but **missed batch atomicity**, and the review caught it. Partial
+  alignment is worse than none: it makes "substitutable" look true when it is not. **The
+  rule now applied to any port with more than one implementation: the shared semantics are
+  demonstrated by one parameterized test that runs the same body against every
+  implementation**, because an assertion written once per implementation is exactly how the
+  missed semantic survived a review. F03b reads from the store and inherits that test.
+- **F03a also closed a silent-failure risk worth remembering.** `PRAGMA journal_mode =
+  WAL` was executed with its result ignored. On a filesystem that cannot support WAL,
+  SQLite keeps another mode **without saying so**, and the one-writer/many-readers
+  assumption the architecture rests on would have been false in production while every
+  test stayed green. The mode is now read back and a non-`wal` mode is refused.
 
 ### F04 — Implement deterministic collector and event detection
 
@@ -489,14 +1285,36 @@ here.
 
 ## Current next step
 
-F00 and F01 are closed and published. F02–F13 remain unstarted and need fresh explicit
-user authorization: the grants so far never covered application implementation, and this
-backlog alone does not grant it.
+F00–F02 are closed and published on main through `fc30084`. F03a, F03b and F03b-1 are
+reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 closed in
+`3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
+acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Next is F02 (Python foundation and shared contracts) — the first task that writes real
-source code, so it needs an explicit implementation authorization first. F02 must pin
-the `google-genai` version resolved at that time (2.29.0 was latest on 2026-10-09),
-decide the `httpx` versus `httpx2` question deliberately rather than by habit, and keep
-SQLite behaviour behind a store boundary. **No model ID may be written into
-configuration or code** until it is enumerated with the account and its GA status
-confirmed in current documentation, and no price is attributable to a named model yet.
+Active: **F03d-2 authentication and the live seam**, one bounded writer after this F03d-1
+closure and design registration, under the existing F03 authorization. F03d-1 is closed as
+`d807cbc` — ten paths, +1050/−40 = 1090, independent verifier PASS with 7/7 mutants killed and
+no survivor, native approval and exact acknowledgement, reviewed = staged = committed tree
+`1e9ca9d6b4d088ceab66150bfa20b27d6d746a63`. F03d-2 adds a new auth module with a token model, an
+expiry-with-skew refresh policy, a caching provider and an auth-injecting client, all offline
+against a fake or `MockTransport`. Carried, not fixed: the 3 pre-existing `tests/test_fakes.py`
+static errors, two base `I001` findings, the overstated `http.py` header-default wording the
+reviewer independently flagged, the unverified Python 3.12 floor, the unverified POST-retry
+assumption, probes-only CI gaps, and informational native suggestions whose bodies were never
+returned. Forecast calibration remains a standing concern: F03c ran 2620 against ~1000 forecast
+and F03d-1 1090 against 450. No new source push; remote `3f52c33` and main `fc30084` remain as
+published. F04 onward stays unauthorized.
+The three registered advisory regions were examined read-only; native descriptions were
+not found locally, observations are explicitly independent, no fixes authorized or made.
+Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
+review authorities are burned; never query/reuse them. Keep writes single-threaded and
+limit 3a to ingest.py/test_ingest.py/additive package exports, with genuine behavior RED,
+shared Store parity, records-before-observation-checkpoint and honest partial outcomes.
+Future source publication remains a separate human decision.
+F03c-3/4 and F03d injectable live seam remain pending and authorized for implementation.
+Their publication is a separate decision. F04 onward requires a new implementation grant.
+
+The user now authorized publishing this reviewed advance to `origin/feat/f03-source-adapters`
+only, not to `main`; future units need their own delivery decision. No model ID may enter
+configuration or code until account enumeration and current documentation verify it.
+No live/model calls, purchases or deployment are authorized; real-service correctness
+remains pending F13.

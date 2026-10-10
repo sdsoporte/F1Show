@@ -8,6 +8,9 @@ construction time. Two rules shape this module:
 * **Model IDs, the commentary language and credentials have no defaults.** An
   unset model ID or language is a configuration error, never a silent fallback
   to whatever an SDK happens to offer.
+* **Local file paths have documented defaults and are overridable.** A path is
+  not a secret and a wrong one fails loudly when the file cannot be opened,
+  unlike a credential, whose absence would otherwise be a silent downgrade.
 
 No model ID and no credential is written into this module. Tests use obviously
 fictional placeholders.
@@ -38,6 +41,11 @@ DEFAULT_OPENF1_BASE_URL = "https://api.openf1.org/v1"
 #: the source's ~3 second update cadence.
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 10.0
 
+#: Documented default database file for the single-writer local store. It lives
+#: under ``var/`` and ``.gitignore`` already excludes both ``var/`` and
+#: ``*.sqlite3``, so a local database is never committed.
+DEFAULT_STORE_PATH = "var/f1show.sqlite3"
+
 
 class Mode(str, Enum):
     """How the pipeline obtains its data."""
@@ -64,6 +72,23 @@ class SourceSettings(_Section):
 
     base_url: str = DEFAULT_OPENF1_BASE_URL
     timeout_seconds: float = Field(default=DEFAULT_REQUEST_TIMEOUT_SECONDS, gt=0)
+
+
+class StoreSettings(_Section):
+    """The local store: a path is safe to default, so it is not a secret."""
+
+    path: str = DEFAULT_STORE_PATH
+
+    @field_validator("path", mode="after")
+    @classmethod
+    def _reject_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError(
+                "store.path must not be blank; sqlite3 reads an empty path as a "
+                "private temporary database, which would silently discard every write"
+            )
+        return stripped
 
 
 class ReplaySettings(_Section):
@@ -167,6 +192,7 @@ class Settings(BaseSettings):
 
     mode: Mode = Mode.replay
     source: SourceSettings = Field(default_factory=SourceSettings)
+    store: StoreSettings = Field(default_factory=StoreSettings)
     replay: ReplaySettings = Field(default_factory=ReplaySettings)
     booth: BoothSettings
     credentials: CredentialsSettings = Field(default_factory=CredentialsSettings)
