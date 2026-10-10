@@ -961,10 +961,24 @@ class CountingHttpClient:
         self.close_calls = 0
 
     async def get_json(
-        self, url: str, *, params: Mapping[str, str] | None = None
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> HttpResponse:
         self.fetches += 1
-        return await self._inner.get_json(url, params=params)
+        return await self._inner.get_json(url, params=params, headers=headers)
+
+    async def post_form_json(
+        self,
+        url: str,
+        *,
+        form: Mapping[str, str],
+        headers: Mapping[str, str] | None = None,
+    ) -> HttpResponse:
+        """Forward the F03d form POST; the fetch counter tracks GET fetches only."""
+        return await self._inner.post_form_json(url, form=form, headers=headers)
 
     async def close(self) -> None:
         self.close_calls += 1
@@ -1000,12 +1014,26 @@ class ParkingHttpClient:
         self.entered = asyncio.Event()
 
     async def get_json(
-        self, url: str, *, params: Mapping[str, str] | None = None
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> HttpResponse:
         if url.endswith(self._park_on):
             self.entered.set()
             await asyncio.Event().wait()
-        return await self._inner.get_json(url, params=params)
+        return await self._inner.get_json(url, params=params, headers=headers)
+
+    async def post_form_json(
+        self,
+        url: str,
+        *,
+        form: Mapping[str, str],
+        headers: Mapping[str, str] | None = None,
+    ) -> HttpResponse:
+        """Forward the F03d form POST; parking is a GET-only behavior."""
+        return await self._inner.post_form_json(url, form=form, headers=headers)
 
     async def close(self) -> None:
         await self._inner.close()
@@ -1058,9 +1086,26 @@ class ExplodingHttpClient:
         self._error = error
 
     async def get_json(
-        self, url: str, *, params: Mapping[str, str] | None = None
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> HttpResponse:
         raise self._error
+
+    async def post_form_json(
+        self,
+        url: str,
+        *,
+        form: Mapping[str, str],
+        headers: Mapping[str, str] | None = None,
+    ) -> HttpResponse:
+        """No caller asks this double for a form POST; refuse loudly, never no-op."""
+        raise NotImplementedError(
+            f"{type(self).__name__} has no form-POST behavior; it exists to raise "
+            "the injected error on get_json"
+        )
 
     async def close(self) -> None:
         """Nothing to release."""

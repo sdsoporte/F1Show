@@ -206,13 +206,27 @@ class HookedHttpClient:
         self.close_calls = 0
 
     async def get_json(
-        self, url: str, *, params: Mapping[str, str] | None = None
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> Any:
         self.fetches += 1
         if self._hook is not None and not self._fired and url == self._trigger_url:
             self._fired = True
             self._hook()
-        return await self._inner.get_json(url, params=params)
+        return await self._inner.get_json(url, params=params, headers=headers)
+
+    async def post_form_json(
+        self,
+        url: str,
+        *,
+        form: Mapping[str, str],
+        headers: Mapping[str, str] | None = None,
+    ) -> Any:
+        """Forward the F03d form POST; the hook and its counter are GET behavior."""
+        return await self._inner.post_form_json(url, form=form, headers=headers)
 
     async def close(self) -> None:
         self.close_calls += 1
@@ -227,10 +241,27 @@ class ExplodingHttpClient:
         self.fetches = 0
 
     async def get_json(
-        self, url: str, *, params: Mapping[str, str] | None = None
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> Any:
         self.fetches += 1
         raise self._error
+
+    async def post_form_json(
+        self,
+        url: str,
+        *,
+        form: Mapping[str, str],
+        headers: Mapping[str, str] | None = None,
+    ) -> Any:
+        """No caller asks this double for a form POST; refuse loudly, never no-op."""
+        raise NotImplementedError(
+            f"{type(self).__name__} has no form-POST behavior; it exists to raise "
+            "the injected error on get_json"
+        )
 
     async def close(self) -> None:
         """Nothing to release."""

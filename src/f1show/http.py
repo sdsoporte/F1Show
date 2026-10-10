@@ -50,11 +50,16 @@ from f1show.ports import (
     HttpResponseTooLargeError,
     HttpTimeoutError,
     HttpTransportError,
+    copy_form_fields,
+    copy_request_headers,
 )
 
 #: Cleanup never gets more than this, whatever the request timeout is, so no wait can
 #: hide behind a vague "overall" claim.
 _MAX_CLOSE_SECONDS = 1.0
+
+#: The documented content type of the OpenF1 token exchange.
+_FORM_CONTENT_TYPE = "application/x-www-form-urlencoded"
 
 
 def _positive_seconds(value: object, name: str) -> float:
@@ -138,13 +143,22 @@ class HttpxJsonClient:
         )
 
     async def get_json(
-        self, url: str, *, params: Mapping[str, str] | None = None
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> HttpResponse:
-        """Make exactly one attempt and return its response.
+        """Make exactly one GET attempt and return its response.
 
         An HTTP status never raises, not even a 4xx or a 5xx: the retry policy needs the
         status and headers to decide. Only a transport failure, a missed deadline, an
         undecodable successful body or an oversized body raises.
+
+        ``headers`` adds optional request headers. Their shape is validated by the
+        shared port rule - a non-mapping, or a non-``str`` key or value, is a
+        ``TypeError`` before anything is sent - and their values are never stored on
+        this client nor named in a message.
 
         Closing the response is bounded by the cleanup allowance and can never change the
         call's own outcome: a close failure annotates whatever failed first, and after an
@@ -152,17 +166,66 @@ class HttpxJsonClient:
         instead of a silent success.
         """
         self._require_open()
+        return await self._perform(
+            "GET", "get_json", url, params=params, headers=copy_request_headers(headers)
+        )
+
+    async def post_form_json(
+        self,
+        url: str,
+        *,
+        form: Mapping[str, str],
+        headers: Mapping[str, str] | None = None,
+    ) -> HttpResponse:
+        """Post one ``application/x-www-form-urlencoded`` form and return its response.
+
+        The documented content type is set unless the caller already supplied a
+        ``Content-Type`` header of its own. ``form`` and ``headers`` follow the same
+        shape rule as ``get_json``: a non-mapping, or a non-``str`` key or value, is
+        refused with ``TypeError`` before anything is sent. Everything else - response
+        construction, typed failures, the byte bound, the deadline and cleanup - is the
+        same shared path, so an HTTP status never raises and a 3xx is returned rather
+        than followed.
+        """
+        self._require_open()
+        return await self._perform(
+            "POST",
+            "post_form_json",
+            url,
+            form=copy_form_fields(form),
+            headers=copy_request_headers(headers),
+        )
+
+    async def _perform(
+        self,
+        method: str,
+        caller: str,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        form: Mapping[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> HttpResponse:
+        """Run one attempt with the semantics both public methods share.
+
+        The request is built inside the normalisation so an unparsable URL still becomes
+        a typed failure, and the credential refusal stays a plain ``ValueError``. A
+        message carries only the sanitised endpoint and an exception's class, never a
+        request header value.
+        """
         response: httpx.Response | None = None
         result: HttpResponse | None = None
         close_failure: HttpError | None = None
         primary: BaseException | None = None
         try:
             try:
-                request = httpx.Request("GET", url, params=params)
+                request = httpx.Request(method, url, params=params, data=form, headers=headers)
                 if request.url.username or request.url.password:
                     raise ValueError(
-                        "get_json refuses a URL that embeds credentials; no request was sent"
+                        f"{caller} refuses a URL that embeds credentials; no request was sent"
                     )
+                if form is not None and request.headers.get("content-type") is None:
+                    request.headers["content-type"] = _FORM_CONTENT_TYPE
                 async with asyncio.timeout(self._timeout_seconds):
                     response = await self._send(request)
                     result, close_failure = await self._consume(request, response)
@@ -207,7 +270,7 @@ class HttpxJsonClient:
             raise close_failure
         if result is None:
             # An internal invariant, not a real path: a call ends with a result or a failure.
-            raise AssertionError("get_json finished without a result and without a failure")
+            raise AssertionError(f"{caller} finished without a result and without a failure")
         return result
 
     async def close(self) -> None:

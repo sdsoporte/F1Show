@@ -8,6 +8,7 @@ network, no disk and no model call is involved.
 
 from __future__ import annotations
 
+import inspect
 import pathlib
 from typing import Any, get_type_hints
 
@@ -27,6 +28,8 @@ from f1show.ports import (
     ModelResponse,
     MonotonicClock,
     Store,
+    copy_form_fields,
+    copy_request_headers,
 )
 
 #: Obviously fictional: a real model ID must come from typed configuration.
@@ -164,6 +167,39 @@ def test_http_client_port_declares_a_typed_response_and_a_close() -> None:
     assert get_type_hints(HttpClient.get_json)["return"] is HttpResponse
     assert any(name == "params" for name in get_type_hints(HttpClient.get_json))
     assert get_type_hints(HttpClient.close)["return"] is type(None)
+
+
+def test_http_client_port_declares_the_form_post_and_optional_request_headers() -> None:
+    """The additive F03d surface: optional request headers on GET, and one form POST."""
+    get_params = inspect.signature(HttpClient.get_json).parameters
+    assert "headers" in get_params and get_params["headers"].default is None
+    post_params = inspect.signature(HttpClient.post_form_json).parameters
+    assert post_params["form"].default is inspect.Parameter.empty, "the form is required"
+    assert post_params["headers"].default is None
+    post_hints = get_type_hints(HttpClient.post_form_json)
+    assert post_hints["return"] is HttpResponse
+    assert "form" in post_hints and "headers" in post_hints
+
+
+def test_request_headers_and_form_helpers_share_one_input_rule() -> None:
+    """Both implementations must refuse the same shapes with the same error type."""
+    assert copy_request_headers(None) is None
+    assert copy_request_headers({"X-Trace": "t"}) == {"X-Trace": "t"}
+    assert copy_form_fields({"a": "b"}) == {"a": "b"}
+    bad_shapes: tuple[Any, ...] = ("x", [("a", "b")], {"a": 1}, {1: "a"})
+    for bad in bad_shapes:
+        with pytest.raises(TypeError):
+            copy_request_headers(bad)
+    # ``None`` headers mean "no extra headers"; a form has no such absent shape.
+    bad_forms: tuple[Any, ...] = (*bad_shapes, None)
+    for bad in bad_forms:
+        with pytest.raises(TypeError):
+            copy_form_fields(bad)
+
+
+def test_copying_a_request_header_mapping_never_rewrites_the_names() -> None:
+    copied = copy_request_headers({"Authorization": "Bearer placeholder", "X-Trace": "t"})
+    assert copied == {"Authorization": "Bearer placeholder", "X-Trace": "t"}
 
 
 def test_monotonic_clock_port_separates_pacing_time_from_utc_observation_time() -> None:

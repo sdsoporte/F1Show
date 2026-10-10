@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import math
 from collections import deque
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import timezone
 from email.utils import parsedate_to_datetime
@@ -197,9 +197,9 @@ class RetryingHttpClient:
     ``asyncio.CancelledError`` is never caught, is never converted, and cannot produce
     another attempt.
 
-    ``close`` is idempotent, delegates to the inner client exactly once, and makes a
-    later ``get_json`` raise - provably before the inner client is reached, because the
-    open check is the first statement of ``get_json``.
+    ``close`` is idempotent, delegates to the inner client exactly once, and makes any
+    later call raise - provably before the inner client is reached, because the open
+    check is the first statement of both public methods.
     """
 
     def __init__(
@@ -217,20 +217,60 @@ class RetryingHttpClient:
         self._closed = False
 
     async def get_json(
-        self, url: str, *, params: Mapping[str, str] | None = None
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> HttpResponse:
-        """Make up to ``max_attempts`` paced attempts and return the exchange."""
+        """Make up to ``max_attempts`` paced attempts and return the exchange.
+
+        ``headers`` is forwarded untouched to the inner client, which owns the shared
+        input rule and the guarantee that a request header value never leaves the
+        request.
+        """
         self._require_open()
+        return await self._run(
+            lambda: self._inner.get_json(url, params=params, headers=headers)
+        )
+
+    async def post_form_json(
+        self,
+        url: str,
+        *,
+        form: Mapping[str, str],
+        headers: Mapping[str, str] | None = None,
+    ) -> HttpResponse:
+        """Make up to ``max_attempts`` paced attempts of the documented form POST.
+
+        It shares the limiter and the retry policy with ``get_json``: the same retryable
+        status set, the same backoff and ``Retry-After`` arithmetic, and the same
+        never-earlier-than-advised guarantee, so both methods are paced and bounded
+        identically.
+
+        One honest caveat: a retried POST can be sent more than once. That is acceptable
+        for a token exchange, where repeating the exchange is expected to be harmless,
+        but it is an *unverified provider assumption*, not a property this client can
+        prove; a provider that counted or billed token exchanges would observe the
+        duplicate.
+        """
+        self._require_open()
+        return await self._run(
+            lambda: self._inner.post_form_json(url, form=form, headers=headers)
+        )
+
+    async def _run(self, attempt: Callable[[], Awaitable[HttpResponse]]) -> HttpResponse:
+        """Pace, retry and classify one method's attempts under the shared policy."""
         policy = self._retry_policy
-        attempt = 0
+        number = 0
         while True:
-            attempt += 1
+            number += 1
             await self._limiter.wait_for_slot()
             try:
-                response = await self._inner.get_json(url, params=params)
+                response = await attempt()
             except (HttpTransportError, HttpTimeoutError):
-                wait = self._backoff_wait(attempt)
-                if attempt >= policy.max_attempts or wait > policy.max_retry_after_seconds:
+                wait = self._backoff_wait(number)
+                if number >= policy.max_attempts or wait > policy.max_retry_after_seconds:
                     raise
                 await self._limiter.sleep(wait)
                 continue
@@ -238,9 +278,9 @@ class RetryingHttpClient:
                 return response
             if response.status_code not in policy.retryable_statuses:
                 return response
-            if attempt >= policy.max_attempts:
+            if number >= policy.max_attempts:
                 return response
-            wait = self._retry_wait(response, attempt)
+            wait = self._retry_wait(response, number)
             if wait > policy.max_retry_after_seconds:
                 # Over budget: no retry and no sleep. The response is the answer.
                 return response

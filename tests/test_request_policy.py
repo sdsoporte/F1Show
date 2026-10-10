@@ -42,7 +42,10 @@ from f1show.request_policy import (
 
 URL = "https://example.invalid/v1/sessions"
 OTHER_URL = "https://example.invalid/v1/drivers"
+TOKEN_URL = "https://example.invalid/token"  # noqa: S105 (fictional endpoint, not a credential)
 PARAMS = {"session_key": "9462"}
+FORM = {"grant_type": "client_credentials", "client_id": "placeholder-client"}
+CALL_HEADERS = {"Authorization": "Bearer placeholder-token-not-a-real-credential"}
 MOMENT = dt.datetime(2024, 3, 2, 15, 0, 0, tzinfo=dt.timezone.utc)
 
 
@@ -123,6 +126,28 @@ def fake_retrying(
     return client, inner, monotonic
 
 
+def fake_retrying_form(
+    outcomes: Sequence[HttpResponse | BaseException],
+    *,
+    per_second: int = 3,
+    per_minute: int = 30,
+    policy: RetryPolicy | None = None,
+    utc_clock: FrozenClock | None = None,
+) -> tuple[RetryingHttpClient, FakeHttpClient, FakeMonotonicClock]:
+    """The form-POST twin of ``fake_retrying``: the same policy, a different method."""
+    inner = FakeHttpClient()
+    for outcome in outcomes:
+        inner.enqueue_form(TOKEN_URL, outcome, form=FORM)
+    monotonic = FakeMonotonicClock()
+    client = RetryingHttpClient(
+        inner,
+        limiter=RateLimiter(PacingPolicy(per_second=per_second, per_minute=per_minute), monotonic),
+        retry_policy=policy if policy is not None else RetryPolicy(),
+        clock=utc_clock if utc_clock is not None else FrozenClock(MOMENT),
+    )
+    return client, inner, monotonic
+
+
 class BlockingMonotonicClock:
     """A monotonic seam that parks inside ``sleep`` so a test can cancel it."""
 
@@ -145,9 +170,22 @@ class CountingInner:
         self.close_calls = 0
 
     async def get_json(
-        self, url: str, *, params: Mapping[str, str] | None = None
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> HttpResponse:
-        return await self.inner.get_json(url, params=params)
+        return await self.inner.get_json(url, params=params, headers=headers)
+
+    async def post_form_json(
+        self,
+        url: str,
+        *,
+        form: Mapping[str, str],
+        headers: Mapping[str, str] | None = None,
+    ) -> HttpResponse:
+        return await self.inner.post_form_json(url, form=form, headers=headers)
 
     async def close(self) -> None:
         self.close_calls += 1
@@ -168,10 +206,14 @@ class TimestampingInner(FakeHttpClient):
         self.timestamps: list[float] = []
 
     async def get_json(
-        self, url: str, *, params: Mapping[str, str] | None = None
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> HttpResponse:
         self.timestamps.append(self._clock.monotonic())
-        return await super().get_json(url, params=params)
+        return await super().get_json(url, params=params, headers=headers)
 
 
 # --- policy values ------------------------------------------------------------
@@ -689,3 +731,132 @@ async def test_extreme_finite_base_and_cap_saturate_without_huge_ratio_allocatio
     assert len(inner.calls) == attempts
     assert all(math.isfinite(wait) for wait in monotonic.sleeps), "no wait may be infinite"
     assert monotonic.sleeps[-1] == cap, "backoff saturates exactly at the configured cap"
+
+
+# --- F03d-1: the retrying client must pace and retry a form POST exactly as it does
+# --- a GET, on the same shared limiter and the same policy values.
+
+
+@pytest.mark.anyio
+async def test_retrying_get_forwards_request_headers_to_the_inner_client() -> None:
+    inner = FakeHttpClient()
+    inner.register(URL, [{"session_key": 9462}], params=PARAMS)
+    client = RetryingHttpClient(
+        inner,
+        limiter=RateLimiter(PacingPolicy(), FakeMonotonicClock()),
+        retry_policy=RetryPolicy(),
+        clock=FrozenClock(MOMENT),
+    )
+    result = await client.get_json(URL, params=PARAMS, headers=CALL_HEADERS)
+    assert result.status_code == 200
+    assert inner.request_headers == [dict(CALL_HEADERS)]
+
+
+@pytest.mark.anyio
+async def test_get_and_post_share_one_pacing_budget() -> None:
+    inner = FakeHttpClient()
+    inner.register(URL, [], params=PARAMS)
+    inner.register_form(TOKEN_URL, [], form=FORM)
+    monotonic = FakeMonotonicClock()
+    client = RetryingHttpClient(
+        inner,
+        limiter=RateLimiter(PacingPolicy(per_second=1, per_minute=30), monotonic),
+        retry_policy=RetryPolicy(),
+        clock=FrozenClock(MOMENT),
+    )
+    await client.get_json(URL, params=PARAMS)
+    assert monotonic.sleeps == []
+    await client.post_form_json(TOKEN_URL, form=FORM, headers=CALL_HEADERS)
+    assert monotonic.sleeps == [1.0], "the POST waited on the GET's slot: one shared budget"
+    assert inner.request_headers[-1] == dict(CALL_HEADERS)
+
+
+@pytest.mark.anyio
+async def test_post_form_json_backs_off_and_takes_its_own_pacing_slot_on_retry() -> None:
+    client, inner, monotonic = fake_retrying_form(
+        [response(500), response(200, payload={"access_token": "t"})],
+        per_second=1,
+        policy=RetryPolicy(max_attempts=3, base_backoff_seconds=0.25, max_backoff_seconds=8.0),
+    )
+    result = await client.post_form_json(TOKEN_URL, form=FORM)
+    assert (result.status_code, result.payload) == (200, {"access_token": "t"})
+    assert monotonic.sleeps == [0.25, 0.75], "same backoff, and the retry takes its own slot"
+    assert len(inner.post_calls) == 2
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_calls", "expected_sleeps"),
+    [
+        pytest.param(500, 2, [0.5], id="retryable-500"),
+        pytest.param(408, 2, [0.5], id="retryable-408"),
+        pytest.param(400, 1, [], id="non-retryable-400"),
+        pytest.param(302, 1, [], id="redirect-not-retried"),
+    ],
+)
+@pytest.mark.anyio
+async def test_post_form_json_uses_the_same_retryable_status_classification(
+    status: int, expected_calls: int, expected_sleeps: list[float]
+) -> None:
+    client, inner, monotonic = fake_retrying_form(
+        [response(status), response(200)], policy=RetryPolicy(max_attempts=3)
+    )
+    result = await client.post_form_json(TOKEN_URL, form=FORM)
+    assert len(inner.post_calls) == expected_calls
+    assert monotonic.sleeps == expected_sleeps
+    assert result.status_code == (200 if expected_calls == 2 else status)
+
+
+@pytest.mark.anyio
+async def test_post_form_json_never_retries_earlier_than_the_server_advice() -> None:
+    client, inner, monotonic = fake_retrying_form(
+        [response(429, headers={"Retry-After": "2"}), response(200)],
+        policy=RetryPolicy(max_attempts=3, base_backoff_seconds=0.5, max_backoff_seconds=8.0),
+    )
+    result = await client.post_form_json(TOKEN_URL, form=FORM)
+    assert result.status_code == 200
+    assert monotonic.sleeps == [2.0]
+    assert len(inner.post_calls) == 2
+
+
+@pytest.mark.parametrize("error_type", [HttpTransportError, HttpTimeoutError])
+@pytest.mark.anyio
+async def test_post_form_json_retries_transport_and_timeout_then_re_raises(
+    error_type: type[Exception],
+) -> None:
+    client, inner, monotonic = fake_retrying_form(
+        [error_type("boom"), error_type("boom")],
+        policy=RetryPolicy(max_attempts=2, base_backoff_seconds=0.5, max_backoff_seconds=8.0),
+    )
+    with pytest.raises(error_type):
+        await client.post_form_json(TOKEN_URL, form=FORM)
+    assert monotonic.sleeps == [0.5]
+    assert len(inner.post_calls) == 2
+
+
+@pytest.mark.parametrize(
+    "error", [HttpDecodeError("body is not one JSON document"), HttpResponseTooLargeError("too big")]
+)
+@pytest.mark.anyio
+async def test_post_form_json_never_retries_a_deterministic_body_failure(error: Exception) -> None:
+    client, inner, monotonic = fake_retrying_form([error, response(200)], policy=RetryPolicy(3))
+    with pytest.raises(type(error)):
+        await client.post_form_json(TOKEN_URL, form=FORM)
+    assert monotonic.sleeps == []
+    assert len(inner.post_calls) == 1
+
+
+@pytest.mark.anyio
+async def test_close_refuses_a_form_post_before_the_inner_client_is_reached() -> None:
+    inner = FakeHttpClient()
+    inner.register_form(TOKEN_URL, {"access_token": "t"}, form=FORM)
+    client = RetryingHttpClient(
+        inner,
+        limiter=RateLimiter(PacingPolicy(), FakeMonotonicClock()),
+        retry_policy=RetryPolicy(),
+        clock=FrozenClock(MOMENT),
+    )
+    await client.close()
+    await client.close()
+    with pytest.raises(RuntimeError):
+        await client.post_form_json(TOKEN_URL, form=FORM)
+    assert inner.post_calls == [], "a post-close request must never reach the inner client"

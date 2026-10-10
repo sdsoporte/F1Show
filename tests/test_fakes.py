@@ -37,6 +37,10 @@ from f1show.ports import (
 UTC = dt.timezone.utc
 MOMENT = dt.datetime(2024, 3, 2, 15, 0, 0, tzinfo=UTC)
 MODEL_ID = "test-model-not-real"
+TOKEN_URL = "https://example.invalid/token"  # noqa: S105 (fictional endpoint, not a credential)
+FORM = {"grant_type": "client_credentials", "client_id": "placeholder-client"}
+#: Obviously fictional; never a real credential.
+CALL_HEADERS = {"Authorization": "Bearer placeholder-token-not-a-real-credential"}
 
 
 def envelope(event_id: str) -> EventEnvelope:
@@ -207,6 +211,119 @@ async def test_fake_http_raises_on_an_unregistered_url() -> None:
     # refusal apart from an accidental dict miss.
     assert type(excinfo.value) is LookupError
     assert "never-registered" in str(excinfo.value)
+
+
+# --- F03d-1: additive form-POST and request-header observability. Every existing
+# --- behaviour above stays untouched; these probes only cover the new surface.
+
+
+@pytest.mark.anyio
+async def test_fake_http_form_post_records_the_form_and_headers_and_returns_the_answer() -> None:
+    client = FakeHttpClient()
+    client.register_form(
+        TOKEN_URL, {"access_token": "placeholder"}, form=FORM, headers={"Content-Type": "application/json"}
+    )
+    response = await client.post_form_json(TOKEN_URL, form=FORM, headers=CALL_HEADERS)
+    assert isinstance(response, HttpResponse)
+    assert (response.status_code, response.payload) == (200, {"access_token": "placeholder"})
+    assert response.header("content-type") == "application/json"
+    assert client.post_calls == [(TOKEN_URL, dict(FORM), dict(CALL_HEADERS))]
+    assert client.request_headers == [dict(CALL_HEADERS)]
+    assert client.calls == [], "a form POST must not appear in the get_json call list"
+
+
+@pytest.mark.anyio
+async def test_fake_http_form_post_scripts_outcomes_in_order_then_refuses() -> None:
+    client = FakeHttpClient()
+    client.register_form(TOKEN_URL, "static", form=FORM)
+    client.enqueue_form(TOKEN_URL, HttpResponse(429, {"Retry-After": "1"}), form=FORM)
+    client.enqueue_form(
+        TOKEN_URL, HttpResponse(200, {"Content-Type": "application/json"}, {"a": 1}), form=FORM
+    )
+    first = await client.post_form_json(TOKEN_URL, form=FORM)
+    assert (first.status_code, first.header("retry-after")) == (429, "1")
+    second = await client.post_form_json(TOKEN_URL, form=FORM)
+    assert (second.status_code, second.payload) == (200, {"a": 1})
+    with pytest.raises(RuntimeError, match="exhausted"):
+        await client.post_form_json(TOKEN_URL, form=FORM)
+    assert len(client.post_calls) == 3, "the refused attempt is still recorded"
+
+
+@pytest.mark.anyio
+async def test_fake_http_form_post_raises_on_an_unregistered_form() -> None:
+    client = FakeHttpClient()
+    with pytest.raises(LookupError) as excinfo:
+        await client.post_form_json(TOKEN_URL, form=FORM)
+    assert type(excinfo.value) is LookupError
+    assert "/token" in str(excinfo.value)
+
+
+@pytest.mark.anyio
+async def test_fake_http_get_and_form_registrations_are_independent() -> None:
+    client = FakeHttpClient()
+    client.register(TOKEN_URL, "get-answer", params=FORM)
+    client.register_form(TOKEN_URL, "form-answer", form=FORM)
+    assert (await client.get_json(TOKEN_URL, params=FORM)).payload == "get-answer"
+    assert (await client.post_form_json(TOKEN_URL, form=FORM)).payload == "form-answer"
+
+
+@pytest.mark.parametrize("bad_headers", ["x", [("a", "b")], {"a": 1}, {1: "a"}])
+@pytest.mark.anyio
+async def test_fake_http_refuses_bad_request_headers_without_recording_a_call(
+    bad_headers: Any,
+) -> None:
+    client = FakeHttpClient()
+    with pytest.raises(TypeError):
+        await client.get_json(TOKEN_URL, headers=bad_headers)
+    with pytest.raises(TypeError):
+        await client.post_form_json(TOKEN_URL, form=FORM, headers=bad_headers)
+    assert (client.calls, client.post_calls, client.request_headers) == ([], [], [])
+
+
+@pytest.mark.parametrize("bad_form", ["x", [("a", "b")], {"a": 1}, {1: "a"}, None])
+@pytest.mark.anyio
+async def test_fake_http_refuses_a_bad_form_without_recording_a_call(bad_form: Any) -> None:
+    client = FakeHttpClient()
+    with pytest.raises(TypeError):
+        await client.post_form_json(TOKEN_URL, form=bad_form)
+    assert (client.post_calls, client.request_headers) == ([], [])
+
+
+@pytest.mark.anyio
+async def test_fake_http_records_headers_verbatim_or_none_without_rewriting_names() -> None:
+    client = FakeHttpClient()
+    client.register(TOKEN_URL, [])
+    await client.get_json(TOKEN_URL)
+    assert client.request_headers == [None], "a call with no headers is recorded as None"
+    await client.get_json(TOKEN_URL, headers={"X-Trace": "t"})
+    assert client.request_headers[-1] == {"X-Trace": "t"}, "header names are never rewritten"
+    assert client.calls == [(TOKEN_URL, None), (TOKEN_URL, None)]
+
+
+@pytest.mark.anyio
+async def test_fake_http_form_post_refuses_a_closed_client() -> None:
+    client = FakeHttpClient()
+    await client.close()
+    await client.close()
+    with pytest.raises(RuntimeError):
+        await client.post_form_json(TOKEN_URL, form=FORM)
+    assert client.post_calls == [], "a closed client records no form call"
+
+
+@pytest.mark.anyio
+async def test_fake_http_copies_a_form_payload_so_mutable_fixtures_cannot_poison_it() -> None:
+    client = FakeHttpClient()
+    payload: dict[str, Any] = {"access_token": "t", "scope": ["a"]}
+    form = dict(FORM)
+    headers = dict(CALL_HEADERS)
+    client.register_form(TOKEN_URL, payload, form=form, headers=headers)
+    payload["scope"].append("poison")
+    form["grant_type"] = "poison"
+    headers["Authorization"] = "poison"
+    response = await client.post_form_json(TOKEN_URL, form=FORM, headers=CALL_HEADERS)
+    assert response.payload == {"access_token": "t", "scope": ["a"]}
+    assert client.post_calls == [(TOKEN_URL, dict(FORM), dict(CALL_HEADERS))]
+    assert client.request_headers == [dict(CALL_HEADERS)]
 
 
 @pytest.mark.anyio

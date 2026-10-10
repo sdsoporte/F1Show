@@ -116,7 +116,8 @@ class HttpResponse:
 
 @runtime_checkable
 class HttpClient(Protocol):
-    """Outbound HTTP boundary; grows at F03c-2 with pacing and retries.
+    """Outbound HTTP boundary; grows at F03c-2 with pacing and retries and at F03d
+    with the additive ``Authorization``-capable form POST.
 
     The single place the app reaches the network, so no role builds its own client.
 
@@ -124,15 +125,80 @@ class HttpClient(Protocol):
     canonical headers and payload - instead of raising for an HTTP status, because a
     retry policy has to see a 429 or a 503 first. Only transport, timeout, decode and
     body-size failures raise, and they raise ``HttpError`` subtypes so no transport
-    library's exception ever crosses this port. ``close`` releases what the
-    implementation owns, is safe to repeat, and makes ``get_json`` refuse.
+    library's exception ever crosses this port.
+
+    ``headers`` is an optional mapping of *request* headers and defaults to ``None``,
+    which adds none. A non-mapping, or a mapping whose keys or values are not ``str``,
+    is refused with ``TypeError`` before anything is sent; names are copied verbatim,
+    never lower-cased, and the caller's mapping is copied so a later mutation cannot
+    change a request already in flight. Request header values never appear in a
+    returned ``HttpResponse`` (which carries response headers only), in an exception's
+    message or ``repr``, or on the client itself.
+
+    ``post_form_json`` performs the documented OAuth2 token exchange: one POST whose
+    body is ``application/x-www-form-urlencoded`` (that content type is set unless the
+    caller supplied one), with the same validation, response and failure semantics as
+    ``get_json``. It exists because a header and a form body are the two things a token
+    exchange needs and neither could be expressed before; it carries no auth logic, no
+    token model and no credential store.
+
+    ``close`` releases what the implementation owns, is safe to repeat, and makes both
+    methods refuse.
     """
 
     async def get_json(
-        self, url: str, *, params: Mapping[str, str] | None = None
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> HttpResponse: ...
+
+    async def post_form_json(
+        self,
+        url: str,
+        *,
+        form: Mapping[str, str],
+        headers: Mapping[str, str] | None = None,
     ) -> HttpResponse: ...
 
     async def close(self) -> None: ...
+
+
+def copy_request_headers(headers: Mapping[str, str] | None) -> dict[str, str] | None:
+    """Validate and shallow-copy a request header mapping, or refuse it.
+
+    Shared by every ``HttpClient`` implementation so the same input rule cannot drift
+    between the adapter and the fake. ``None`` stays ``None`` (no extra headers); a
+    non-mapping, or a mapping whose keys or values are not ``str``, raises ``TypeError``
+    before anything is sent. Names are copied verbatim and never rewritten, and the copy
+    means a later mutation of the caller's mapping cannot change a request in flight.
+    """
+    if headers is None:
+        return None
+    return _copy_str_mapping(headers, "headers")
+
+
+def copy_form_fields(form: Mapping[str, str]) -> dict[str, str]:
+    """Validate and shallow-copy an urlencoded form mapping, or refuse it.
+
+    The form twin of :func:`copy_request_headers`, with the same shape rule and the
+    same ``TypeError``; unlike headers it has no ``None`` form, because a token
+    exchange without a body is not a request this port can express.
+    """
+    return _copy_str_mapping(form, "form")
+
+
+def _copy_str_mapping(value: object, name: str) -> dict[str, str]:
+    """Return a shallow copy of ``value`` as a ``str``-to-``str`` mapping, or refuse it."""
+    if not isinstance(value, Mapping):
+        raise TypeError(f"{name} must be a mapping of str to str, got {type(value).__name__}")
+    copied: dict[str, str] = {}
+    for key, item in value.items():
+        if not isinstance(key, str) or not isinstance(item, str):
+            raise TypeError(f"{name} must map str names to str values")
+        copied[key] = item
+    return copied
 
 
 @runtime_checkable

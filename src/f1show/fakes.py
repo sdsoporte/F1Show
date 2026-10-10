@@ -13,7 +13,13 @@ import datetime as dt
 from collections.abc import Mapping, Sequence
 
 from f1show.events import EventEnvelope
-from f1show.ports import HttpResponse, ModelRequest, ModelResponse
+from f1show.ports import (
+    HttpResponse,
+    ModelRequest,
+    ModelResponse,
+    copy_form_fields,
+    copy_request_headers,
+)
 
 
 class FrozenClock:
@@ -81,6 +87,13 @@ class FakeHttpClient:
       what was passed in, or what came back, cannot poison a later answer.
     * Scripted outcomes are delivered strictly in order and never repeat; once the
       queue is drained the fake refuses instead of falling back to a static answer.
+
+    F03d adds the additive form-POST surface. Every existing observable stays exactly
+    as it was - the ``calls`` list shape, the registration keys, the exhaustion rule and
+    the deep copies - and the new surface is observed separately through
+    ``post_calls`` and ``request_headers``. A form registration never collides with a
+    GET registration for the same URL, and request header names are recorded verbatim,
+    never lower-cased: observing them is the fake's job, rewriting them is not.
     """
 
     def __init__(self) -> None:
@@ -88,8 +101,17 @@ class FakeHttpClient:
         self._scripts: dict[
             tuple[str, tuple[tuple[str, str], ...]], list[HttpResponse | BaseException]
         ] = {}
+        self._form_responses: dict[tuple[str, tuple[tuple[str, str], ...]], HttpResponse] = {}
+        self._form_scripts: dict[
+            tuple[str, tuple[tuple[str, str], ...]], list[HttpResponse | BaseException]
+        ] = {}
         self._closed = False
         self.calls: list[tuple[str, dict[str, str] | None]] = []
+        #: Additive F03d observability: the request headers of every request, in call
+        #: order, or ``None`` when the call passed none.
+        self.request_headers: list[dict[str, str] | None] = []
+        #: Additive F03d observability: ``(url, form, headers)`` for every form POST.
+        self.post_calls: list[tuple[str, dict[str, str], dict[str, str] | None]] = []
 
     def register(
         self,
@@ -134,17 +156,60 @@ class FakeHttpClient:
             )
         self._scripts.setdefault((url, self._key(params)), []).append(outcome)
 
+    def register_form(
+        self,
+        url: str,
+        payload: object,
+        *,
+        form: Mapping[str, str] | None = None,
+        status_code: int = 200,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
+        """Register the answer for a form POST to ``url`` with exactly ``form``.
+
+        Additive to :meth:`register`: the two key spaces are separate, so a form
+        registration neither shadows nor is shadowed by a GET registration on the same
+        URL. The payload and headers are copied exactly as :meth:`register` copies them.
+        """
+        self._form_responses[(url, self._key(form))] = HttpResponse(
+            status_code=status_code,
+            headers=dict(headers) if headers is not None else {},
+            payload=copy.deepcopy(payload),
+        )
+
+    def enqueue_form(
+        self,
+        url: str,
+        outcome: HttpResponse | BaseException,
+        *,
+        form: Mapping[str, str] | None = None,
+    ) -> None:
+        """Append one scripted outcome for the form-POST ``url``/``form`` pair."""
+        if not isinstance(outcome, (HttpResponse, BaseException)):
+            raise TypeError(
+                "a scripted outcome must be an HttpResponse or an exception instance, "
+                f"got {type(outcome).__name__}"
+            )
+        self._form_scripts.setdefault((url, self._key(form)), []).append(outcome)
+
     async def get_json(
-        self, url: str, *, params: Mapping[str, str] | None = None
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> HttpResponse:
         """Return the next answer for the ``url``/``params`` pair, or raise.
 
         The call is recorded before the outcome is delivered, including when the
         outcome is a scripted exception, so an exhausted queue still shows the attempt.
+        ``headers`` is validated by the shared port rule and recorded verbatim.
         """
         if self._closed:
             raise RuntimeError("FakeHttpClient is closed")
+        copied_headers = copy_request_headers(headers)
         self.calls.append((url, dict(params) if params is not None else None))
+        self.request_headers.append(copied_headers)
         key = (url, self._key(params))
         if key in self._scripts:
             queue = self._scripts[key]
@@ -159,6 +224,45 @@ class FakeHttpClient:
         if key not in self._responses:
             raise LookupError(f"FakeHttpClient has no registered response for {url!r} with {params!r}")
         return self._copy(self._responses[key])
+
+    async def post_form_json(
+        self,
+        url: str,
+        *,
+        form: Mapping[str, str],
+        headers: Mapping[str, str] | None = None,
+    ) -> HttpResponse:
+        """Return the next answer for the form-POST ``url``/``form`` pair, or raise.
+
+        The mirror of :meth:`get_json` for the additive form surface: the same recording
+        discipline, the same scripted-then-static-then-refuse order, and the same deep
+        copies. The form and headers are validated by the shared port rule before the
+        call is recorded.
+        """
+        if self._closed:
+            raise RuntimeError("FakeHttpClient is closed")
+        copied_form = copy_form_fields(form)
+        copied_headers = copy_request_headers(headers)
+        self.post_calls.append((url, copied_form, copied_headers))
+        self.request_headers.append(copied_headers)
+        key = (url, self._key(copied_form))
+        if key in self._form_scripts:
+            queue = self._form_scripts[key]
+            if not queue:
+                raise RuntimeError(
+                    f"FakeHttpClient scripted form outcomes for {url!r} with "
+                    f"{copied_form!r} are exhausted"
+                )
+            outcome = queue.pop(0)
+            if not isinstance(outcome, HttpResponse):
+                raise outcome
+            return self._copy(outcome)
+        if key not in self._form_responses:
+            raise LookupError(
+                f"FakeHttpClient has no registered form response for {url!r} with "
+                f"{copied_form!r}"
+            )
+        return self._copy(self._form_responses[key])
 
     async def close(self) -> None:
         """Mark the fake closed; safe to call repeatedly."""

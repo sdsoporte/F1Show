@@ -14,7 +14,7 @@ import asyncio
 import contextlib
 import gzip
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -34,7 +34,14 @@ from f1show.ports import (
 )
 
 URL = "https://example.invalid/v1/sessions"
+TOKEN_URL = "https://example.invalid/token"  # noqa: S105 (fictional endpoint, not a credential)
 PARAMS = {"session_key": "9462"}
+FORM = {"grant_type": "client_credentials", "client_id": "placeholder-client"}
+#: Obviously fictional and searchable, so a leak test can look for it anywhere.
+#: Never a real credential.
+PLACEHOLDER_TOKEN = "placeholder-token-not-a-real-credential"  # noqa: S105 (deliberately fake)
+CALL_HEADERS = {"Authorization": f"Bearer {PLACEHOLDER_TOKEN}", "X-Trace": "trace-1"}
+FORM_CONTENT_TYPE = "application/x-www-form-urlencoded"
 #: Short but comfortably above scheduling noise, so the deadline fires fast.
 DEADLINE = 0.2
 #: Outer safety net for stalled tests: a missing deadline fails, it never hangs.
@@ -95,7 +102,66 @@ def fake_client(outcome: Outcome) -> FakeHttpClient:
 
 
 def build(implementation: str, outcome: Outcome) -> Any:
-    return adapter_client(outcome) if implementation == "adapter" else fake_client(outcome)
+    """Build one implementation that answers both a GET and a form POST."""
+    if implementation == "adapter":
+        return adapter_client(outcome)
+    client = fake_client(outcome)
+    client.register_form(
+        TOKEN_URL,
+        outcome.payload,
+        form=FORM,
+        status_code=outcome.status,
+        headers=outcome.headers,
+    )
+    return client
+
+
+@dataclass
+class Probed:
+    """One implementation plus the request facts the shared bodies need."""
+
+    client: Any
+    sent: Callable[[], int]
+    headers: Callable[[], dict[str, str]]
+
+
+def build_probed(implementation: str, outcome: Outcome) -> Probed:
+    """Build a client plus probes for request count and the last request's headers.
+
+    Header names are lowercased in the probe only so one body fits both
+    implementations: httpx canonicalises on the wire, the fake deliberately does not.
+    """
+    if implementation == "adapter":
+        transport = RecordingTransport(lambda request: _mock_response(outcome))
+        client = HttpxJsonClient(
+            timeout_seconds=5.0, max_response_bytes=1024, transport=transport
+        )
+        return Probed(
+            client=client,
+            sent=lambda: len(transport.requests),
+            headers=lambda: (
+                {name.lower(): value for name, value in transport.requests[-1].headers.items()}
+                if transport.requests
+                else {}
+            ),
+        )
+    fake = fake_client(outcome)
+    fake.register_form(
+        TOKEN_URL,
+        outcome.payload,
+        form=FORM,
+        status_code=outcome.status,
+        headers=outcome.headers,
+    )
+    return Probed(
+        client=fake,
+        sent=lambda: len(fake.calls) + len(fake.post_calls),
+        headers=lambda: (
+            {name.lower(): value for name, value in (fake.request_headers[-1] or {}).items()}
+            if fake.request_headers
+            else {}
+        ),
+    )
 
 
 class RecordingTransport(httpx.MockTransport):
@@ -159,11 +225,11 @@ class StallBody(httpx.AsyncByteStream):
 async def test_adapter_and_fake_share_one_http_contract(
     implementation: str, outcome: Outcome, expected_payload: Any
 ) -> None:
-    """The shared contract body: status, canonical headers, payload copies, close.
+    """The shared contract body: GET and form POST, headers, payloads, close.
 
     F03a showed that asserting the same semantics twice, once per
     implementation, is how a divergence survives review, so both implementations
-    run this single body.
+    run this single body. F03d extends it to the additive form-POST surface.
     """
     client = build(implementation, outcome)
     response = await client.get_json(URL, params=PARAMS)
@@ -179,6 +245,12 @@ async def test_adapter_and_fake_share_one_http_contract(
         returned.append({"poison": True})
         again = await client.get_json(URL, params=PARAMS)
         assert again.payload == expected_payload, "a returned payload must be a copy"
+
+    posted = await client.post_form_json(TOKEN_URL, form=FORM)
+    assert isinstance(posted, HttpResponse)
+    assert posted.status_code == outcome.status
+    assert posted.payload == expected_payload
+    assert posted.header("Retry-After") == outcome.headers["Retry-After"]
 
     await client.close()
     await client.close()  # closing twice stays harmless
@@ -877,3 +949,268 @@ async def test_a_non_2xx_response_keeps_status_and_headers_without_reading_a_rai
     assert response.header("content-type") == "application/json"
     assert response.payload is None, "a non-2xx payload stays unavailable"
     assert not body.started.is_set(), "a non-2xx body is never streamed, so nothing can raise"
+
+
+# --- F03d-1: the additive form-POST and request-header surface. Every implementation
+# --- of the port must obey the same rules, so the shared bodies stay parameterized.
+
+BAD_HEADERS = [
+    pytest.param("not-a-mapping", id="str"),
+    pytest.param([("a", "b")], id="list-of-pairs"),
+    pytest.param({"a": 1}, id="non-str-value"),
+    pytest.param({1: "a"}, id="non-str-name"),
+    pytest.param({"a": None}, id="none-value"),
+]
+BAD_FORMS = [
+    pytest.param("grant_type=x", id="str"),
+    pytest.param([("a", "b")], id="list-of-pairs"),
+    pytest.param({"a": 1}, id="non-str-value"),
+    pytest.param({1: "a"}, id="non-str-name"),
+    pytest.param(None, id="none"),
+]
+
+
+@pytest.mark.parametrize("implementation", ["adapter", "fake"])
+@pytest.mark.parametrize("bad_headers", BAD_HEADERS)
+@pytest.mark.anyio
+async def test_both_implementations_refuse_bad_request_headers_before_any_request(
+    implementation: str, bad_headers: Any
+) -> None:
+    probed = build_probed(implementation, Outcome(200, payload=JSON_LIST))
+    try:
+        with pytest.raises(TypeError):
+            await probed.client.get_json(URL, params=PARAMS, headers=bad_headers)
+        with pytest.raises(TypeError):
+            await probed.client.post_form_json(TOKEN_URL, form=FORM, headers=bad_headers)
+        assert probed.sent() == 0, "a refused header mapping must never reach the request"
+    finally:
+        await probed.client.close()
+
+
+@pytest.mark.parametrize("implementation", ["adapter", "fake"])
+@pytest.mark.parametrize("bad_form", BAD_FORMS)
+@pytest.mark.anyio
+async def test_both_implementations_refuse_a_bad_form_before_any_request(
+    implementation: str, bad_form: Any
+) -> None:
+    probed = build_probed(implementation, Outcome(200, payload=JSON_LIST))
+    try:
+        with pytest.raises(TypeError):
+            await probed.client.post_form_json(TOKEN_URL, form=bad_form)
+        assert probed.sent() == 0, "a refused form must never reach the request"
+    finally:
+        await probed.client.close()
+
+
+@pytest.mark.parametrize("implementation", ["adapter", "fake"])
+@pytest.mark.anyio
+async def test_both_implementations_put_the_called_headers_on_the_request(
+    implementation: str,
+) -> None:
+    """Headers reach the request on GET and POST, and none is invented when absent."""
+    probed = build_probed(implementation, Outcome(200, payload=JSON_LIST))
+    try:
+        await probed.client.get_json(URL, params=PARAMS)
+        assert "x-trace" not in probed.headers()
+        assert "authorization" not in probed.headers()
+
+        await probed.client.get_json(URL, params=PARAMS, headers=CALL_HEADERS)
+        assert probed.headers()["x-trace"] == "trace-1"
+        assert probed.headers()["authorization"] == f"Bearer {PLACEHOLDER_TOKEN}"
+
+        await probed.client.post_form_json(TOKEN_URL, form=FORM, headers=CALL_HEADERS)
+        assert probed.headers()["authorization"] == f"Bearer {PLACEHOLDER_TOKEN}"
+    finally:
+        await probed.client.close()
+
+
+@pytest.mark.anyio
+async def test_adapter_posts_a_urlencoded_form_with_the_documented_content_type() -> None:
+    transport = RecordingTransport(
+        lambda request: _mock_response(Outcome(200, payload={"access_token": "x"}))
+    )
+    client = HttpxJsonClient(timeout_seconds=5.0, max_response_bytes=1024, transport=transport)
+    try:
+        await client.post_form_json(TOKEN_URL, form=FORM)
+    finally:
+        await client.close()
+    assert len(transport.requests) == 1
+    request = transport.requests[0]
+    assert request.method == "POST"
+    assert request.headers["content-type"] == FORM_CONTENT_TYPE
+    assert request.content == b"grant_type=client_credentials&client_id=placeholder-client"
+    assert request.url.path == "/token"
+
+
+@pytest.mark.anyio
+async def test_adapter_keeps_a_caller_supplied_content_type_on_a_form_post() -> None:
+    transport = RecordingTransport(lambda request: _mock_response(Outcome(200, payload=JSON_LIST)))
+    client = HttpxJsonClient(timeout_seconds=5.0, max_response_bytes=1024, transport=transport)
+    supplied = "application/x-www-form-urlencoded; charset=utf-8"
+    try:
+        await client.post_form_json(TOKEN_URL, form=FORM, headers={"Content-Type": supplied})
+    finally:
+        await client.close()
+    assert transport.requests[0].headers["content-type"] == supplied
+
+
+@pytest.mark.anyio
+async def test_adapter_returns_a_post_redirect_without_following_it() -> None:
+    transport = RecordingTransport(
+        lambda request: httpx.Response(302, headers={"location": "https://elsewhere.invalid/token"})
+    )
+    client = HttpxJsonClient(timeout_seconds=5.0, max_response_bytes=1024, transport=transport)
+    try:
+        response = await client.post_form_json(TOKEN_URL, form=FORM)
+    finally:
+        await client.close()
+    assert response.status_code == 302
+    assert response.payload is None
+    assert response.header("location") == "https://elsewhere.invalid/token"
+    assert len(transport.requests) == 1, "one attempt per call, and no redirect follow"
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        pytest.param(httpx.ConnectError("connection refused"), HttpTransportError, id="connect"),
+        pytest.param(httpx.ReadTimeout("no answer"), HttpTimeoutError, id="read-timeout"),
+        pytest.param(httpx.ConnectTimeout("no route"), HttpTimeoutError, id="connect-timeout"),
+    ],
+)
+@pytest.mark.anyio
+async def test_adapter_normalises_post_transport_failures_into_typed_port_errors(
+    error: Exception, expected: type[HttpError]
+) -> None:
+    client = HttpxJsonClient(
+        timeout_seconds=5.0, max_response_bytes=64, transport=RaisingTransport(error)
+    )
+    try:
+        with pytest.raises(expected) as excinfo:
+            await client.post_form_json(TOKEN_URL, form=FORM)
+    finally:
+        await client.close()
+    assert isinstance(excinfo.value, HttpError)
+    assert not isinstance(excinfo.value, httpx.HTTPError), "no httpx exception may cross the port"
+
+
+@pytest.mark.parametrize(
+    ("outcome", "max_bytes", "expected"),
+    [
+        pytest.param(
+            Outcome(200, raw_body="<html>not json</html>"), 1024, HttpDecodeError, id="decode"
+        ),
+        pytest.param(
+            Outcome(200, raw_body='{"pad":"' + "x" * 40 + '"}'),
+            10,
+            HttpResponseTooLargeError,
+            id="size",
+        ),
+    ],
+)
+@pytest.mark.anyio
+async def test_adapter_keeps_post_body_failures_typed(
+    outcome: Outcome, max_bytes: int, expected: type[HttpError]
+) -> None:
+    client = adapter_client(outcome, max_response_bytes=max_bytes)
+    try:
+        with pytest.raises(expected):
+            await client.post_form_json(TOKEN_URL, form=FORM)
+    finally:
+        await client.close()
+
+
+@pytest.mark.anyio
+async def test_adapter_enforces_the_deadline_on_a_post_that_never_answers() -> None:
+    class Hanging(httpx.AsyncBaseTransport):
+        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+    client = HttpxJsonClient(timeout_seconds=DEADLINE, max_response_bytes=64, transport=Hanging())
+    try:
+        async with asyncio.timeout(STALL_SAFETY):
+            with pytest.raises(HttpTimeoutError):
+                await client.post_form_json(TOKEN_URL, form=FORM)
+    finally:
+        await client.close()
+
+
+def assert_no_placeholder_leak(error: BaseException) -> None:
+    """Walk the whole cause/context chain and refuse the placeholder anywhere."""
+    node: BaseException | None = error
+    steps = 0
+    while node is not None:
+        assert PLACEHOLDER_TOKEN not in str(node)
+        assert PLACEHOLDER_TOKEN not in repr(node)
+        assert PLACEHOLDER_TOKEN not in repr(node.args)
+        steps += 1
+        assert steps < 10, "the cause chain must be finite"
+        node = node.__cause__ if node.__cause__ is not None else node.__context__
+
+
+@pytest.mark.anyio
+async def test_request_headers_never_leave_the_request_that_carried_them() -> None:
+    """Request headers reach the wire, then exist nowhere the caller can observe."""
+    transport = RecordingTransport(lambda request: _mock_response(Outcome(200, payload=JSON_LIST)))
+    client = HttpxJsonClient(timeout_seconds=5.0, max_response_bytes=1024, transport=transport)
+    try:
+        await client.get_json(URL, params=PARAMS, headers=CALL_HEADERS)
+        await client.post_form_json(TOKEN_URL, form=FORM, headers=CALL_HEADERS)
+        # Non-vacuous: the placeholder really is sent on both requests.
+        assert transport.requests[0].headers["authorization"] == f"Bearer {PLACEHOLDER_TOKEN}"
+        assert transport.requests[1].headers["authorization"] == f"Bearer {PLACEHOLDER_TOKEN}"
+        assert PLACEHOLDER_TOKEN not in repr(client)
+        assert PLACEHOLDER_TOKEN not in repr(vars(client))
+    finally:
+        await client.close()
+
+    failing = HttpxJsonClient(
+        timeout_seconds=5.0,
+        max_response_bytes=1024,
+        transport=RaisingTransport(httpx.ConnectError("connection refused")),
+    )
+    try:
+        with pytest.raises(HttpError) as get_error:
+            await failing.get_json(URL, params=PARAMS, headers=CALL_HEADERS)
+        assert_no_placeholder_leak(get_error.value)
+        with pytest.raises(HttpError) as post_error:
+            await failing.post_form_json(TOKEN_URL, form=FORM, headers=CALL_HEADERS)
+        assert_no_placeholder_leak(post_error.value)
+        assert PLACEHOLDER_TOKEN not in repr(failing)
+        assert PLACEHOLDER_TOKEN not in repr(vars(failing))
+    finally:
+        await failing.close()
+
+
+class ParkingTransport(httpx.AsyncBaseTransport):
+    """A transport that records the request and lets the test mutate the input
+    mapping while the request is genuinely in flight."""
+
+    def __init__(self) -> None:
+        self.entered = asyncio.Event()
+        self.release = asyncio.Event()
+        self.requests: list[httpx.Request] = []
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        self.entered.set()
+        await self.release.wait()
+        return httpx.Response(200, json=JSON_LIST)
+
+
+@pytest.mark.anyio
+async def test_a_caller_mutation_while_a_request_is_in_flight_cannot_change_it() -> None:
+    transport = ParkingTransport()
+    client = HttpxJsonClient(timeout_seconds=5.0, max_response_bytes=1024, transport=transport)
+    headers = {"X-Trace": "first"}
+    try:
+        task = asyncio.create_task(client.get_json(URL, params=PARAMS, headers=headers))
+        async with asyncio.timeout(STALL_SAFETY):
+            await transport.entered.wait()
+        headers["X-Trace"] = "mutated"
+        transport.release.set()
+        await task
+    finally:
+        await client.close()
+    assert transport.requests[0].headers["x-trace"] == "first"
