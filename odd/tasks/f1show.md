@@ -1342,6 +1342,37 @@ that a reader can see the two-persona commentary and a replay re-produces it.
    historical API**. That is an actual OpenF1 call, so it needs its own small grant. The fixtures
    are the production artifact: the same immutable snapshots serve as replay input and as the
    regression corpus.
+   **Granted by the user on 2026-10-10.** Concrete plan, registered before the first request:
+   - **Read-only, unauthenticated, free tier.** No credentials, no subscription, no OAuth2, no
+     bearer header. Historical data only. The recorder stops on any non-200 and records what it
+     saw rather than retrying its way around a refusal.
+   - **Pacing is real, not decorative.** The free tier is documented at 3 requests/second and
+     30/minute, so the whole recording stays inside one minute's budget by keeping the endpoint
+     count small; every request is paced and the actual elapsed time is reported.
+   - **Endpoints, with paths now verified from the first-party docs rather than guessed.** The
+     documented URL paths are `/v1/sessions`, `/v1/drivers`, `/v1/position`, `/v1/laps`,
+     `/v1/intervals`, `/v1/pit`, `/v1/stints`, `/v1/race_control`, `/v1/overtakes`,
+     `/v1/session_result`, `/v1/starting_grid`, `/v1/weather` and others. The MVP recording takes
+     the event-relevant subset: `sessions` (to choose the session), `drivers`, `position`, `laps`,
+     `intervals`, `pit`, `stints`, `race_control` — eight requests. **Deliberately excluded:**
+     `car_data` and `location` (both ~3.7 Hz and enormous), `team_radio`, and the championship
+     endpoints. Reading a documented path is still not the same as observing a shape, so the
+     recording is what turns a documented path into a recorded fact.
+   - **One session, chosen so the families are actually available.** `intervals` and `overtakes`
+     are documented as race-only, and `pit.stop_duration` exists only from the 2024 United States
+     Grand Prix onwards, so the recording targets a **2024 race session at or after that event**.
+   - **Bounded size.** Measure before committing: if a family is large enough to bloat the
+     repository, bound it with the endpoint's documented date filters and record the exact filter
+     plus the resulting first and last timestamps. Nothing is trimmed silently, and an excluded or
+     bounded family is stated in the provenance file.
+   - **The artifact is self-describing.** Each recorded response lands as raw JSON, and a
+     provenance file records the exact URL and query, the HTTP status, the byte size, the SHA256,
+     the record count, the request timestamp, and that the responses are unauthenticated
+     free-tier historical data. `docs/EXTERNAL-CONTRACTS.md` is updated by the parent, not the
+     recorder, once the shapes are actually known.
+   - **The recorder script is not committed.** It runs from `/tmp`; the provenance file records
+     the exact requests so the recording is reproducible by hand. A committed recorder is a
+     separate decision, not a side effect of this step.
 2. **F04 — deterministic events.** A **subset of families** that the recorded fixtures can
    actually support, rather than all 18 endpoints. Deduplicate updates, keep evidence timestamps
    and source fields, and prove no false first-lap record and no inferred overtake from a position
@@ -1478,20 +1509,17 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **MVP, option A chosen by the user.** The cut is registered above: record fixtures from the
-free historical API (needs its own small grant), then F04 over the families those fixtures support,
-F08 against a fake provider, F09's two-person booth, and a thin single-process F10 that prints a
-transcript. F05, F06, F07, F11 and F13 are deferred with reasons, and F03d's auth/live seam is off
-the MVP path under free mode. The user chose **free mode**: no subscription, so nothing on the MVP
-path may require authenticated or real-time access, and the live gaps are tracked as issue #3.
-Seven open items were deferred into tracked issues (#3 live/subscription, #4 401/403 token
-invalidation, #5 the fourteen advisory locations whose bodies are unrecoverable, #6 the remaining
-pre-existing static findings, #7 offline CI with a 3.12 matrix, #8 probe-only coverage and the
-unreachable generation branch, #9 the retried-POST question). A small in-flight hardening of
-`auth.py` continues because it fixes a real defect — a transport failure's message leaked server
-text — and it will take its own verification, review and commit like every other unit. `main` is at
-`2c83a150` with all nine F03 units published; nothing from F03-cleanup or the MVP is published.
-F04's estimates are lower bounds, given the project's consistent two-to-four-times overrun.
+Active: **close the in-flight auth hardening, then MVP step 1.** The auth hardening is complete and
+under **mandatory** independent verification (ASSESS tiers it high: auth is a hot path); it may not
+go to review until that verification returns. The **fixture recording is granted and planned above**,
+and starts only after the auth unit closes, because a second writer in this worktree would
+contaminate its review candidate — writes stay single-threaded. Order: verify → native review →
+local commit for the auth unit, then record fixtures, then F04 over the families those fixtures
+actually support. Seven deferred items are tracked as issues #3–#9, and the user chose **free mode**,
+so nothing on the MVP path may require authenticated or real-time access. `main` stays at
+`2c83a150`; nothing from F03-cleanup or the MVP is published. Housekeeping: the three-part ODD
+mirror has about 13 KB of headroom left in its final part, so a fourth record will be needed
+within a few units.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
