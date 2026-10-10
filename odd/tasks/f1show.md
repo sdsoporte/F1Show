@@ -1079,6 +1079,37 @@ new real-service/model calls or automatic publication of the next source unit.
       `tests/test_{http,fakes,request_policy}.py`. These bytes were reviewed before, but the
       burned F03c-1/F03c-2 authorities are never reused: this is a new candidate and a new
       review. Secrets or credential values must never appear in these files or their tests.
+      **Implementation returned; independent verification in flight.** Writer `mv2undvu-19-zgla`
+      produced ten modified paths, **+1050/−40 = 1090** total against the 250–450 forecast
+      (2.4×, disclosed, no test trimmed); focused 243 / full **496** (baseline 431 + 65).
+      The writer disclosed three process weaknesses honestly rather than hiding them:
+      (1) **RED was reconstructed, not observed** — tests were authored first but the first
+      pytest run happened after implementation, so RED came from running the new tests against
+      base sources in a /tmp tree (75 failed/168 passed: 124 `AttributeError`, 24 `TypeError`,
+      2 `DID NOT RAISE`), preceded by a collection error (`ImportError: copy_form_fields`) and a
+      no-logic stub that **masked two helper-rule cases**; (2) the shared-path extraction
+      (`_perform`/`_run`) landed on the GREEN implementation with no separate pre-refactor
+      snapshot; (3) the protocol growth **structurally broke 18 Pyright errors in files it was
+      not allowed to touch**.
+      The parent confirmed the third point independently with its own active LSP and treated it
+      as a defect of this unit rather than carried debt: fixing after review would invalidate the
+      candidate and burn a human consent round, and asking a reviewer to look at bytes already
+      known to be statically wrong wastes the reviewer. Follow-up `mv2v6cvj-1a-gcfv` conformed
+      five local doubles by signature only — `headers` forwarded on `get_json`, `post_form_json`
+      forwarding for wrappers and a loud `NotImplementedError` naming the double for the
+      exploding ones — with counts unchanged at 121/496, the R3-001 hardening assertions
+      untouched, and the 18 errors reduced to **0**, with the same 18 reproduced against the base
+      copies to prove the cause was the protocol growth. The parent's re-probe now shows only the
+      **3 pre-existing** `tests/test_fakes.py` errors and the two base `I001` findings, so the
+      static state did not regress. Pins: `tests/test_session.py`
+      `47466f3c34e5c3b5ddd9251c72a4b017c6e66db4420b1373ff88535b7ef1ca02`, `tests/test_ingest.py`
+      `5fba8a28202dbff369f8c579dec98a63bdd37a2443f6b872823f8e3ff327701b`.
+      ASSESS returned medium/10 paths/1090 lines, and its plan does **not** require a separate
+      verifier; the parent runs one anyway, because with a reconstructed RED the unit would
+      otherwise rest entirely on the writer's self-report. Logs `/tmp/f1show_f03d1_*.txt`; the
+      verifier works under `/tmp/f03d1_verify/`. Honest caveats carried into review: a retried
+      POST may be sent more than once, which is an **unverified provider assumption** and not a
+      proven property, and there is no Python 3.12 runtime proof.
     - **F03d-2 — authentication and the live seam.** A token model accepting the documented
       string-or-int `expires_in` and a `bearer` token type, an expiry-with-skew refresh policy,
       a provider that exchanges credentials once through the extended port and caches until
@@ -1204,18 +1235,18 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03d-1 HTTP boundary extension**, one bounded writer after this R3-001 closure,
-under the existing F03 authorization and with the design registered at `d2cf6da` before any
-write. R3-001 closed as `f13757b` with its own independent verification and burned native
-authority. F03d-1 adds additive `headers` support to `get_json` plus one form-POST method across
-`ports.py`, `http.py`, `fakes.py` and `request_policy.py`, preserving every existing retry,
-pacing, cleanup and error contract and re-reviewing those bytes as a NEW candidate (the burned
-F03c-1/F03c-2 authorities are never reused). F03d-2 owns auth and the live seam afterwards.
-Carried, not fixed: probes-only CI gaps, the base `SnapshotResult` warning, harness Ruff I001,
-the unverified Python 3.12 floor, scripted-only race coverage, the generation branch unreachable
-by the public API, and informational native suggestions whose bodies were never returned or
-whose own text was never provided. No new source push; remote `3f52c33` and main `fc30084`
-remain as published. F04 onward stays unauthorized.
+Active: **F03d-1 independent verification**, then fresh native review and the exact-byte local
+unit commit. The candidate is ten modified tracked paths, **+1050/−40 = 1090**, with 243 focused
+and **496** full tests green and the static state back to its base findings after the parent
+detected and had corrected an 18-error protocol break in two approved test files. ASSESS returned
+medium and did not require a separate verifier; the parent chose one because the writer's RED was
+reconstructed rather than observed. F03d-2 owns auth and the live seam afterwards. Carried, not
+fixed: the 3 pre-existing `tests/test_fakes.py` static errors, two base `I001` findings, the
+unverified Python 3.12 floor, the unverified POST-retry assumption, probes-only CI gaps, and
+informational native suggestions whose bodies were never returned. Forecast calibration is now a
+standing concern: F03c ran 2620 against ~1000 forecast and F03d-1 1090 against 450, so the next
+units need either recalibrated forecasts or chaining. No new source push; remote `3f52c33` and
+main `fc30084` remain as published. F04 onward stays unauthorized.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
