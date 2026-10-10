@@ -18,12 +18,14 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import gc
 from collections.abc import Mapping
 
 import httpx
 import pytest
 from pydantic import SecretStr
 
+from f1show import auth as auth_module
 from f1show.auth import (
     DEFAULT_OPENF1_TOKEN_URL,
     TOKEN_REFRESH_SKEW_SECONDS,
@@ -33,13 +35,23 @@ from f1show.auth import (
     OpenF1TokenProvider,
     TokenDecodeError,
     TokenExchangeError,
+    TokenPayload,
     TokenPayloadError,
     parse_token_payload,
 )
 from f1show.config import CredentialsSettings
 from f1show.fakes import FakeHttpClient, FrozenClock
 from f1show.http import HttpxJsonClient
-from f1show.ports import Clock, HttpClient, HttpDecodeError, HttpResponse
+from f1show.ports import (
+    Clock,
+    HttpClient,
+    HttpDecodeError,
+    HttpResponse,
+    HttpResponseTooLargeError,
+    HttpTimeoutError,
+    HttpTransportError,
+)
+from f1show.redaction import REDACTED
 
 TOKEN_URL = "https://example.invalid/token"
 SOURCE_URL = "https://example.invalid/v1/sessions"
@@ -455,3 +467,163 @@ async def test_end_to_end_exchange_and_authenticated_get_over_mock_transport() -
     assert second.payload == {"ok": True}
     assert token_requests == 1  # the second read reused the cached token
     assert source_headers == [f"Bearer {ACCESS_TOKEN}"] * 2
+
+
+class SecretThatMustNotBeUnwrapped:
+    """A stand-in secret whose unwrapping is a test failure.
+
+    ``AccessToken`` must emit a fixed mask, so any repr, str or format path that
+    reaches for ``get_secret_value`` raises here instead of silently unredacting.
+    """
+
+    def get_secret_value(self) -> str:
+        raise AssertionError("AccessToken repr/str must never unwrap the secret")
+
+    def __repr__(self) -> str:
+        return "SecretThatMustNotBeUnwrapped()"
+
+
+class GatedFailingFormClient:
+    """Hold one form POST in flight, then fail it; count the exchanges attempted.
+
+    The gate lets its awaiting caller be cancelled while the exchange is still
+    pending, and the count observes that the next call starts a fresh exchange
+    rather than replaying the abandoned failure.
+    """
+
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+        self.exchanges = 0
+
+    async def get_json(
+        self, url: str, *, params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> HttpResponse:
+        raise AssertionError("the token provider never issues a GET")
+
+    async def post_form_json(
+        self, url: str, *, form: Mapping[str, str], headers: Mapping[str, str] | None = None
+    ) -> HttpResponse:
+        self.exchanges += 1
+        self.started.set()
+        await self.release.wait()
+        raise HttpDecodeError("the body was not one JSON document")
+
+    async def close(self) -> None:
+        return None
+
+
+def test_access_token_repr_never_unwraps_the_secret() -> None:
+    # Non-vacuous: ``access_token`` is a wrapper that raises if unwrapped at all, so a
+    # repr that reached for the secret would fail here instead of merely exposing it.
+    payload_model = TokenPayload.model_construct(
+        access_token=SecretThatMustNotBeUnwrapped(),
+        expires_in=3600,
+        token_type="bearer",  # noqa: S106 -- an obvious placeholder token type
+    )
+    token = AccessToken(payload=payload_model, issued_at=MOMENT)
+    renderings = [
+        repr(token),
+        str(token),
+        format(token),
+        f"{token}",
+        f"{token!r}",
+    ]
+    for rendered in renderings:
+        assert ACCESS_TOKEN not in rendered
+        assert REDACTED in rendered
+        assert "bearer" in rendered
+        assert "3600" in rendered
+        assert MOMENT.isoformat() in rendered
+
+
+@pytest.mark.anyio
+async def test_abandoned_failed_exchange_is_consumed_and_never_reported() -> None:
+    loop = asyncio.get_running_loop()
+    reports: list[dict[str, object]] = []
+    original_handler = loop.get_exception_handler()
+    loop.set_exception_handler(lambda _loop, context: reports.append(context))
+    try:
+        client = GatedFailingFormClient()
+        provider = build_provider(client)
+        caller = asyncio.ensure_future(provider.token())
+        await asyncio.wait_for(client.started.wait(), timeout=EXCHANGE_HAZARD_TIMEOUT_SECONDS)
+        caller.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await caller
+        assert client.exchanges == 1  # the abandoned exchange was not restarted
+
+        client.release.set()
+        for _ in range(50):
+            await asyncio.sleep(0)
+
+        with pytest.raises(TokenDecodeError) as caught:
+            await provider.token()
+        assert isinstance(caught.value, AuthError)
+        assert client.exchanges == 2  # the next call starts a fresh exchange
+
+        gc.collect()
+        await asyncio.sleep(0)
+        assert reports == []  # no "shielded future" and no "never retrieved" report
+    finally:
+        loop.set_exception_handler(original_handler)
+
+
+@pytest.mark.anyio
+async def test_cancelling_one_caller_leaves_the_shared_exchange_intact() -> None:
+    gated = GatedFormClient(fake_with_token())
+    provider = build_provider(gated)
+    doomed = asyncio.ensure_future(provider.token())
+    survivor = asyncio.ensure_future(provider.token())
+    await asyncio.wait_for(gated.started.wait(), timeout=EXCHANGE_HAZARD_TIMEOUT_SECONDS)
+    doomed.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await doomed
+    assert gated.exchanges == 1
+    assert not survivor.cancelled()  # the cancellation stayed with its own caller
+    gated.release.set()
+    token = await asyncio.wait_for(survivor, timeout=EXCHANGE_HAZARD_TIMEOUT_SECONDS)
+    assert token.authorization_header() == f"Bearer {ACCESS_TOKEN}"
+    assert gated.exchanges == 1  # one exchange served both callers
+
+
+TRANSPORT_DETAIL = "placeholder-transport-detail"  # never a real server message
+
+
+@pytest.mark.parametrize(
+    "http_failure",
+    [
+        HttpTransportError(TRANSPORT_DETAIL),
+        HttpTimeoutError(TRANSPORT_DETAIL),
+        HttpResponseTooLargeError(TRANSPORT_DETAIL),
+    ],
+    ids=["transport", "timeout", "too-large"],
+)
+@pytest.mark.anyio
+async def test_http_failure_becomes_a_sanitized_auth_failure(
+    http_failure: BaseException,
+) -> None:
+    fake = FakeHttpClient()
+    fake.enqueue_form(TOKEN_URL, http_failure, form=FORM)
+    with pytest.raises(auth_module.TokenTransportError) as caught:
+        await build_provider(fake).token()
+    assert isinstance(caught.value, AuthError)
+    # Non-vacuous: the raw failure really carries the server text and the fake really
+    # raised it, before we assert the typed failure does not.
+    assert TRANSPORT_DETAIL in str(http_failure)
+    assert fake.post_calls[0][0] == TOKEN_URL
+    assert TRANSPORT_DETAIL not in str(caught.value)
+    assert TOKEN_URL not in str(caught.value)
+    assert type(http_failure).__name__ in str(caught.value)
+    assert_no_secret_in_error(caught.value, USERNAME, PASSWORD, ACCESS_TOKEN, TRANSPORT_DETAIL)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_token_transport_error_is_exported_at_the_package_root() -> None:
+    import f1show
+
+    assert auth_module.TokenTransportError is f1show.TokenTransportError
+    assert "TokenTransportError" in auth_module.__all__
+    assert "TokenTransportError" in f1show.__all__

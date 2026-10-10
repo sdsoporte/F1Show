@@ -39,9 +39,12 @@ from f1show.ports import (
     HttpClient,
     HttpDecodeError,
     HttpResponse,
+    HttpResponseTooLargeError,
+    HttpTimeoutError,
+    HttpTransportError,
     copy_request_headers,
 )
-from f1show.redaction import redact
+from f1show.redaction import REDACTED
 
 #: The documented token endpoint. It lives here rather than in ``config.py``
 #: because it is a protocol constant of the exchange, not an operator setting.
@@ -64,6 +67,7 @@ __all__ = [
     "TokenExchangeError",
     "TokenPayload",
     "TokenPayloadError",
+    "TokenTransportError",
     "parse_token_payload",
 ]
 
@@ -87,6 +91,17 @@ class TokenExchangeError(AuthError):
 
 class TokenDecodeError(AuthError):
     """A 2xx exchange returned a body that is not one JSON document."""
+
+
+class TokenTransportError(AuthError):
+    """The exchange never produced a usable response.
+
+    A transport failure, a timeout or an oversized body ended the attempt before a
+    decodable answer, so it is an authentication failure here rather than a raw
+    ``HttpError`` escaping the module. The message names only the failure kind and,
+    at most, the port's own error class; no credential, token, URL, header, body or
+    server message is carried, and ``__cause__`` and ``__context__`` stay empty.
+    """
 
 
 class TokenPayloadError(AuthError):
@@ -185,9 +200,8 @@ class AccessToken:
     """A validated token plus the instant it was issued.
 
     The secret is reachable only through :meth:`authorization_header`; ``repr``,
-    ``str`` and every format operation mask it, including through the shared
-    redaction helper, so a diagnostic can name the token's state and lifetime
-    without its value.
+    ``str`` and every format operation emit a fixed mask without ever unwrapping the
+    secret, so a diagnostic can name the token's state and lifetime without its value.
     """
 
     payload: TokenPayload
@@ -198,12 +212,13 @@ class AccessToken:
             raise ValueError("issued_at must be timezone-aware; naive time is ambiguous")
 
     def __repr__(self) -> str:
-        return redact(
+        # The secret is never unwrapped: the mask is emitted literally, so no repr,
+        # str or format path can leak a token even if redaction were bypassed.
+        return (
             f"AccessToken(token_type={self.payload.token_type!r}, "
             f"expires_in={self.payload.expires_in!r}, "
             f"issued_at={self.issued_at.isoformat()!r}, "
-            f"access_token={self.payload.access_token.get_secret_value()!r})",
-            secrets=(self.payload.access_token,),
+            f"access_token={REDACTED!r})"
         )
 
     def __str__(self) -> str:
@@ -242,7 +257,11 @@ class OpenF1TokenProvider:
 
     Concurrent callers share one exchange task, so a burst of first requests
     produces one exchange rather than one per caller. A failed exchange is not
-    cached, so a later call can retry it.
+    cached, so a later call can retry it. Each caller waits on its own relayed
+    future rather than on ``asyncio.shield``: the relay always retrieves the shared
+    exchange's outcome, so an exchange abandoned by a cancelled caller cannot
+    surface as an unretrieved task exception or a loop-level report, and no private
+    interpreter logging behaviour is relied on.
     """
 
     def __init__(
@@ -283,7 +302,8 @@ class OpenF1TokenProvider:
         exchange = self._exchange
         if exchange is not None and exchange.done():
             # A completed exchange that did not leave a valid token is discarded so
-            # the next caller can start a fresh one instead of replaying a stale result.
+            # the next caller can start a fresh one instead of replaying a stale
+            # result. The relay that settled it consumed any failure already.
             if self._exchange is exchange:
                 self._exchange = None
             exchange = None
@@ -291,16 +311,45 @@ class OpenF1TokenProvider:
             exchange = asyncio.ensure_future(self._exchange_credentials())
             self._exchange = exchange
         try:
-            token = await asyncio.shield(exchange)
+            token = await self._relay(exchange)
         except BaseException:
             # One caller's cancellation must not cancel the shared exchange, and a
-            # failed exchange is detached so it cannot poison a later attempt.
+            # completed exchange is detached so it cannot poison a later attempt.
+            # The relay consumes the outcome even when this caller never returns.
             if exchange.done() and self._exchange is exchange:
                 self._exchange = None
             raise
         if self._exchange is exchange:
             self._exchange = None
         return token
+
+    async def _relay(self, exchange: asyncio.Future[AccessToken]) -> AccessToken:
+        """Await ``exchange`` without letting this caller's cancellation cancel it.
+
+        A per-caller waiter is settled from a done callback, so cancelling the caller
+        cancels only the waiter. The relay always calls ``exchange.exception()``
+        first, even when its waiter is already gone, so an abandoned failure is
+        consumed instead of being left for the loop to report. It also handles an
+        exchange that is already done when the callback is attached: asyncio
+        schedules that callback immediately.
+        """
+        waiter: asyncio.Future[AccessToken] = asyncio.get_running_loop().create_future()
+
+        def _settle(done: asyncio.Future[AccessToken]) -> None:
+            if done.cancelled():
+                if not waiter.done():
+                    waiter.cancel()
+                return
+            failure = done.exception()  # always consume, even with no caller left
+            if waiter.done():
+                return
+            if failure is not None:
+                waiter.set_exception(failure)
+            else:
+                waiter.set_result(done.result())
+
+        exchange.add_done_callback(_settle)
+        return await waiter
 
     def _cached_valid(self) -> AccessToken | None:
         token = self._token
@@ -323,16 +372,31 @@ class OpenF1TokenProvider:
         return token
 
     async def _post_credentials(self) -> HttpResponse:
-        """POST the credential form, converting an undecodable body to a typed failure."""
+        """POST the credential form, converting every HTTP failure to a typed failure.
+
+        A transport, timeout, oversized-body or undecodable response fails the
+        exchange, so it becomes an ``AuthError`` subtype instead of escaping as a raw
+        ``HttpError``. Only the failure kind is named; no credential, token, URL,
+        header, body or server message crosses the boundary. Each raise happens after
+        its handler has exited, so the original error is neither ``__cause__`` nor
+        ``__context__`` of the new one.
+        """
+        failure: AuthError
         try:
             return await self._client.post_form_json(
                 self._token_url, form=self._credentials_form()
             )
         except HttpDecodeError:
-            pass  # noqa: S110 -- the raise below is the whole point of the handler
-        # Reached only after the handler: raising here keeps the undecodable body's
-        # own chain out of __cause__ and __context__ as well as out of the message.
-        raise TokenDecodeError("the OpenF1 token exchange returned an undecodable body")
+            failure = TokenDecodeError(
+                "the OpenF1 token exchange returned an undecodable body"
+            )
+        except (HttpTransportError, HttpTimeoutError, HttpResponseTooLargeError) as exc:
+            failure = TokenTransportError(
+                f"the OpenF1 token exchange could not be completed ({type(exc).__name__})"
+            )
+        # Reached only after a handler has exited: raising here keeps the original
+        # error's own chain out of __cause__ and __context__ as well as out of the message.
+        raise failure
 
     def _credentials_form(self) -> dict[str, str]:
         """Build the urlencoded form, the only place a secret is ever unwrapped."""
@@ -357,6 +421,12 @@ class AuthenticatedHttpClient:
     single ownership act is ``close``: it releases the inner client exactly once and
     is safe to repeat, following ``RetryingHttpClient``'s convention. After closing,
     both methods refuse before the inner client is reached.
+
+    Ownership is the caller's to compose. Because ``close`` releases the adopted
+    inner client, a caller that shares that same inner client with the token provider
+    makes the provider unusable once this wrapper is closed: closing here closes the
+    provider's client too. Give each owner its own inner client, or close this
+    wrapper only once the provider is done with it.
     """
 
     def __init__(self, *, inner: HttpClient, provider: OpenF1TokenProvider) -> None:

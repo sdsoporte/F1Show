@@ -1274,6 +1274,62 @@ new real-service/model calls or automatic publication of the next source unit.
       **The warnings cluster on authentication material, retry amplification and token staleness,
       which is precisely the material that matters once this code runs against the live service**,
       so retrieving those bodies is real later work rather than bookkeeping.
+      **F03-cleanup, opened after publication at the user's request.**
+      (1) **The finding bodies are not recoverable, and that was proved rather than assumed.**
+      The terminal-consumption receipt in `.git/gentle-ai` is **259 bytes** holding only
+      `lineage`/`repository`/`schema`/`target`; **no provider state directory exists** on this
+      machine; and a bounded filesystem search for the finding ids found **only the parent's own
+      mirror file**, which mentions them because the parent wrote them there. The reviewer
+      results were relayed as **opaque bytes** and only their metadata survives the closure.
+      `review reopen-results` is **not** a retrieval path: it is a maintainer-authorized
+      same-lineage **quarantine for unusable reviewer results**, requiring an uncorrected
+      validating/correction-required revision plus an authorization emitted by `--prepare`, and
+      this lineage is approved and burned — invoking it would be an abuse and would return no
+      narrative anyway. `inspect-candidate` inspects the candidate, not the results. The durable
+      consequence: **finding bodies are ephemeral by design, so the location list is the only
+      durable signal, and this will recur for every future advisory.**
+      (2) **The declared Python 3.12 floor is now proven, not asserted.** Verifier
+      `mv2xtob9-1h-rkjv`: `uv run --frozen --python 3.12 pytest -q` → **548 passed** on CPython
+      **3.12.13**, and the same suite under **3.13.13** → **548 passed**; both exit 0, no failures
+      to classify, with `pyproject.toml`, `uv.lock` and `.python-version` hashes identical before
+      and after. `--frozen` was respected (no lock re-resolution); uv downloaded two wheels absent
+      from the cache (`duckdb`, `pydantic-core`) and rebuilt the gitignored `.venv`, which is the
+      disclosed side effect of the authorized command. A version-gated API audit found only
+      `asyncio.timeout` (3.11+), consistent with the floor, and every one of the 36 installed
+      distributions declares a floor at or below 3.12, so the lock is coherent with the claim.
+      **The honest limit stands:** this proves the floor is runnable today, not that a future
+      dependency bump preserves it, and no CI in this repository enforces it — a matrix job
+      pinning 3.12 would be needed to keep the claim honest over time.
+      (3) **Auth hardening closed as `8b17df23a619eca3b34f7039aa7187651b441c8a`.** Conventional Commit
+      `fix(auth): consume abandoned exchange failures and sanitize transport errors`, three paths
+      **+261/−18 = 279**; reviewed = staged = committed tree
+      `78fc6d6b1c7bd752fba65f270a079cdadb0165df`. The parent's own analysis of the flagged
+      locations, **not** retrieved provider intent, drove four self-standing changes: `repr`/`str`
+      now emit a fixed mask and never unwrap the secret; `asyncio.shield` is replaced by a manual
+      relay whose done-callback always consumes the exchange's exception; a new
+      `TokenTransportError` brings transport, timeout and oversized-body failures into the
+      `AuthError` taxonomy with a sanitized message; and the composition caveat is documented.
+      The relay was a **design correction to the parent's brief**: the original mechanism could not
+      pass the original proof, because `asyncio.shield` reports an abandoned shielded failure
+      regardless of retrieval — the writer stopped without editing rather than improvise, which is
+      exactly the behaviour the brief asked for on an unplanned fork.
+      Independent verification PASS (59 focused/555 full): candidate hashes matched at start and
+      end, `odd/tasks/f1show.md` re-derived as **clean** (two separate reports had mislabelled a
+      committed diff as a pending modification), and mutants for the relay, the mask and the
+      sanitization were killed. One mutant **survived** — dropping the exception branch's
+      `_exchange` clearing — and the honest classification is that it is a **behaviourally
+      equivalent** mutant rather than a coverage gap worth chasing: the next call's done-discard
+      path performs the same clearing, so only private-state introspection would observe the
+      difference, and a test that pokes a private attribute would couple the suite to internals.
+      Two relay paths (waiter cancelled after completion, exchange already done at attach) are
+      code-verified only, with no dedicated test. Native `review-3ed008e4aa1a106b` tiered **high**
+      (auth hot path) and ran four lenses, approving on the first attempt with four reviewers;
+      its first capture required no retry. Exact bound STATUS/ack returned authority **burned**;
+      consumed revision `sha256:143aadb1590e0fed0e96e9544656ce8e240c15d1c0b6062b7b3115be6af338b2`;
+      never query it again. Three informational findings with no correction opened and **no bodies
+      returned**, carried as later work and not reconstructed: `R4-001` a **warning** at
+      `auth.py:347`, `R3-001` a suggestion at `auth.py:375-383`, and `R2-magic-yield-count` a
+      suggestion at `tests/test_auth.py:558-559`.
   Honest limit unchanged: without the paid subscription the real exchange, the real expiry
   behaviour and real live responses remain unverified; a fake transport proves only our
   handling, and live validation belongs to F13 under its own authorization.
@@ -1293,6 +1349,291 @@ new real-service/model calls or automatic publication of the next source unit.
   assumption the architecture rests on would have been false in production while every
   test stayed green. The mode is now read back and a non-`wal` mode is refused.
 
+## MVP cut, decided 2026-10-10
+
+The user asked how far the project is from an MVP, whether the remaining tasks should be reduced,
+and chose **option A**: prove the product's promise before building more plumbing. They also chose
+**free mode** — no subscription — so nothing on the MVP path may require authenticated or
+real-time access.
+
+**Honest position first.** F00–F03 delivered roughly 5,700 lines of verified plumbing and **zero
+user-visible capability**: nothing in this repository produces commentary. F03d in particular
+— 883 lines of OAuth2 and authenticated-client code — was built **ahead of need** for a live path
+free mode cannot exercise. It is reviewed and tested, but it is the clearest symptom of building
+bottom-up without a product check, and this cut is the correction.
+
+**The MVP is:** one session's data → deterministic events → **two distinct, evidence-grounded
+personas** → a visible transcript, reproducible offline from recorded fixtures. Its acceptance is
+that a reader can see the two-persona commentary and a replay re-produces it.
+
+**MVP units, in order:**
+1. **Record the fixtures** (blocking step). Only `sessions` and `drivers` response shapes have ever
+   been observed, so honest collector work needs recorded fixtures from the **free, unauthenticated
+   historical API**. That is an actual OpenF1 call, so it needs its own small grant. The fixtures
+   are the production artifact: the same immutable snapshots serve as replay input and as the
+   regression corpus.
+   **Granted by the user on 2026-10-10.** Concrete plan, registered before the first request:
+   - **Read-only, unauthenticated, free tier.** No credentials, no subscription, no OAuth2, no
+     bearer header. Historical data only. The recorder stops on any non-200 and records what it
+     saw rather than retrying its way around a refusal.
+   - **Pacing is real, not decorative.** The free tier is documented at 3 requests/second and
+     30/minute, so the whole recording stays inside one minute's budget by keeping the endpoint
+     count small; every request is paced and the actual elapsed time is reported.
+   - **Endpoints, with paths now verified from the first-party docs rather than guessed.** The
+     documented URL paths are `/v1/sessions`, `/v1/drivers`, `/v1/position`, `/v1/laps`,
+     `/v1/intervals`, `/v1/pit`, `/v1/stints`, `/v1/race_control`, `/v1/overtakes`,
+     `/v1/session_result`, `/v1/starting_grid`, `/v1/weather` and others. The MVP recording takes
+     the event-relevant subset: `sessions` (to choose the session), `drivers`, `position`, `laps`,
+     `intervals`, `pit`, `stints`, `race_control` — eight requests. **Deliberately excluded:**
+     `car_data` and `location` (both ~3.7 Hz and enormous), `team_radio`, and the championship
+     endpoints. Reading a documented path is still not the same as observing a shape, so the
+     recording is what turns a documented path into a recorded fact.
+   - **One session, chosen so the families are actually available.** `intervals` and `overtakes`
+     are documented as race-only, and `pit.stop_duration` exists only from the 2024 United States
+     Grand Prix onwards, so the recording targets a **2024 race session at or after that event**.
+   - **Bounded size.** Measure before committing: if a family is large enough to bloat the
+     repository, bound it with the endpoint's documented date filters and record the exact filter
+     plus the resulting first and last timestamps. Nothing is trimmed silently, and an excluded or
+     bounded family is stated in the provenance file.
+   - **The artifact is self-describing.** Each recorded response lands as raw JSON, and a
+     provenance file records the exact URL and query, the HTTP status, the byte size, the SHA256,
+     the record count, the request timestamp, and that the responses are unauthenticated
+     free-tier historical data. `docs/EXTERNAL-CONTRACTS.md` is updated by the parent, not the
+     recorder, once the shapes are actually known.
+   - **The recorder script is not committed.** It runs from `/tmp`; the provenance file records
+     the exact requests so the recording is reproducible by hand. A committed recorder is a
+     separate decision, not a side effect of this step.
+   **Recorded 2026-10-10.** Eight unauthenticated free-tier families, all HTTP 200 on the first
+   attempt, written verbatim into `fixtures/openf1/` with a provenance file: `sessions` 123,
+   `drivers` 20, `position` 403, `laps` 1059, `intervals` 21041, `pit` 23, `stints` 43 and
+   `race_control` 120 records — **3,599,681 bytes** total, eight of the twelve authorized requests,
+   minimum inter-request gap 0.764 s against the documented 3/s and 30/min. Session `session_key`
+   9617, Austin 2024-10-20 race, `meeting_key` 1247, chosen by the registered rule. The parent
+   re-verified integrity itself: every file parses as a JSON list, every on-disk SHA256 appears in
+   the provenance, the non-allowed trees are byte-identical, the index was empty and the paths are
+   not gitignored.
+   **The size gate was settled by measurement, not by preference.** `intervals` measured
+   **2,965,644 bytes**, above the pre-agreed ~2 MB family gate, and the writer **stopped and
+   reserved the decision** instead of trimming. The deciding fact was its own measurement: only
+   **1 of 21,041** rows predates the session start, so the documented `date>=` bound would remove a
+   single row. A bound that changes nothing is **worse than none**, because it looks like a
+   mitigation while doing nothing. Per-driver bounding would drop part of the grid — the opposite
+   of a regression corpus — and withholding would lose a family F04's acceptance names. So it stays
+   **whole and unreshaped**, with that reasoning recorded in the provenance file.
+   **Three shape facts carried into F04**, recorded both in the provenance and in
+   `docs/EXTERNAL-CONTRACTS.md`: there is **no uniform timestamp field** (`date` only on
+   `position`/`intervals`/`pit`/`race_control`, `date_start` on `sessions`/`laps`, and none at all
+   on `drivers`/`stints`); **`laps` has one null `date_start` out of 1059**, so no code may assume
+   every lap is dated; and free-tier history is a **snapshot**, so these hashes are point-in-time
+   rather than evergreen. The contract file was updated by the parent, as planned: the six newly
+   exercised paths are now asserted as **observed** while the remaining documented-only paths stay
+   explicitly unasserted.
+   Commits: fixtures `d5a1132`, contract update `a2e243c`. **Native review was deliberately skipped
+   for this unit**: the artifact is raw JSON plus a provenance document — non-executable data and
+   documentation — which is the passive case the provider's entry rule carves out, and running the
+   risk, resilience and reliability lenses over a recording would produce noise rather than signal.
+   That judgement is stated rather than hidden, and F04's own review will cover the code that
+   consumes these fixtures.
+2. **F04 — deterministic events.** A **subset of families** that the recorded fixtures can
+   actually support, rather than all 18 endpoints. Deduplicate updates, keep evidence timestamps
+   and source fields, and prove no false first-lap record and no inferred overtake from a position
+   change alone.
+   **Design registered before the first write, grounded in the recorded fields rather than assumed
+   ones.** The parent inspected every family's real keys and value types, and four of the findings
+   are blocking constraints rather than trivia:
+   - **`intervals.gap_to_leader` is not uniform**: 19,604 numbers, 106 nulls and **1,331 strings**
+     (`+1 LAP`). Any code that casts it to a number is wrong. `interval` is numeric or null, with no
+     strings.
+   - **`laps` is partial**: `lap_duration` null twice, `date_start` null once, sector 1 null three
+     times, sector 3 once, and **846 of 3,177 segment arrays contain nulls**. The very first record
+     is a lap-1 row with null `date_start` and null `lap_duration` — the first-lap trap the
+     acceptance names, sitting in the data rather than in theory.
+   - **`pit` carries three different durations** — `lane_duration`, `pit_duration` and
+     `stop_duration` — and they are not the same number; the sample row has 34.983, 34.983 and 12.5.
+     Conflating them would misreport a stop.
+   - **`stints`, `drivers` and `position` differ in timestamping**: `stints` and `drivers` have no
+     timestamp field at all, `position` has `date`, `laps` has `date_start`.
+   **Event families for the MVP, each carrying its source evidence** (session key, driver number,
+   the actual timestamp field name and value, and the source record identity): `position_changed`
+   from `position`; `lap_completed` from `laps` where a duration exists; `pit_stop` from `pit` with
+   the three durations kept distinct; `stint_started` from `stints`; and race-control entries from
+   `race_control`, preserving `category`, `flag`, `scope`, `sector`, `lap_number` and the provider
+   `message` **as evidence, never as instruction** (the recorded categories are `Other` 71, `Flag`
+   42, `Drs` 3, `SessionStatus` 2, `SafetyCar` 2, and the flags are dominated by `BLUE` at 20 of
+   42, so a naive "flag event" would be noise).
+   **What the MVP deliberately does not claim.** No `overtake` event: nothing in these fixtures
+   proves an on-track pass, and a position change can come from a pit stop, a penalty, a retirement
+   or a car being lapped. No fastest-lap or record claim: a record needs a comparison corpus that
+   does not exist, sector data is partial, and lap 1 is a standing start — so lap 1 is excluded from
+   any lap-time comparison rather than silently winning one. `intervals` is **normalized but derives
+   no events** in the MVP, because gap semantics (`+1 LAP` versus numbers) and their tactical reading
+   belong to the deferred F06; the large fixture is used for normalization coverage rather than
+   speculation.
+   **Determinism and honesty requirements.** Identical fixtures must produce an identical event
+   sequence, byte for byte, in a fixed order. A missing value is represented as **unknown**, never
+   coerced to zero or dropped silently — not the 106 null gaps, not the two null lap durations, not
+   the one null `date_start`, not the partial segment arrays. Deduplicate repeated updates by source
+   identity and observation time rather than by guessing intent. Acceptance: a replay over the
+   recorded session yields a stable event stream; lap 1 never appears as a lap-time record; a
+   position change never surfaces as an overtake; and every event can be traced back to the exact
+   fixture record that produced it.
+   **Implementation returned 2026-10-10; independent verification in flight.** Writer
+   `mv2z47jv-1m-vms1` produced `src/f1show/collector.py` (272 lines), `tests/test_collector.py`
+   (294) and additive root exports (+8): **574 additions, 0 deletions**, within the 300–600
+   forecast. Focused 18 / full **573**, with the 555 baseline green. Public surface:
+   `collect_session_events(session_key, payloads)` plus `classify_gap(raw)` as the intervals
+   normalization helper, with `DetectedEvent`, `GapKind`, `GapReading` exported additively. That
+   helper carries a **named future consumer and an expiry condition**, recorded in the F06 section
+   below rather than left as an intention: the risk it holds is not deferred-scope creep but
+   **orphan code**, since pure normalization with no MVP caller can pass a review *by looking like
+   normalization* and then prove nothing about any behaviour. F06 must consume it or it is deleted.
+   Ordering is documented as a total order — timestamped events first by
+   `(timestamp_value, family_rank, record_index)`, untimestamped after by
+   `(family_rank, record_index)` — which matters because `stints` and `drivers` carry no timestamp
+   at all. Over the real fixtures it emits **1,648 events**, and the writer's evidence shows no
+   `overtake` event of any kind, lap 1 carrying no lap-time claim, all 1,331 `+1 LAP` strings
+   classified without a numeric cast, the three pit durations kept distinct, and the null
+   durations, null `date_start` and 846 partial segment arrays surviving as explicit unknowns.
+   **The writer declined to modify `events.py` and said why**: `EventEnvelope` requires an aware
+   `event_time`, which cannot represent a stint (no timestamp field) or the null-`date_start` lap
+   without inventing a clock, so the collector owns its own `DetectedEvent` and reuses `EventType`.
+   That is the right call, and it is recorded because editing an already-approved file to fit new
+   code is exactly the kind of drift this project keeps refusing.
+   **Two interpretation decisions the brief left open, disclosed rather than buried**: a
+   null-duration lap **still emits** a completion event carrying `lap_duration` as unknown instead
+   of being filtered out (reading "where a duration exists" as "no timed claim"), and position
+   events are emitted **per deduplicated record** with no cross-record previous-position state and
+   no cause claimed. Both are defensible against the registered design and both are the likeliest
+   review contention, so they are named here.
+   **The evidence weakness, stated plainly.** The collection RED was an `ImportError` recorded
+   separately, and the behavioural RED was **18 tests failing with `NotImplementedError` at their
+   first call against a no-logic stub** — so **no assertion in any test was ever observed failing
+   against a real implementation**. Disclosed by the writer, not discovered by the parent. It makes
+   this the weakest RED evidence in the project so far, and it means the acceptance tests' efficacy
+   rests entirely on the independent verifier's mutation testing rather than on any RED. Dedup has
+   the same shape of problem in miniature: it is **unexercisable on the real fixtures** because no
+   family repeats an update, so it is proven only synthetically.
+   **Independent verification PASS, 8/8 mutants killed with no survivor.** Verifier
+   `mv2ze9ly-1n-fguu` confirmed the three pins unchanged at start and end, the **574 additions / 0
+deletions** count, `events.py` and the `fixtures/` tree byte-identical, 18 focused and 573 full,
+   two runs byte-identical, the documented total order exactly as written, and **all 1,648 events
+   tracing back to their exact source record**. On the real fixtures it independently reproduced the
+   non-claims: no overtake spelling anywhere, position evidence exactly `{"position"}` with no cause
+   claim, 20 lap-1 completions with no lap-time record to enter, and the unknown-preservation for the
+   two null durations, the null `date_start` (with a stated reason rather than a borrowed clock) and
+   the 846 partial segment arrays. It also **confirmed the parent's static judgement** that the two
+   auxiliary numeric-parse warnings are false positives, with the nuance that Unicode decimal digits
+   pass `\d` but `int()` accepts them, so nothing breaks. It read both interpretation decisions as
+   **consistent with the registered design**, not departures. Kills by mutant: overtake emission,
+   lap-1 record, gap coercion, pit-duration collapse, null coercion, order change, dedup removal and
+   foreign-session attribution.
+   **One real robustness hole it found, and the fix is underway before review.**
+   `classify_gap(10**400)` — an **oversized integer**, which a corrupt payload could genuinely carry
+   because JSON parses a long integer literal into a Python `int` — raises **`OverflowError`** from
+   `float(raw)` at `collector.py:196` instead of returning an unknown reading. That contradicts the
+   design's own spine, that a missing or unusable value stays **unknown** rather than crashing, so it
+   is being fixed rather than carried: the guard must catch the overflow and yield `UNKNOWN`, with a
+   test proving the huge-int case does not raise. It is **not** fixture-reachable, which is why it
+   survived the writer's own testing, but "not reachable today" is not "cannot happen".
+   **Thinness noted, not fixed:** three of the eight mutants were killed by exactly **one** test each
+   (null coercion, dedup, foreign session), and the untimestamped tail order is pinned only through
+   a final-element assertion — effective but thin, which belongs with the probe-promotion work in
+   issue #8 rather than in this unit.
+   **Correction applied and re-verified, inside the same uncommitted unit.** The overflow hole was
+   fixed rather than carried: `collector.py` `2be54125…`→`d5d2fe23…` and `tests/test_collector.py`
+   `50b5c2cd…`→`fa83fa15…`, five tests appended, **23 focused / 578 full** on the 573
+   pre-correction total. **This correction produced the genuine RED the original unit lacked**: on
+   the pre-fix source the oversized-integer tests failed with the real `OverflowError` and the
+   non-finite test failed on `SECONDS` versus `UNKNOWN` — 3 failed / 20 passed before, 23 passed
+   after. A non-finite numeric now classifies as unknown as well; that is a **parent decision, not
+   the verifier's finding**, and it is labelled as such in the source comment, both docstrings and
+   the test comment so the record does not misattribute it.
+   Focused re-verification `mv2zsp18-1p-7ehx` PASS, and it went beyond the brief: it rebuilt the
+   pre-fix collector in a shadow and showed the new tests fail there with the real `OverflowError`
+   while the fixed control passes, and — because the earlier verifier's pre-fix copy **survived under
+   `/tmp`** — it could prove the test change is **strictly append-only: 0 lines removed, 67 added**,
+   with the collector diff confined to `import math`, one module-docstring line, the `classify_gap`
+   docstring and the guard body. It confirmed the total-order and dedup code untouched, the
+   classification deterministic across two passes over all 21,041 interval values, the
+   parent-decision labelling present and unmisattributed, and the writer's disclosed docstring slip
+   fully repaired: both files parse, `inspect.getdoc` is well-formed, indentation correct, no
+   trailing whitespace.
+   **A trap worth carrying forward.** Its first shadow attempt silently imported the **original**
+   module, because copying the repository's `.venv` baked the original paths into the launcher, and
+   the outcome was a **false pass of 23 tests**. It caught that with an import proof and switched to
+   a `.venv`-free tar shadow. The lesson generalises: a shadow test without an import proof can pass
+   while proving nothing, which is precisely why every shadow instruction in this project demands
+   that proof.
+   **Native review and closure.** Native `review-d4ba1e2b466ba724`, medium / one reliability lens /
+   3 files / 657 lines / budget 200, approved on the **first** reviewer run; exact bound STATUS/ack
+   returned authority **burned**; consumed revision
+   `sha256:67058111919ffbd55e420d1ee0816e6dea3f2e63f8550ef17c9700a99f2a680b`; never query it again.
+   Local unit commit **`893fa5b521ac894e23ab9ae707fe4a6cef8c2bf9`**, Conventional Commit
+   `feat(collector): derive deterministic session events from recorded fixtures`, three paths,
+   **+657/−0**, with reviewed = staged = committed tree
+   `93782d7536fe7174a1c58c444a15fa51c9b60874`.
+   Four informational findings, no correction opened and **no bodies returned**, carried rather than
+   reconstructed: `R3-unhashable-identity` a **warning** at `collector.py:245-249`,
+   `R3-gapreading-cross-kind` at `:121-131`, `R3-fromisoformat-version-tail` at `:170-175` and
+   `R3-fixtures-outside-candidate` at `tests/test_collector.py:26-33`.
+   **The warning was reproduced by the parent in one line and is being fixed, not carried.** The
+   dedup key is a member of a `set`, so a payload whose identity field holds a **list or a dict**
+   raises `TypeError: unhashable type` against the committed module. It is reachable precisely
+   because the signature declares `Mapping[str, object]` values and JSON can put a list or an object
+   anywhere, so the function is not total over the input type it advertises. That is the **same
+   defect class as the overflow**: a corrupt payload crashing the collector instead of being
+   handled, against a design whose spine is that unusable values stay unknown. The other three
+   suggestions are carried as informational, since they describe type-level invariants and a
+   version-dependent `fromisoformat` tail and none is a demonstrated defect.
+   **The warning's correction is committed as `cfbe6148202d8d7328b88b90f15807319d8b055f`**,
+   `fix(collector): make the dedup identity hashable for any payload value`, two paths
+   **+164/−2**, with reviewed scope checks clean and the non-allowed trees byte-identical. The
+   identity field is now a **type-tagged token**: the type name plus the value when it hashes, and
+   plus a canonical `json.dumps(..., sort_keys=True)` rendering otherwise. The type tag also closes
+   a latent conflation the raw key had, where `1`, `True` and `"1"` were the same identity, and the
+   **raw value still appears in the event evidence**, so a corrupt record is no longer fatal but is
+   not hidden either. No validation, skipping or refused-record concept was added.
+   **No native review was run for this correction, and the reason is the provider's own gate.**
+   ASSESS returned medium with **`reviewDue: false`, `reviewDueReason: under_budget`** at 166
+   changed lines, and `independentVerifier: false`. Following that returned plan rather than
+   over-riding it is deliberate: spending a reviewer on a bounded correction of a warning that a
+   reviewer already raised is exactly the workload the gate exists to avoid. Stated openly so the
+   omission is a decision on the record, not a gap discovered later.
+   **What the parent established itself, since no third party did.** It reproduced the crash before
+   the fix and confirmed both one-liners now emit an event instead of raising; it confirmed the new
+   auxiliary lint warning at `collector.py:253` is the same guarded-regex false-positive class as
+   before, now at a new line number; and it proved the behaviour claim **element by element** rather
+   than by digest: a `/tmp` shadow built from the pre-fix collector at `893fa5b` (with an import
+   proof, `d5d2fe23`) and the current module both produce **1,648 events, identical
+   element-by-element**, so the correction changes nothing about the recorded stream.
+   **A false negative the parent nearly accepted, worth recording.** The first comparison used the
+   parent's own invented canonicalization and **the digests did not match** (`495caf2d…` against the
+   writer's `bb845138…`). That was a serialization difference, not a behaviour difference: comparing
+   two different canonical forms proves nothing in either direction. Redoing it against the same
+   objects element by element is what settled it, and the lesson is that a digest comparison is only
+   meaningful when both sides share the exact canonical form.
+   **Residuals disclosed, not fixed:** a value whose own `__hash__` raises something other than
+   `TypeError` still propagates, deliberately narrow because it is unreachable from JSON; and the
+   `repr` fallback is insertion-order sensitive, so two equal dicts with **mixed-type** keys need not
+   deduplicate, while every `str`-keyed payload goes through `json.dumps` and does.
+3. **F08 — Gemini gateway**, exercised against a fake provider, with one separately granted real
+   generation to prove the wiring. One model call is a budget decision, not an assumption.
+4. **F09 — the two-person booth.** Lead and colour personas, explicit turn order, bounded context,
+   evidence-only sourcing, degradation that is neutral rather than invented.
+5. **Thin F10.** One command that runs replay → events → booth → a transcript. Not the
+   multi-service orchestration: the MVP runs in one process.
+
+**Deferred from the MVP, with the reason:** **F05** Redis fan-out is infrastructure for services
+that do not exist in a single-process MVP; **F06** tactical analysis is value added on top of
+rather than a precondition for commentary; **F07** Jolpica enrichment adds historical colour but
+not the core claim; **F11** Docker packaging is deployment, not demonstration; **F12**'s CI job is
+tracked as issue #7; **F13** live is gated on a purchase the user declined for now. F03d's auth and
+live seam sit **off the MVP path entirely** under free mode.
+
+**Forecasts are lower bounds.** This project has overrun them consistently — F03c 2,620 against
+~1,000, F03d-1 998 against 450, F03d-2 883 against 300–500 — so the MVP estimate must be read with
+that multiplier in mind, and each unit still runs its own verification, native review and commit.
+
 ### F04 — Implement deterministic collector and event detection
 
 - [ ] Normalize positions, laps, sectors, flags, intervals and pit/stint data;
@@ -1304,6 +1645,9 @@ new real-service/model calls or automatic publication of the next source unit.
 
 ### F05 — Implement Redis Streams delivery and fan-out
 
+**Deferred from the MVP** (see the MVP cut above): single-process fan-out is not needed to prove
+the two-persona commentary claim.
+
 - [ ] Define stream names, versioned envelopes, separate consumer groups for
   analyst/historian, acknowledgements, idempotency, recovery and retention limits.
 - Acceptance/checks: local Redis tests show both enrichers receive each event,
@@ -1311,6 +1655,24 @@ new real-service/model calls or automatic publication of the next source unit.
 - Depends on F02/F04. Commit/checks: pending.
 
 ### F06 — Implement deterministic tactical analysis
+
+**Deferred from the MVP** (see the MVP cut above): tactical alerts add value on top of commentary
+but are not a precondition for it.
+
+**A named handoff, not a promise.** F04 ships `classify_gap(raw)` — a pure classifier turning one raw
+`gap_to_leader`/`interval` value into absent, unknown, seconds or laps — and **F06 is its intended
+consumer**: the tactical reading of gaps is exactly what F06 defers today. The specific case F04
+pre-validates against the real fixture is the **`+1 LAP` string form** (1,331 of the 21,041 interval
+values, alongside 19,604 numbers and 106 nulls), which is the one that would otherwise be mis-cast
+to a number by a naive implementation.
+
+**The condition attached to it, recorded before it can be forgotten.** F06 must either consume this
+classifier or **delete it**. That is not a stylistic preference: the danger is not scope creep but
+**orphan code** — pure, plausible-looking normalization with no MVP caller can survive a review
+precisely *because* it looks like normalization, and then sit in the tree forever with tests that
+prove nothing about any behaviour. Naming the recipient converts it from a promise into a handoff
+with a deadline. If F06 lands and does not use it, removing it is the correct outcome, not keeping it
+out of politeness.
 
 - [ ] Calculate contextual gap/pace/stint alerts with configurable circuit/session
   parameters. Treat tyre-life and pit-loss estimates as assumptions, not facts.
@@ -1320,6 +1682,9 @@ new real-service/model calls or automatic publication of the next source unit.
 - Depends on F04/F05. Commit/checks: pending.
 
 ### F07 — Implement evidence-grounded historical enrichment
+
+**Deferred from the MVP** (see the MVP cut above): historical colour is not the core claim, and its
+Jolpica pagination work is unrelated to proving the booth.
 
 - [ ] Query Jolpica-style archives with verified driver/circuit mappings, bounded
   caching and source/as-of attribution. Remove fabricated circuit defaults.
@@ -1339,7 +1704,175 @@ new real-service/model calls or automatic publication of the next source unit.
   that no hard cost stop exists before F13.
 - Depends on F01/F02. Commit/checks: pending.
 
+**Parallel track, authorized 2026-10-10: F08 runs in an isolated linked worktree.**
+The fixture recording (MVP step 1) is committed on its own branch in the main worktree, so
+F08 must not touch that tree: it works in `../F1Show-f08` on branch `feat/f08-gemini-gateway`,
+cut from `0b1f0c7`. This is a side track, not a chain slice — F08 declares no dependency on
+the fixtures and reads none of them. Every commit stages **explicit paths**, never
+`git add -A`, so untracked or committed fixture artifacts are never swept into an unrelated
+commit. The shared task file and its Engram mirror are the collision surface: the parent edits
+this file on its own branch and records the F08 track under `f1show/f08-gemini-gateway` rather
+than rewriting the split tasks mirror while the step-1 session owns it.
+
+**Concrete design, registered before the first write.**
+
+- **Two classes in one new module, `src/f1show/gemini.py`, both implementing the existing
+  `ModelClient` port.** `GoogleGenAIClient` is the thin adapter over an **injected** async
+  `google-genai` client: the caller constructs `genai.Client(api_key=...)` at wiring time from
+  `CredentialsSettings.gemini_api_key`, so this module never reads, stores or formats a
+  credential (composition-ownership precedent: `auth.py`). `SafeguardedModelClient` wraps any
+  inner `ModelClient` and owns timeout, bounded attempts, bounded concurrency and usage
+  accounting, mirroring the wrapper convention of `request_policy.py`. Splitting them is what
+  makes the safeguards testable offline: the whole policy layer runs against scripted doubles,
+  and only the adapter's mapping touches the SDK.
+- **Attempt budget reuses `RetryPolicy`** from `request_policy.py` for `max_attempts`,
+  `base_backoff_seconds` and `max_backoff_seconds`, so the backoff arithmetic, the no-jitter
+  rule and the attempt accounting are not re-implemented. Its HTTP-only fields
+  (`retryable_statuses`, `max_retry_after_seconds`) are unused on this path, and that is stated
+  in the code rather than papered over with a parallel policy type; retryability is decided by
+  the **typed** errors below, not by an HTTP status. Waits are spent through the injected
+  `MonotonicClock.sleep`, never a private clock, so tests observe exact virtual durations.
+- **Timeout is enforced once**, by `asyncio.timeout(request.timeout_seconds)` around a single
+  attempt, and becomes `ModelTimeoutError`. No second SDK-level timeout knob is invented: two
+  budgets would be two behaviours to reason about.
+- **Bounded concurrency** is an `asyncio.Semaphore` of caller-supplied size, with no default
+  that silently serialises or silently unlimits. Every concurrency test bounds its waits with
+  `asyncio.wait_for(..., timeout=...)` plus `pytest.fail` naming the hazard, because the
+  F03d-2 lesson is that an unbounded wait turns a suite that should fail into one that hangs.
+- **Typed, sanitized failures**, all exported, under a `ModelError` base:
+  `ModelTimeoutError`, `ModelRateLimitedError` (429, carrying an optional server-advised
+  delay), `ModelServerError` (5xx), `ModelTransportError` and `ModelResponseError`. Retryable:
+  rate-limited, server, timeout, transport. Not retried: a malformed or blank response, on the
+  `HttpDecodeError` precedent. **No raised error, `repr` or log line may carry the prompt text,
+  the API key or the raw provider payload.**
+- **Output bounds**: `max_output_tokens` from the request is mapped into the SDK generation
+  config, and a missing, blank or non-text response becomes `ModelResponseError` instead of an
+  empty turn. `ModelResponse.model_id` **echoes the requested id**; the provider's own model
+  naming is never trusted or rewritten into our transcript.
+- **Usage accounting and alerting**: a new pydantic `ModelUsage` (model id, input, output,
+  total, attempts) plus an in-process accumulator, an optional `on_usage` observer called once
+  per successful call, and a warning through the redacting logger when a caller-supplied token
+  threshold is crossed. The threshold is a constructor argument, not a new configuration
+  section, so `config.py` and its tests are untouched. **Measured usage is not a hard spend
+  limit and no cost stop exists before F13** — that sentence belongs to the module's own
+  documentation, not only to this file.
+- **Model IDs stay injected.** `model_id` has no default and no literal appears in this module
+  or its tests, per the standing rule that no model ID may enter code or configuration before
+  account enumeration and current documentation verify it; the earlier enumeration attempt
+  (401 with `GEMINI_API_KEY`, `IndexError` through the local proxy) did not verify one. The
+  separately granted real generation that proves the wiring stays a future grant.
+- **Offline checks, with the honest limit stated.** The policy layer runs against
+  `ScriptedModelClient` plus local scripted failing doubles and `FakeMonotonicClock`; the
+  adapter runs against a local fake with the SDK's async surface, plus one **contract probe**
+  that imports the installed `google-genai==2.29.0` and asserts the callables and config fields
+  this mapping depends on exist. That probe is a version-pinned assumption about a third party,
+  not proof: real 429 shapes, `usage_metadata` presence and truncation semantics stay
+  unverified offline and belong to F13.
+- **Allowed edit surfaces** for the writer: `src/f1show/gemini.py` (new),
+  `tests/test_gemini.py` (new), and additive exports in `src/f1show/__init__.py`. **Do not
+  touch** `config.py`, `ports.py`, `fakes.py`, `request_policy.py`, the fixture artifacts, or
+  any other module. No new dependency and no lock change: `google-genai==2.29.0` is already
+  pinned and installed.
+- **Forecast**: 350–550 authored diff lines. The recorded history of this project is that
+  forecasts are lower bounds, so an oversize diff is disclosed rather than compressed by
+  dropping tests or documentation. Verification, native review and the work-unit commit follow
+  the usual path.
+
+**Implementation, verification and native review (observed). Status: implemented, independently
+verified and natively reviewed on the fake-provider path, and NOT closed** — the verified model ID
+and the separately granted real generation remain pending, so this task keeps its unchecked box.
+No live call, credential or purchase was made for this unit.
+
+- Writer `mv2z2j6g-1-oq1i` (`gentle-ai-worker`, background) returned three paths:
+  `src/f1show/gemini.py` **567** lines, `tests/test_gemini.py` **1191** lines and
+  `src/f1show/__init__.py` **+21/−2** — **1758 authored lines against the 350–550 forecast
+  (3.2×, disclosed, no test or docstring trimmed)**.
+- **RED was observed, not reconstructed.** Stage (a) collection: `1 error in 0.34s`,
+  `ModuleNotFoundError: No module named 'f1show.gemini'`, zero tests collected. Stage (b) with the
+  module present as signatures only raising `NotImplementedError`: **54 failed / 2 passed**, and the
+  writer **named the two trivial passes** (the installed-SDK contract probe and the export-shape
+  test) instead of presenting the whole RED as behavioural. GREEN: focused 57, full **612**
+  (baseline 555).
+- **Parent spot check** (required): the three file hashes identical to the writer's report, 612
+  passed, the nine public names resolve from the package root, no model ID literal and no credential
+  read anywhere in the candidate, and additivity confirmed — the `f1show.gemini` import block and the
+  `__all__` lines are purely additive and correctly ordered, with the only replaced lines being the
+  module docstring the writer legitimately extended.
+- **A discrepancy the parent found, and resolved without smoothing it over.** The writer's "ruff
+  check: all checks passed" claim is **not reproducible**, because this repository **commits no ruff
+  configuration at all**, so the verdict depends on the rule selection each caller chooses. The
+  parent's probe on the two new files returns one `RUF100` (`tests/test_gemini.py:68`, an unused
+  `# noqa: S105`), which is established house style in six other files and part of 56 findings the
+  tree already carries under ruff's defaults. Recorded here as a **configuration gap** (F12
+  territory, where the linter decision was deferred) — **not** as a defect of this candidate, and
+  deliberately not fixed inside it.
+- Independent verifier `mv2zugyb-2-3y6w` **PASS**: counts reproduced (focused 57, full 612 in the
+  worktree), the three candidate hashes byte-identical before and after its work, and **10/10 named
+  mutants killed with no survivor and no behaviourally equivalent mutant** — the per-attempt timeout
+  guard, attempts off-by-one, an unbounded gate, dropped output tokens, a blank answer accepted, a
+  non-retryable failure retried, a rate-limited failure not retried, constant instead of doubling
+  backoff, the alert firing on every call, and a provider exception chained into the raised error.
+  It also turned the writer's two "covered by code reading only" declarations into **observations**:
+  the gate slot really is released while the client sleeps in backoff (real clock, two callers,
+  time-bounded probe, sensitivity validated against a shadow mutant that holds the slot), and an
+  expired deadline produces `ModelTimeoutError` with `__cause__`/`__context__` both `None` and no
+  prompt text anywhere in the walked chain. Its method note is worth keeping: **a copied
+  `.venv/bin/pytest` shebang points back at the source worktree's interpreter**, so copy-based
+  experiments silently test the original tree unless they run `python -m pytest` against the copy —
+  its first mutant runs were invalid for exactly that reason and it said so.
+- Native review `review-12ddb2c2a11e69e8`, tier **medium**, **one** consolidated lens
+  (`review-reliability`), 3 files, **1781** changed lines, correction budget 200. Its forecast was one
+  host-relay model run, acknowledged, and the review **approved on the first reviewer run with no
+  correction opened**. The exact acknowledgement **burned** authority (`consumed_revision
+  sha256:1d9d59b9114c1fae10ddf2435c702e19ccf5390534c17f7989ffcfec4dcf91c9`,
+  `gentle-ai.review-acknowledged/v1`) and no STATUS was issued after the burn. Three informational
+  findings with **no bodies returned**, carried as later work and not reconstructed: `R3-001`
+  (WARNING) `src/f1show/gemini.py:479-482`, `R3-002` (SUGGESTION) `tests/test_gemini.py:932-959`,
+  `R3-003` (SUGGESTION) `src/f1show/gemini.py:562-563`. The acknowledgement was deliberately deferred
+  until the independent verifier returned, because a correction after a burn costs a fresh review
+  round.
+- **Committed** as `b56a2fee771791e282890c15d766f4f57efea34c`, Conventional Commit
+  `feat(gemini): add the Gemini gateway with bounded retries and usage accounting`. Reviewed =
+  staged = committed tree `11dc44c76062630fd9ad187fbffe5eb7d957d275`, identical to the tree the
+  controller froze; clean worktree after the commit; 612 passed afterwards; no push.
+- **Two hardening recommendations from the independent verifier, carried as later work and not
+  silently applied**: honour `max(retry_after, backoff)` clamped to a documented ceiling before
+  F13's live calls — the server advice is already parsed and carried, so only the policy decision is
+  missing, and repeated early contact could extend a real quota lockout — and escalate a run of
+  consecutive observer failures instead of logging the class name only, so that a persistent usage
+  sink failure cannot under-report silently while the answer still returns.
+- **Honest limits carried into the record.** Real provider 429 body shapes, whether
+  `usage_metadata` is always present, and truncation semantics remain unprovable offline; the two
+  contract probes are version-pinned assumptions about `google-genai==2.29.0`, not proof. Measurement
+  is incomplete **by port design**: thinking tokens never reach `ModelUsage`, and a response without
+  usage metadata records zero — an under-report, never an invented number. The gate wait sits outside
+  `request.timeout_seconds`, so a caller needing a total deadline must bound `generate` itself. The
+  usage observer's failure is swallowed by design so a reporter can never discard a paid answer. And
+  because **no model ID is verified**, `model_id` stays injected with no default: the separately
+  granted real generation that proves the wiring is still pending and is not claimed here.
+- **Integration handoff, agreed with the step-1/F04 session.** This track lives on
+  `feat/f08-gemini-gateway`, cut from `0b1f0c7`. At integration **their version of this file wins**
+  and this block is re-applied by cherry-picking this track's **three documentation commits**
+  (`11f78c8`, `f7e7412` and the one that adds the rules below) in order during that resolution
+  (their document still carries the exact anchor, so they apply cleanly in sequence);
+  `src/f1show/__init__.py` is the only shared file and both changes are additive; the split Engram
+  task mirror stays with them and they fold this evidence in.
+- **Two project rules this track produced, recorded here because an anecdote does not survive.**
+  (1) **A copy-based verification must prove which source it imported.** Two independent sessions hit
+  the same trap in one day: copying `.venv` bakes the original worktree's paths into the launcher, so
+  `pytest` silently imports the original package — the F04 track's re-verifier passed **23 tests in
+  false** before an import proof caught it, and this track's verifier discarded its first mutant runs
+  for the same reason. Any shadow or copy used for mutation must print the imported module path
+  (`inspect.getsourcefile`) before its results count. (2) **A lint claim must name its rule
+  selection or it is not evidence.** This repository commits no ruff configuration, so the effective
+  rule set lives outside it, in whatever selection each caller's harness provides: the same tree
+  either "passes all checks" or reports findings depending on that selection, and every
+  `# noqa: S105` directive reads as unused without `S` selected. Tracked in issue #7.
+
 ### F09 — Implement the two-person commentary booth
+
+**MVP-critical.** Its dependency line below is superseded by the cut: the booth depends on F08 and
+on whatever event families F04 actually delivers, **not** on the deferred F06/F07.
 
 - [ ] Implement lead/color personas, explicit turns, bounded history and structured
   transcript output using only current events and attributed enrichment.
@@ -1358,6 +1891,9 @@ new real-service/model calls or automatic publication of the next source unit.
 - Depends on F05/F09. Commit/checks: pending.
 
 ### F11 — Package the services and Redis in Docker Compose
+
+**Deferred from the MVP** (see the MVP cut above): packaging is deployment, not demonstration, and
+it depends on the deferred F05/F10 multi-service shape.
 
 - [ ] Build `sync`, collector, analyst, historian and booth images, plus Redis and the
   local SQLite store volume; configure internal networking, persistence,
@@ -1392,33 +1928,45 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03 complete; F03d-2 closed locally and awaiting its own publication decision.**
-Every F03 unit is now closed: `F03a`, `F03b`/`F03b-1`, `F03c-1`, `F03c-2`, `F03c-3a`, `F03c-3b`,
-`F03c-4`, `F03d-1` and `F03d-2`, each with its own independent verification, native approval and
-exact-tree local commit. `F03c` and `F03d-1` are merged into `main` through PR #1 (`77f22466`);
-F03d-2 source `30f4fa4` plus two documentation commits (`620eb8c`, `b773217`) sit on the feature
-branch and are **not** in `main`. Publishing them is a separate human decision, exactly as the
-previous push and merge were. ASSESS is unassessable for candidates with undeclared new files, so
-that mandatory high-risk plan governs each such unit. Carried, not fixed: the fourteen
-informational F03d-2 findings above (six warnings), pre-existing `tests/test_fakes.py` and
-`conftest.py` findings, base lint findings, the unverified Python 3.12 floor, the unverified
-POST-retry assumption, scripted-only race coverage, the F03c-4 generation branch unreachable by
-the public API, probes-only CI gaps, the caller-owns-its-composition caveat, and the earlier
-informational advisories whose bodies were never returned. Forecast calibration remains a
-standing concern. **F04 onward stays unauthorized**, and no live, purchase, subscription or
-model call has been made or is implied by this work.
-The three registered advisory regions were examined read-only; native descriptions were
-not found locally, observations are explicitly independent, no fixes authorized or made.
-Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
-review authorities are burned; never query/reuse them. Keep writes single-threaded and
-limit 3a to ingest.py/test_ingest.py/additive package exports, with genuine behavior RED,
-shared Store parity, records-before-observation-checkpoint and honest partial outcomes.
-Future source publication remains a separate human decision.
-F03c-3/4 and F03d injectable live seam remain pending and authorized for implementation.
-Their publication is a separate decision. F04 onward requires a new implementation grant.
+Active: **F04 and its two corrections are closed; MVP step 3 is F08.** F04 stands as units
+`893fa5b` (the collector, +657), `cfbe614` (the hashable-identity correction, +164/−2) and, before
+it, the classifier guard folded into the same unit — with independent verification at **8/8 mutants
+killed**, a medium-tier review whose authority is **burned**, and one post-approval correction
+carried **without** a review because ASSESS returned `reviewDue: false` under budget. The parent
+proved the behaviour claim element-wise against a pre-fix shadow, so that omission rests on evidence
+rather than on trust. Next is F08, whose isolated track already closed on
+`feat/f08-gemini-gateway` as `b56a2fe` with a burned authority and 10/10 mutants killed, and whose
+integration is agreed: this branch's task document wins, the design and evidence arrive as
+`cherry-pick -n 11f78c8 f7e7412` (verified to apply cleanly in sequence), and the additive
+`__init__.py` conflict is resolved here. Then F09's two-person booth and a thin single-process F10
+that prints a transcript. Seven deferred items stay tracked as issues #3–#9, and issue #7 now also
+carries the measured fact that **no ruff configuration is committed**, so every lint claim in this
+project is config-scoped and must name its rule selection. The user chose **free mode**. `main` stays
+at `2c83a150`. Housekeeping: the ODD mirror is four records and the splitter handles any number.
+**Parallel track, coordinated 2026-10-10.** A second session implements **F08** (the Gemini gateway)
+in an isolated worktree `/home/s/dev/projects/work/F1Show-f08`, branch `feat/f08-gemini-gateway`,
+based on `0b1f0c7`, registering its own design in that branch's copy of the F08 section. Verified
+state at coordination time: two writers total — this session and that one — plus a third
+`git worktree` entry that is **not** a writer at all but the review integrator's frozen detached
+candidate view under `.git/gentle-ai/candidate-views/`, which is worth knowing because it looks like
+a third agent in `git worktree list`. The merge-conflict surface between the two branches is exactly
+two files: `src/f1show/__init__.py`, which **both** modify additively and which the parent resolves
+on integration because this branch carries the tip, and this task document, which both modify and
+where the parent's version wins with the F08 design block re-applied on top. `feat/f03-source-adapters`
+is **never rewritten**: only fast-forward pushes (`3f52c33`→`ce7d113`→`7b56e49`) and PR merges have
+ever landed on it, never a force-push, squash or rebase. At that moment the remote sat at `7b56e49`
+while the local tip was `e999a10`, six commits unpublished, and the F04 source was still uncommitted
+pending verification — both facts were disclosed to the other session rather than left implicit.
+**Delivery state.** `main` sits at `2c83a150` and contains all nine F03 units, merged through PR #1
+and PR #2. The feature branch is ahead of it with the F03-cleanup work, the recorded fixtures and
+F04, all unpublished: the remote is at `7b56e49` while the local tip has moved past it, and F04's
+source is still uncommitted pending review. Publication of any of it remains a separate human
+decision. The native authorities for F03c-1, F03c-2, F03c-3a, F03c-3b, F03c-4, F03d-1, F03d-2 and
+the advisory follow-up are **burned**; never query or reuse them. Two earlier advisory regions were
+examined read-only, with native descriptions never found locally and the observations explicitly
+labelled as the parent's own rather than the provider's intent.
 
-The user now authorized publishing this reviewed advance to `origin/feat/f03-source-adapters`
-only, not to `main`; future units need their own delivery decision. No model ID may enter
-configuration or code until account enumeration and current documentation verify it.
-No live/model calls, purchases or deployment are authorized; real-service correctness
-remains pending F13.
+**Standing constraints.** Writes stay single-threaded. No model ID may enter configuration or code
+until account enumeration and current documentation verify it. **No live, model, purchase or
+deployment call is authorized**, and no subscription exists: the project runs in **free mode**, so
+real-service correctness remains an F13 question and the live gaps are tracked as issue #3.
