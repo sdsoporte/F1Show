@@ -1778,6 +1778,85 @@ than rewriting the split tasks mirror while the step-1 session owns it.
   dropping tests or documentation. Verification, native review and the work-unit commit follow
   the usual path.
 
+**Implementation, verification and native review (observed). Status: implemented, independently
+verified and natively reviewed on the fake-provider path, and NOT closed** — the verified model ID
+and the separately granted real generation remain pending, so this task keeps its unchecked box.
+No live call, credential or purchase was made for this unit.
+
+- Writer `mv2z2j6g-1-oq1i` (`gentle-ai-worker`, background) returned three paths:
+  `src/f1show/gemini.py` **567** lines, `tests/test_gemini.py` **1191** lines and
+  `src/f1show/__init__.py` **+21/−2** — **1758 authored lines against the 350–550 forecast
+  (3.2×, disclosed, no test or docstring trimmed)**.
+- **RED was observed, not reconstructed.** Stage (a) collection: `1 error in 0.34s`,
+  `ModuleNotFoundError: No module named 'f1show.gemini'`, zero tests collected. Stage (b) with the
+  module present as signatures only raising `NotImplementedError`: **54 failed / 2 passed**, and the
+  writer **named the two trivial passes** (the installed-SDK contract probe and the export-shape
+  test) instead of presenting the whole RED as behavioural. GREEN: focused 57, full **612**
+  (baseline 555).
+- **Parent spot check** (required): the three file hashes identical to the writer's report, 612
+  passed, the nine public names resolve from the package root, no model ID literal and no credential
+  read anywhere in the candidate, and additivity confirmed — the `f1show.gemini` import block and the
+  `__all__` lines are purely additive and correctly ordered, with the only replaced lines being the
+  module docstring the writer legitimately extended.
+- **A discrepancy the parent found, and resolved without smoothing it over.** The writer's "ruff
+  check: all checks passed" claim is **not reproducible**, because this repository **commits no ruff
+  configuration at all**, so the verdict depends on the rule selection each caller chooses. The
+  parent's probe on the two new files returns one `RUF100` (`tests/test_gemini.py:68`, an unused
+  `# noqa: S105`), which is established house style in six other files and part of 56 findings the
+  tree already carries under ruff's defaults. Recorded here as a **configuration gap** (F12
+  territory, where the linter decision was deferred) — **not** as a defect of this candidate, and
+  deliberately not fixed inside it.
+- Independent verifier `mv2zugyb-2-3y6w` **PASS**: counts reproduced (focused 57, full 612 in the
+  worktree), the three candidate hashes byte-identical before and after its work, and **10/10 named
+  mutants killed with no survivor and no behaviourally equivalent mutant** — the per-attempt timeout
+  guard, attempts off-by-one, an unbounded gate, dropped output tokens, a blank answer accepted, a
+  non-retryable failure retried, a rate-limited failure not retried, constant instead of doubling
+  backoff, the alert firing on every call, and a provider exception chained into the raised error.
+  It also turned the writer's two "covered by code reading only" declarations into **observations**:
+  the gate slot really is released while the client sleeps in backoff (real clock, two callers,
+  time-bounded probe, sensitivity validated against a shadow mutant that holds the slot), and an
+  expired deadline produces `ModelTimeoutError` with `__cause__`/`__context__` both `None` and no
+  prompt text anywhere in the walked chain. Its method note is worth keeping: **a copied
+  `.venv/bin/pytest` shebang points back at the source worktree's interpreter**, so copy-based
+  experiments silently test the original tree unless they run `python -m pytest` against the copy —
+  its first mutant runs were invalid for exactly that reason and it said so.
+- Native review `review-12ddb2c2a11e69e8`, tier **medium**, **one** consolidated lens
+  (`review-reliability`), 3 files, **1781** changed lines, correction budget 200. Its forecast was one
+  host-relay model run, acknowledged, and the review **approved on the first reviewer run with no
+  correction opened**. The exact acknowledgement **burned** authority (`consumed_revision
+  sha256:1d9d59b9114c1fae10ddf2435c702e19ccf5390534c17f7989ffcfec4dcf91c9`,
+  `gentle-ai.review-acknowledged/v1`) and no STATUS was issued after the burn. Three informational
+  findings with **no bodies returned**, carried as later work and not reconstructed: `R3-001`
+  (WARNING) `src/f1show/gemini.py:479-482`, `R3-002` (SUGGESTION) `tests/test_gemini.py:932-959`,
+  `R3-003` (SUGGESTION) `src/f1show/gemini.py:562-563`. The acknowledgement was deliberately deferred
+  until the independent verifier returned, because a correction after a burn costs a fresh review
+  round.
+- **Committed** as `b56a2fee771791e282890c15d766f4f57efea34c`, Conventional Commit
+  `feat(gemini): add the Gemini gateway with bounded retries and usage accounting`. Reviewed =
+  staged = committed tree `11dc44c76062630fd9ad187fbffe5eb7d957d275`, identical to the tree the
+  controller froze; clean worktree after the commit; 612 passed afterwards; no push.
+- **Two hardening recommendations from the independent verifier, carried as later work and not
+  silently applied**: honour `max(retry_after, backoff)` clamped to a documented ceiling before
+  F13's live calls — the server advice is already parsed and carried, so only the policy decision is
+  missing, and repeated early contact could extend a real quota lockout — and escalate a run of
+  consecutive observer failures instead of logging the class name only, so that a persistent usage
+  sink failure cannot under-report silently while the answer still returns.
+- **Honest limits carried into the record.** Real provider 429 body shapes, whether
+  `usage_metadata` is always present, and truncation semantics remain unprovable offline; the two
+  contract probes are version-pinned assumptions about `google-genai==2.29.0`, not proof. Measurement
+  is incomplete **by port design**: thinking tokens never reach `ModelUsage`, and a response without
+  usage metadata records zero — an under-report, never an invented number. The gate wait sits outside
+  `request.timeout_seconds`, so a caller needing a total deadline must bound `generate` itself. The
+  usage observer's failure is swallowed by design so a reporter can never discard a paid answer. And
+  because **no model ID is verified**, `model_id` stays injected with no default: the separately
+  granted real generation that proves the wiring is still pending and is not claimed here.
+- **Integration handoff, agreed with the step-1/F04 session.** This track lives on
+  `feat/f08-gemini-gateway`, cut from `0b1f0c7`. At integration **their version of this file wins**
+  and this block is re-applied with `git cherry-pick -n 11f78c8` during that resolution (their
+  document still carries the exact anchor, so it applies cleanly); `src/f1show/__init__.py` is the
+  only shared file and both changes are additive; the split Engram task mirror stays with them and
+  they fold this evidence in.
+
 ### F09 — Implement the two-person commentary booth
 
 **MVP-critical.** Its dependency line below is superseded by the cut: the booth depends on F08 and
