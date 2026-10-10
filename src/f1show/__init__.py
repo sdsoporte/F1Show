@@ -19,6 +19,7 @@ from f1show.auth import (
     TokenExchangeError,
     TokenPayload,
     TokenPayloadError,
+    TokenTransportError,
     parse_token_payload,
 )
 from f1show.config import (
@@ -108,5 +109,5 @@ __all__ = [
     "SessionSyncResult", "ingest_endpoint", "redact", "sync_session", "write_session_snapshot",
     "DEFAULT_OPENF1_TOKEN_URL", "TOKEN_REFRESH_SKEW_SECONDS", "AccessToken", "AuthError",
     "AuthenticatedHttpClient", "OpenF1TokenProvider", "TokenDecodeError", "TokenExchangeError",
-    "TokenPayload", "TokenPayloadError", "parse_token_payload",
+    "TokenPayload", "TokenPayloadError", "TokenTransportError", "parse_token_payload",
 ]
