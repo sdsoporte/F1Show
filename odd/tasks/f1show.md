@@ -757,7 +757,21 @@ new real-service/model calls or automatic publication of the next source unit.
     per-batch atomic Store writes with separate watermarks. A single whole-unit 350–550
     estimate was understated (scout 650–830); preserve tests and split by behavior.
     - [ ] **F03c-3a — Single-endpoint validation, persistence and observation checkpoint.**
-      In progress; one bounded writer after this plan/mirror/todo reconciliation.
+      Implementation returned; narrow test annotations and independent checks pending.
+      Writer `mv2i885h-11-842l` reports scaffold assertion RED 33 failed/0 passed, zero
+      collection errors; GREEN/refactor 33, focused 48/full 358 (baseline 325). A large
+      shared parity body stops at its first RED assertion, so all tests failing does not
+      prove every later assertion/variant was exercised; verifier must distinguish this.
+      Parent confirmed three paths, empty index and **858 additions +1 deletion = 859**
+      total diff lines (new module 266/test 589; exports +3/−1), above the 450–650 forecast.
+      SHA256: ingest `d86b48ff5151324258088404cfb566878a7269b4759c4f2f444b3d5d170513c9`,
+      test `870512411ad5ad07a63955c3f8c16b263f68636fb7451117870ec704640f26c0`.
+      Parent active LSP found three intentional invalid-argument test diagnostics plus
+      the pre-existing root `SnapshotResult` warning; annotate only those negative calls,
+      never weaken the public API/tests or suppress whole files. Source behavior unchanged.
+      Writer's harness-Ruff pass still needs corroboration; no project lint config added.
+      ASSESS unassessable for new files: independent high-risk verification mandatory.
+      No acceptance, native lineage, source commit or new push; 3b stays pending.
       Surfaces: new `src/f1show/ingest.py`, new `tests/test_ingest.py`, additive exports only
       in `src/f1show/__init__.py`. Other source/tests/config/ports/fakes remain untouched.
       Public `ingest_endpoint(store, clock, *, endpoint, session_key, payload)` supports
@@ -916,8 +930,11 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03c-3a single-endpoint ingestion core**, planned before source writes; then
-F03c-3b HTTP composition after 3a's independent/native checks and local unit commit.
+Active: **F03c-3a test-only negative-input annotations, then independent verification.**
+Writer reports 48 focused/358 full and scaffold assertion RED; no source acceptance yet.
+Keep ingestion behavior and existing tests fixed while annotating the three expected
+Pyright argument-type findings. Then independent scope/functional/mutation checks and
+native review/local commit; F03c-3b HTTP composition waits for 3a closure.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
