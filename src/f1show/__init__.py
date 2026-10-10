@@ -22,6 +22,13 @@ from f1show.auth import (
     TokenTransportError,
     parse_token_payload,
 )
+from f1show.collector import (
+    DetectedEvent,
+    GapKind,
+    GapReading,
+    classify_gap,
+    collect_session_events,
+)
 from f1show.config import (
     DEFAULT_OPENF1_BASE_URL,
     DEFAULT_REQUEST_TIMEOUT_SECONDS,
@@ -110,4 +117,5 @@ __all__ = [
     "DEFAULT_OPENF1_TOKEN_URL", "TOKEN_REFRESH_SKEW_SECONDS", "AccessToken", "AuthError",
     "AuthenticatedHttpClient", "OpenF1TokenProvider", "TokenDecodeError", "TokenExchangeError",
     "TokenPayload", "TokenPayloadError", "TokenTransportError", "parse_token_payload",
+    "DetectedEvent", "GapKind", "GapReading", "classify_gap", "collect_session_events",
 ]
