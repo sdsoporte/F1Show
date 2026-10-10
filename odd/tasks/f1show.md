@@ -1172,6 +1172,42 @@ new real-service/model calls or automatic publication of the next source unit.
         `Authorization` refusal, and caller ownership. Honest limit unchanged: the real
         exchange, the real expiry behaviour and real live responses stay unverified without the
         paid subscription, and live validation belongs to F13.
+      **Implementation returned; independent verification in flight.** Writer `mv2vrc25-1c-yjv4`
+      produced `src/f1show/auth.py` (416 lines), `tests/test_auth.py` (431) and additive
+      `__init__.py` exports (+16/−0): **863 total** against the 300–500 forecast (1.73×,
+      disclosed, no test or docstring trimmed). Focused 52 / full **548** (baseline 496), on
+      Python 3.14.4. Pins: `auth.py`
+      `f23d28aed9991363455a98de251b6a9aeb1554580994555badddd0c41b271337`, `tests/test_auth.py`
+      `f505541c76e0528ddb96ea58c7a786d4c8b94e2a3639532b10a302a8e77c9cc1`, `__init__.py`
+      `b3fad40a20a7ad304a50323298184a6d8dfc6c425d32956e8b0922bc053e489a`.
+      **Parent design decision, resolving an ambiguity the parent brief created.** The brief both
+      told the writer to follow `request_policy.py`'s convention and forbade closing
+      caller-owned objects. The writer asked, and the reading is confirmed: during a request
+      nothing is opened, closed or replaced, and the single ownership act is `close()`, which
+      releases the adopted inner client exactly once and is safe to repeat — exactly the
+      documented precedent at `request_policy.py:289-294`. The class docstring states this
+      precisely. The composition caveat stays honest and unstated in code: nothing prevents a
+      provider from sharing the same inner client as the auth client, in which case closing the
+      auth client makes the provider unusable, so **the caller owns its composition**. That is
+      recorded here rather than patched into a docstring now, because one sentence would cost a
+      full re-verification and re-review cycle.
+      **Auxiliary static judgement.** The parent's LSP found only the pre-existing
+      `SnapshotResult` warning plus two auxiliary `unchecked-numeric-parse-python` warnings at
+      `auth.py:104` and `:143`, judged **false positives**: `expires_in` is guarded by
+      `str.isdigit()` before `int()`, and `_positive_seconds` validates before `float()`. The
+      same auxiliary pattern already exists in `http.py`, `fakes.py` and `request_policy.py`.
+      The writer's reported `f1show.auth` unresolved import was a **stale index artifact**: the
+      parent's LSP resolved the module and returned findings.
+      **TDD honesty carried into review.** Collection RED was separate
+      (`ModuleNotFoundError`). The behavioural RED was stub-shaped — 50 failed / 1 passed / 1
+      **deselected** — where the single pass was the structural `isinstance` test that a
+      no-logic stub satisfies by exposing method names, every failure stopped at its first
+      exercised call so later in-body assertions were unreached, and the **single-in-flight
+      concurrency test was deselected because it hangs under the stub**. The first GREEN attempt
+      was 51 passed / 1 failed from a test-side missing `params=` registration and that interim
+      log was overwritten. The consequence is explicit: the concurrency proof has **no RED
+      evidence at all**, and a hang instead of a failure is itself a hazard the verifier is
+      asked to judge rather than repair.
   Honest limit unchanged: without the paid subscription the real exchange, the real expiry
   behaviour and real live responses remain unverified; a fake transport proves only our
   handling, and live validation belongs to F13 under its own authorization.
@@ -1290,19 +1326,21 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03d-2 authentication and the live seam**, one bounded writer after this F03d-1
-closure and design registration, under the existing F03 authorization. F03d-1 is closed as
-`d807cbc` — ten paths, +1050/−40 = 1090, independent verifier PASS with 7/7 mutants killed and
-no survivor, native approval and exact acknowledgement, reviewed = staged = committed tree
-`1e9ca9d6b4d088ceab66150bfa20b27d6d746a63`. F03d-2 adds a new auth module with a token model, an
-expiry-with-skew refresh policy, a caching provider and an auth-injecting client, all offline
-against a fake or `MockTransport`. Carried, not fixed: the 3 pre-existing `tests/test_fakes.py`
-static errors, two base `I001` findings, the overstated `http.py` header-default wording the
-reviewer independently flagged, the unverified Python 3.12 floor, the unverified POST-retry
-assumption, probes-only CI gaps, and informational native suggestions whose bodies were never
-returned. Forecast calibration remains a standing concern: F03c ran 2620 against ~1000 forecast
-and F03d-1 1090 against 450. No new source push; remote `3f52c33` and main `fc30084` remain as
-published. F04 onward stays unauthorized.
+Active: **F03d-2 independent verification**, then fresh native review and the exact-byte local
+unit commit, and only then its own separately authorized publication. The candidate is three
+paths — a new `auth.py`, a new `test_auth.py` and additive root exports — at **863 total
+lines**, with 52 focused and **548** full tests green. ASSESS is unassessable for the undeclared
+new files, so its mandatory high-risk plan applies: the writer's self-verification plus an
+independent verifier, which is running. The parent confirmed the auth client's ownership reading
+against the real `request_policy.py` precedent and judged the two numeric-parse warnings false
+positives. F03c and F03d-1 are already merged into `main` through PR #1 (`77f22466`); F03d-2
+bytes are absent from `main` and will not reach it without their own verification, approval and
+authorization. Carried, not fixed: the pre-existing `tests/test_fakes.py` and `conftest.py`
+static findings, base lint findings, the unverified Python 3.12 floor, the unverified POST-retry
+assumption, scripted-only race coverage and the unreachable generation branch from F03c-4,
+probes-only CI gaps, and informational native suggestions whose bodies were never returned.
+Forecast calibration stays a standing concern (F03c 2620, F03d-1 1090, F03d-2 863 against
+smaller forecasts). F04 onward remains unauthorized.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
