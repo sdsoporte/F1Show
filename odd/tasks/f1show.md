@@ -895,7 +895,7 @@ new real-service/model calls or automatic publication of the next source unit.
       forecasts are not caps or permission to expand areas; preserve meaningful tests.
     Session query empty-vs-404 behavior is not live-verified; valid empty remains accepted
     and non-2xx remains failure. F03c-4 owns lifecycle; future source publication is separate.
-  - **F03c-4 — Session lifecycle. Implementation returned; independent verification next.**
+  - **F03c-4 — Session lifecycle. Verified; fresh native review next.**
     Requirement: explicit end/cancel/reset, fixed per-run session identity, late-response
     isolation and partial-family outcomes, caller-owned Store, no delete/transaction API.
     `ARCHITECTURE.md:46` already assigns "session lifecycle" to the `sync` service, so this
@@ -974,9 +974,37 @@ new real-service/model calls or automatic publication of the next source unit.
       the base root I001 only, and cached Pyright 0 errors + the base `SnapshotResult` warning.
       No active LSP was available in the writer; the parent probe saw two clean paths and one
       inconclusive timeout, to be re-probed. No Python 3.12 runtime proof; tests ran on 3.14.4.
-      Unverified writer claims still owed independent evidence: the equivalent-shaped
-      generation-mismatch branch is reachable only through a stand-in run, the mid-flight race
-      tests are scripted (not real concurrency), and the whole delivery is self-reported.
+      **Independent verifier `mv2qfl09-17-b9o9`: PASS, with qualifications that stand.**
+      Confirmed 121 focused/431 full on Python 3.14.4 and the 917 additions/0 deletions count;
+      scope, index and pins identical before and after its work; reviewed 3a/3b bytes untouched.
+      53 independent probes (its own harness, not the shipped tests) passed, plus **6/6
+      mutants assertion-killed** with a pristine control of 36 passing and no survivor:
+      dropped state check, bypassed run-scoped view, stale `set_watermark` allowed, `reset`
+      not terminating the old run, `close()` delegating to the caller store, and a stale write
+      inventing a count. Logs under `/tmp/f03c4_verify/`.
+      **Qualifications carried, not smoothed over.** The generation-mismatch branch is
+      *publicly unreachable*: the public API cannot change a live run's generation, so it is
+      exercised only through a stand-in run — that proves the invariant is coded, not that any
+      public flow reaches it. The mid-flight race tests are *scripted*: hooks run synchronously
+      inside `get_json` before the response is processed, so they prove refusal of responses
+      arriving after the terminal flip and prove **nothing** about a write already delegated to
+      the store when `end()`/`cancel()` fires, which under true concurrency could still commit.
+      The `set_watermark` staleness guard is likewise only killed through the stand-in branch.
+      The constants-only start test and the structural view-surface assertion could pass against
+      a stub; the mutants are what make the suite require real logic.
+      TDD is judged **partly scaffold-shaped**: the 15 `DID NOT RAISE ValueError` failures are
+      meaningful behavioral RED for admission validation, while the async lifecycle tests failed
+      through scaffold `NotImplementedError`, so their in-body assertions were never observed
+      RED on real logic. Their efficacy rests on the mutations above, not on TDD; nothing was
+      backdated and the writer's RED logs were not independently re-observed.
+      Static, configuration-scoped: cached Ruff clean on both new files with a base-only `I001`
+      on `__init__.py` reproduced identically on a HEAD copy; cached Pyright 0 errors and the
+      pre-existing `SnapshotResult` `reportUnsupportedDunderAll` warning only. The timed-out LSP
+      path was re-probed with Pyright scoped to all three files (`session.py` clean) — that is a
+      substitute, not the same probe as the parent's LSP tool. No Python 3.12 runtime proof.
+      ASSESS was unassessable for the undeclared new files, so the mandatory high-risk plan
+      (writer self-verification **plus** a separate independent verifier) is now satisfied.
+      No real-concurrency evidence exists anywhere in this unit.
   Per-unit checks: scoped pytest then full `uv run --frozen pytest -q`, observed
   RED/GREEN with coverage-only passes disclosed, native work-unit review under the
   user's enabled switch, local Conventional Commit and task/mirror/todo evidence.
@@ -1101,16 +1129,18 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03c-4 independent verification**, one verifier after this reconciliation, then
-fresh native review and the exact-byte local unit commit. Writer `mv2q1o7v-16-qn54` reports
-121 focused/431 full and a 917-line three-path candidate (two new files, additive exports);
-index clean, protected 3a/3b bytes untouched, no push. ASSESS is unassessable for the new
-files, so the mandatory high-risk plan requires writer self-verification plus a separate
-independent verifier. F03c-3b source `d4e1bc4` and F03c-3a source `aca17e2` stay closed with
-burned authority and matched trees. Carried, not fixed: probes-only CI gaps, base
-`SnapshotResult` warning, harness Ruff I001, unverified Python 3.12 floor, and the disclosed
-forecast overruns. Review workload risk is real: 917 diff lines in one unit, above the
-400-line chaining guidance, retained as one coherent behavior for a reliability lens.
+Active: **F03c-4 fresh native review**, after independent verifier PASS (121 focused/431 full,
+6/6 mutants killed, 53 probes) with its qualifications recorded: an unreachable-by-public-API
+generation branch, scripted rather than concurrent race tests, partly scaffold-shaped RED, and
+no real-concurrency evidence. Writer `mv2q1o7v-16-qn54` produced a 917-line three-path candidate
+(two new files, additive exports); index clean, protected 3a/3b bytes untouched, no push.
+F03c-3b source `d4e1bc4` and F03c-3a source `aca17e2` stay closed with burned authority and
+matched trees. Carried, not fixed: probes-only CI gaps, base `SnapshotResult` warning, harness
+Ruff I001, unverified Python 3.12 floor, and the disclosed forecast overruns (F03c authored
+total 2620 lines). Review workload risk is real: 917 diff lines in one unit, above the 400-line
+chaining guidance, retained as one coherent behavior for a reliability lens. ODD mirrors now
+span three records (#5666, #5747, and #5800) because the fully indented F03c region left no
+legal two-part boundary.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
