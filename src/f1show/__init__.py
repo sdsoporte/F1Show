@@ -65,6 +65,14 @@ from f1show.request_policy import (
     RetryPolicy,
     RetryingHttpClient,
 )
+from f1show.session import (
+    RunNotActiveError,
+    RunState,
+    SessionRun,
+    SessionRunIdentity,
+    StaleRunError,
+    StoreOwnershipError,
+)
 from f1show.snapshot import write_session_snapshot
 from f1show.store import SQLiteStore
 
@@ -80,6 +88,8 @@ __all__ = [
     "RateLimiter", "RedactingFilter",
     "ReplaySettings", "RetryPolicy", "RetryingHttpClient", "SQLiteStore", "ScriptedModelClient",
     "SessionMismatchError", "SessionRecord",
+    "RunNotActiveError", "RunState", "SessionRun", "SessionRunIdentity", "StaleRunError",
+    "StoreOwnershipError",
     "Settings", "SnapshotReplaySource", "SnapshotResult", "SourceSettings", "Speaker", "Store",
     "StoreSettings", "TimeWindowSettings", "Transcript", "Turn", "attach_redacting_filter",
     "SessionSyncResult", "ingest_endpoint", "redact", "sync_session", "write_session_snapshot",
