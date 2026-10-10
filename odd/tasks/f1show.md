@@ -1403,6 +1403,37 @@ that a reader can see the two-persona commentary and a replay re-produces it.
    - **The recorder script is not committed.** It runs from `/tmp`; the provenance file records
      the exact requests so the recording is reproducible by hand. A committed recorder is a
      separate decision, not a side effect of this step.
+   **Recorded 2026-10-10.** Eight unauthenticated free-tier families, all HTTP 200 on the first
+   attempt, written verbatim into `fixtures/openf1/` with a provenance file: `sessions` 123,
+   `drivers` 20, `position` 403, `laps` 1059, `intervals` 21041, `pit` 23, `stints` 43 and
+   `race_control` 120 records — **3,599,681 bytes** total, eight of the twelve authorized requests,
+   minimum inter-request gap 0.764 s against the documented 3/s and 30/min. Session `session_key`
+   9617, Austin 2024-10-20 race, `meeting_key` 1247, chosen by the registered rule. The parent
+   re-verified integrity itself: every file parses as a JSON list, every on-disk SHA256 appears in
+   the provenance, the non-allowed trees are byte-identical, the index was empty and the paths are
+   not gitignored.
+   **The size gate was settled by measurement, not by preference.** `intervals` measured
+   **2,965,644 bytes**, above the pre-agreed ~2 MB family gate, and the writer **stopped and
+   reserved the decision** instead of trimming. The deciding fact was its own measurement: only
+   **1 of 21,041** rows predates the session start, so the documented `date>=` bound would remove a
+   single row. A bound that changes nothing is **worse than none**, because it looks like a
+   mitigation while doing nothing. Per-driver bounding would drop part of the grid — the opposite
+   of a regression corpus — and withholding would lose a family F04's acceptance names. So it stays
+   **whole and unreshaped**, with that reasoning recorded in the provenance file.
+   **Three shape facts carried into F04**, recorded both in the provenance and in
+   `docs/EXTERNAL-CONTRACTS.md`: there is **no uniform timestamp field** (`date` only on
+   `position`/`intervals`/`pit`/`race_control`, `date_start` on `sessions`/`laps`, and none at all
+   on `drivers`/`stints`); **`laps` has one null `date_start` out of 1059**, so no code may assume
+   every lap is dated; and free-tier history is a **snapshot**, so these hashes are point-in-time
+   rather than evergreen. The contract file was updated by the parent, as planned: the six newly
+   exercised paths are now asserted as **observed** while the remaining documented-only paths stay
+   explicitly unasserted.
+   Commits: fixtures `d5a1132`, contract update `a2e243c`. **Native review was deliberately skipped
+   for this unit**: the artifact is raw JSON plus a provenance document — non-executable data and
+   documentation — which is the passive case the provider's entry rule carves out, and running the
+   risk, resilience and reliability lenses over a recording would produce noise rather than signal.
+   That judgement is stated rather than hidden, and F04's own review will cover the code that
+   consumes these fixtures.
 2. **F04 — deterministic events.** A **subset of families** that the recorded fixtures can
    actually support, rather than all 18 endpoints. Deduplicate updates, keep evidence timestamps
    and source fields, and prove no false first-lap record and no inferred overtake from a position
@@ -1539,17 +1570,18 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **MVP step 1 — record the fixtures.** The auth hardening is closed (`8b17df2`, independent
-verification and burned native authority, three informational findings carried), so the granted
-fixture recording starts now: read-only, unauthenticated, free-tier, paced, one 2024 race session at
-or after the United States Grand Prix, eight endpoints, raw JSON plus a provenance file, with the
-recorder kept out of the repository. `docs/EXTERNAL-CONTRACTS.md` is updated by the parent once the
-shapes are known, and F04 follows over the families those fixtures actually support. Seven deferred
-items stay tracked as issues #3–#9; the user chose **free mode**, so nothing on the MVP path needs
-authenticated or real-time access. `main` stays at `2c83a150` and nothing from F03-cleanup or the MVP
-is published; the auth work sits on the feature branch awaiting its own publication decision.
-Housekeeping: the three-part ODD mirror has about 10 KB of headroom left, so a fourth record is
-coming soon.
+Active: **MVP step 2 — F04, deterministic events over the recorded fixtures.** Step 1 is complete:
+eight free-tier families recorded verbatim, integrity re-verified by the parent, the size gate
+closed by measurement, and the observed shapes and the six newly exercised paths now written into
+the external-contracts file. F04 starts from what the fixtures actually support, and it must honour
+the three recorded shape facts — no uniform timestamp field, one null `date_start` in `laps`, and
+point-in-time fixtures. The remaining MVP order is F04, then F08 against a fake provider with one
+separately granted real generation, then F09's two-person booth, then a thin single-process F10
+that prints a transcript. Seven deferred items stay tracked as issues #3–#9, the user chose **free
+mode**, and nothing on the MVP path needs authenticated or real-time access. `main` stays at
+`2c83a150`: the F03-cleanup work and the fixtures sit on the feature branch awaiting their own
+publication decision. Housekeeping: the three-part ODD mirror is down to roughly 6 KB of headroom,
+so the fourth record is now imminent.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
