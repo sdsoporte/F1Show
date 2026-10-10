@@ -1852,10 +1852,22 @@ No live call, credential or purchase was made for this unit.
   granted real generation that proves the wiring is still pending and is not claimed here.
 - **Integration handoff, agreed with the step-1/F04 session.** This track lives on
   `feat/f08-gemini-gateway`, cut from `0b1f0c7`. At integration **their version of this file wins**
-  and this block is re-applied with `git cherry-pick -n 11f78c8` during that resolution (their
-  document still carries the exact anchor, so it applies cleanly); `src/f1show/__init__.py` is the
-  only shared file and both changes are additive; the split Engram task mirror stays with them and
-  they fold this evidence in.
+  and this block is re-applied by cherry-picking this track's **three documentation commits**
+  (`11f78c8`, `f7e7412` and the one that adds the rules below) in order during that resolution
+  (their document still carries the exact anchor, so they apply cleanly in sequence);
+  `src/f1show/__init__.py` is the only shared file and both changes are additive; the split Engram
+  task mirror stays with them and they fold this evidence in.
+- **Two project rules this track produced, recorded here because an anecdote does not survive.**
+  (1) **A copy-based verification must prove which source it imported.** Two independent sessions hit
+  the same trap in one day: copying `.venv` bakes the original worktree's paths into the launcher, so
+  `pytest` silently imports the original package — the F04 track's re-verifier passed **23 tests in
+  false** before an import proof caught it, and this track's verifier discarded its first mutant runs
+  for the same reason. Any shadow or copy used for mutation must print the imported module path
+  (`inspect.getsourcefile`) before its results count. (2) **A lint claim must name its rule
+  selection or it is not evidence.** This repository commits no ruff configuration, so the effective
+  rule set lives outside it, in whatever selection each caller's harness provides: the same tree
+  either "passes all checks" or reports findings depending on that selection, and every
+  `# noqa: S105` directive reads as unused without `S` selected. Tracked in issue #7.
 
 ### F09 — Implement the two-person commentary booth
 
