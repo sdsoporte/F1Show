@@ -1242,6 +1242,38 @@ new real-service/model calls or automatic publication of the next source unit.
       fixed wall-clock wait, so a pathologically slow but correct exchange would fail as a
       hazard; for in-process fake-driven work that trade is accepted. A focused independent
       re-verification of these new bytes is in flight.
+      **Focused re-verification of the corrected bytes: PASS.** `mv2wv6hv-1f-lz4d` reproduced both
+      fixes independently: the corrected concurrency test failed in 5.15 s with the hazard-naming
+      message instead of hanging (exit 1, never exit 124) while the unmodified control passed in
+      0.38 s; and in a shadow with `_require_open()` removed from `post_form_json` the tightened
+      assertion failed on the wrapper's own message (`Actual message: 'FakeHttpClient is closed'`)
+      while the pristine control passed with the import proof. It confirmed 52 focused/548 full,
+      static cleanliness on the three paths, and judged the fixed 5 s bound a reasonable trade
+      (~12× headroom over a ~0.4 s control, with the only other wait test-controlled). It also
+      **misread one thing, and the parent caught it**: it reported a non-empty index, but a
+      re-check showed the index clean — the verifier had measured the worktree against HEAD while
+      a parent documentation edit was still uncommitted. The observation was real; the label was
+      not.
+      **Closed** as `30f4fa4fad54d708f0e47df013749341441ae2b5`, Conventional Commit
+      `feat(auth): add OAuth2 token handling and an authenticated HTTP client`, three paths
+      **+889/−0**; reviewed = staged = committed tree `06b15a031a7f960523786b5a87e25eacef228634`.
+      Native `review-aedd0260ee5d2fd7` was tiered **high** (hot path: authentication) and ran
+      **four lenses** — risk, resilience, readability, reliability. The first capture died with
+      `reviewer-empty-output` on `review-risk` (stopReason `stop`, 116 s, **nothing prepared,
+      nothing submitted, no mutation**); a fresh bound STATUS reoffered the byte-identical
+      four-lens group and the retry approved in 165 s with four reviewers prepared and submitted.
+      Exact bound STATUS/ack returned authority **burned**; consumed revision
+      `sha256:1bda6145f2cbfc6081a0666e73f8adb957b2f1f2ab28bc6383c6cbc494e58c5f`; never query it
+      again. **Fourteen informational findings, no correction opened and no bodies returned**
+      (six `WARNING`s, eight `SUGGESTION`s). They are carried as later work and **not**
+      reconstructed: `R1-001` auth.py:391-394, `R1-002` :263-264, `R1-003` :140-148,
+      `R3-001` :211-222, `R4-retry-amplification` :283-292 and `R4-stale-token` :305-311 are the
+      warnings; `R2-exchange-lifecycle` :272-295, `R2-post-except-raise` :168-173,
+      `R2-repr-secret-materialization` :193-200, `R3-002` :279-291, `R3-003` :282-288,
+      `R3-004` :405-415, `R3-005` :256-269 and `R4-transport-taxonomy` :325-335 are suggestions.
+      **The warnings cluster on authentication material, retry amplification and token staleness,
+      which is precisely the material that matters once this code runs against the live service**,
+      so retrieving those bodies is real later work rather than bookkeeping.
   Honest limit unchanged: without the paid subscription the real exchange, the real expiry
   behaviour and real live responses remain unverified; a fake transport proves only our
   handling, and live validation belongs to F13 under its own authorization.
@@ -1360,21 +1392,21 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03d-2 focused re-verification of the corrected test bytes**, then fresh native review
-and the exact-byte local unit commit, and only then its own separately authorized publication.
-The candidate is three paths — a new `auth.py`, a corrected `test_auth.py` and additive root
-exports — with 52 focused and **548** full tests green. Independent verification PASSED the first
-bytes and reported a confirmed hang hazard plus one surviving mutant; the test-only correction
-closed both with load-bearing proofs, and a focused re-verification is confirming them now.
-ASSESS is unassessable for the undeclared new files, so its mandatory high-risk plan governs.
-The parent confirmed the auth client's ownership reading against the real `request_policy.py`
-precedent. F03c and F03d-1 are already merged into `main` through PR #1 (`77f22466`); none of
-these bytes are in `main` and they will not reach it without their own verification, approval and
-authorization. Carried, not fixed: pre-existing `tests/test_fakes.py` and `conftest.py` findings,
-base lint findings, the unverified Python 3.12 floor, the unverified POST-retry assumption,
-scripted-only race coverage, the unreachable generation branch, probes-only CI gaps, the
-caller-owns-its-composition caveat, and informational native suggestions whose bodies were never
-returned. Forecast calibration remains a standing concern. F04 onward remains unauthorized.
+Active: **F03 complete; F03d-2 closed locally and awaiting its own publication decision.**
+Every F03 unit is now closed: `F03a`, `F03b`/`F03b-1`, `F03c-1`, `F03c-2`, `F03c-3a`, `F03c-3b`,
+`F03c-4`, `F03d-1` and `F03d-2`, each with its own independent verification, native approval and
+exact-tree local commit. `F03c` and `F03d-1` are merged into `main` through PR #1 (`77f22466`);
+F03d-2 source `30f4fa4` plus two documentation commits (`620eb8c`, `b773217`) sit on the feature
+branch and are **not** in `main`. Publishing them is a separate human decision, exactly as the
+previous push and merge were. ASSESS is unassessable for candidates with undeclared new files, so
+that mandatory high-risk plan governs each such unit. Carried, not fixed: the fourteen
+informational F03d-2 findings above (six warnings), pre-existing `tests/test_fakes.py` and
+`conftest.py` findings, base lint findings, the unverified Python 3.12 floor, the unverified
+POST-retry assumption, scripted-only race coverage, the F03c-4 generation branch unreachable by
+the public API, probes-only CI gaps, the caller-owns-its-composition caveat, and the earlier
+informational advisories whose bodies were never returned. Forecast calibration remains a
+standing concern. **F04 onward stays unauthorized**, and no live, purchase, subscription or
+model call has been made or is implied by this work.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
