@@ -26,6 +26,7 @@ reason it has none. Nothing is coerced to ``0`` or silently dropped.
 from __future__ import annotations
 
 import datetime as dt
+import json
 import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
@@ -183,6 +184,42 @@ def _as_instant(value: object) -> dt.datetime | None:
     return parsed
 
 
+def _canonical_rendering(value: object) -> str:
+    """A deterministic text form of a value that cannot be hashed.
+
+    ``sort_keys=True`` makes two equal dicts with different key order render
+    identically, and ``default=repr`` covers anything JSON cannot encode. Some
+    values a corrupt payload can hold are not renderable at all -- mixed-type
+    dict keys make ``sort_keys`` raise and a self-referencing value makes the
+    encoder raise -- so those fall back to ``repr`` instead of aborting the
+    collection.
+    """
+    try:
+        return json.dumps(value, sort_keys=True, default=repr)
+    except (TypeError, ValueError):
+        return repr(value)
+
+
+def _identity_token(value: object) -> tuple[str, object]:
+    """A hashable, type-tagged stand-in for one identity field value.
+
+    The dedup key is a set element, so it has to be hashable for every value the
+    declared ``Mapping[str, object]`` signature admits; a list or dict identity
+    value used to raise ``TypeError`` and abort the whole collection. The token
+    keeps the value when it is hashable and a canonical rendering when it is
+    not, so equal corrupt payloads still deduplicate. Tagging the type also
+    separates values that compare equal across types (``1``, ``True``, ``"1"``),
+    which the raw key conflated. The token is only ever compared: the recorded
+    value stays raw in the event evidence.
+    """
+    type_name = type(value).__name__
+    try:
+        hash(value)
+    except TypeError:
+        return (type_name, _canonical_rendering(value))
+    return (type_name, value)
+
+
 def classify_gap(raw: object) -> GapReading:
     """Classify one raw ``gap_to_leader`` or ``interval`` value.
 
@@ -227,7 +264,10 @@ def collect_session_events(
     families in :data:`FAMILY_ORDER` are read and a record whose ``session_key``
     is not ``session_key`` is not attributed. Records of the same family that
     share both their source identity and their observation time are one repeated
-    update and yield one event, the first occurrence.
+    update and yield one event, the first occurrence. Identity values are
+    compared type-tagged, so ``1``, ``True`` and ``"1"`` are three identities
+    and a corrupt list or dict value is deduplicated by its rendered value
+    instead of raising.
 
     **Total order.** Events with a known timestamp come first, sorted by
     ``(timestamp_value, family_rank, record_index)``; events with no timestamp
@@ -248,7 +288,9 @@ def collect_session_events(
                 if timestamp_field is not None
                 else None
             )
-            identity = tuple(record.get(field) for field in _IDENTITY_FIELDS[family])
+            identity = tuple(
+                _identity_token(record.get(field)) for field in _IDENTITY_FIELDS[family]
+            )
             dedup_key = (family, identity, timestamp_field, timestamp_value)
             if dedup_key in seen:
                 continue

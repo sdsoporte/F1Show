@@ -10,6 +10,7 @@ events, and it makes no claim the fixtures cannot support.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -359,3 +360,122 @@ def test_hostile_gap_inputs_keep_their_classification_and_never_raise() -> None:
             assert (reading.seconds, reading.laps) == (None, None), raw
         if reading.kind is GapKind.LAPS:
             assert reading.laps == 1, raw
+
+
+#: Identity values the declared ``Mapping[str, object]`` signature admits and a
+#: JSON payload can carry, but that cannot be set elements. The dedup key built
+#: from them used to raise ``TypeError`` and abort the whole collection — the
+#: same defect class as the oversized-gap overflow above: a corrupt payload
+#: crashed the collector instead of staying an explicit, tolerated unknown.
+#: The fix is a type-tagged identity token for the key only; the recorded value
+#: stays raw in the event evidence, and no record is validated away.
+RECORDED_STREAM_SHA256 = "bb84513800066d50003b90ff0d59d34cb4f9c21d3707f0f18ea6271c0520ed5d"
+
+
+def stream_sha256(stream: tuple[DetectedEvent, ...]) -> str:
+    """A stable fingerprint of a whole event stream, evidence included."""
+    return hashlib.sha256(as_json(stream).encode("utf-8")).hexdigest()
+
+
+def position_record(driver_number: object, position: int = 7) -> dict[str, object]:
+    return {
+        "session_key": SESSION_KEY,
+        "driver_number": driver_number,
+        "date": "2024-10-20T19:00:00+00:00",
+        "position": position,
+    }
+
+
+def race_control_record(message: object) -> dict[str, object]:
+    return {
+        "session_key": SESSION_KEY,
+        "category": "Other",
+        "message": message,
+        "date": "2024-10-20T19:00:00+00:00",
+    }
+
+
+def test_recorded_stream_matches_the_pre_fix_reference_and_its_boundaries() -> None:
+    # Measured on the pre-fix source over the same recorded bytes: identity
+    # tokenization may change the dedup key, never the emitted stream.
+    collected = events()
+    assert len(collected) == 1648
+    assert Counter(event.family for event in collected) == RECORDED_FAMILY_COUNTS
+    first = collected[0]
+    assert (first.family, first.record_index, first.driver_number) == ("position", 0, 4)
+    assert first.timestamp_value == dt.datetime(2024, 10, 20, 18, 6, 48, 657000, tzinfo=UTC)
+    last = collected[-1]
+    assert (last.family, last.record_index, last.driver_number) == ("stints", 42, 31)
+    assert last.timestamp_value is None
+    assert stream_sha256(collected) == RECORDED_STREAM_SHA256
+
+
+def test_list_valued_identity_field_emits_its_event_instead_of_raising() -> None:
+    record = position_record([1, 2])
+    collected = collect_session_events(SESSION_KEY, {"position": [record]})
+    assert len(collected) == 1
+    assert (collected[0].family, collected[0].event_type) == (
+        "position", EventType.POSITION_CHANGE,
+    )
+    assert collected[0].record_index == 0
+    assert collected[0].evidence["position"] == 7
+    # The corrupt record is collected, not sanitised or dropped in place.
+    assert record["driver_number"] == [1, 2]
+
+
+def test_dict_valued_identity_field_emits_its_event_and_keeps_the_raw_value() -> None:
+    collected = collect_session_events(
+        SESSION_KEY, {"race_control": [race_control_record({"a": 1})]}
+    )
+    assert len(collected) == 1
+    assert collected[0].event_type is EventType.RACE_CONTROL
+    assert collected[0].evidence["message"] == {"a": 1}
+
+
+def test_identical_corrupt_records_deduplicate_to_one_event() -> None:
+    # Two distinct but equal payloads: dedup must follow the value, not the object.
+    first = race_control_record({"a": [1, 2]})
+    second = race_control_record({"a": [1, 2]})
+    assert first["message"] is not second["message"]
+    repeated = collect_session_events(SESSION_KEY, {"race_control": [first, second]})
+    assert len(repeated) == 1
+    assert repeated[0].record_index == 0
+
+
+def test_dict_identity_with_reordered_keys_deduplicates_to_one_identity() -> None:
+    first = race_control_record({"a": 1, "b": 2})
+    reordered = race_control_record({"b": 2, "a": 1})
+    collected = collect_session_events(SESSION_KEY, {"race_control": [first, reordered]})
+    assert len(collected) == 1
+    assert collected[0].record_index == 0
+
+
+def test_int_true_and_string_one_are_distinct_identities() -> None:
+    collected = collect_session_events(
+        SESSION_KEY,
+        {"position": [
+            position_record(1, position=10),
+            position_record(True, position=11),
+            position_record("1", position=12),
+        ]},
+    )
+    assert [event.record_index for event in collected] == [0, 1, 2]
+    # ``True`` and ``"1"`` are not integers, so they stay explicit unknowns.
+    assert [event.driver_number for event in collected] == [1, None, None]
+
+
+def test_distinct_corrupt_identity_values_do_not_deduplicate() -> None:
+    collected = collect_session_events(
+        SESSION_KEY,
+        {"position": [position_record([1, 2]), position_record([1, 3])]},
+    )
+    assert [event.record_index for event in collected] == [0, 1]
+
+
+def test_dict_identity_with_unorderable_keys_still_emits_an_event() -> None:
+    # A mixed-type key set makes ``sort_keys=True`` raise on its own; the token
+    # still has to be stable and hashable for a value the signature admits.
+    message = {1: "a", "b": 2}
+    collected = collect_session_events(SESSION_KEY, {"race_control": [race_control_record(message)]})
+    assert len(collected) == 1
+    assert collected[0].evidence["message"] == {1: "a", "b": 2}
