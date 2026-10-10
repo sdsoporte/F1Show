@@ -93,8 +93,16 @@ event-driven live consumption possible at all — see the
 `race control`, `sessions`, `session result`, `starting grid`, `stints`,
 `team radio`, `weather`.
 
-These are the documented names as published. Only `/v1/sessions` and `/v1/drivers`
-were exercised in this validation, so no other URL path is asserted here.
+These are the documented names as published. During the original validation only
+`/v1/sessions` and `/v1/drivers` were exercised, so no other URL path was asserted.
+
+**Later, exercised.** The MVP fixture recording (2026-10-10, see [the recording
+section](#mvp-fixture-recording-2026-10-10)) additionally exercised `/v1/position`, `/v1/laps`,
+`/v1/intervals`, `/v1/pit`, `/v1/stints` and `/v1/race_control`, so those six paths are now
+asserted as **observed** rather than only documented. The remaining paths — `car_data`,
+`location`, `meetings`, `overtakes`, `session_result`, `starting_grid`, `team_radio`,
+`weather`, `championship_drivers` and `championship_teams` — remain documented-only and are
+**not** asserted here.
 
 ### Documented cadence and availability
 
@@ -117,9 +125,11 @@ processing and a model call is what a live commentary consumer actually experien
 
 ### Observed requests
 
-Both observations below were executed unauthenticated against historical data during
-validation. They are the only two OpenF1 response shapes this project has seen
-first-hand, and they are the reason the identity mapping exists at all.
+The observations below were executed unauthenticated against historical data. The first two
+came from the original validation; the third is the MVP fixture recording. Together they are
+the OpenF1 response shapes this project has seen first-hand, and the first two are the reason
+the identity mapping exists at all. Nothing here was authenticated, and nothing here proves
+anything about live behaviour.
 
 #### Sessions, 2024 season
 
@@ -164,6 +174,41 @@ is the whole reason the identity mapping below has to be built rather than looke
 up.
 
 ## Jolpica / Ergast-compatible archive
+
+#### MVP fixture recording, 2026-10-10
+
+**OBSERVED (unauthenticated free tier).** Eight families were recorded for one race session into
+[`fixtures/openf1/`](../fixtures/openf1/PROVENANCE.md), which carries the per-endpoint URL, HTTP
+status, byte size, SHA256, record count and request timestamp. The session is `session_key` 9617
+(Austin, 2024-10-20, `meeting_key` 1247), chosen as the earliest 2024 race on or after the United
+States Grand Prix, because `pit.stop_duration` exists only from that event onwards.
+
+```text
+GET https://api.openf1.org/v1/sessions?year=2024             → 200,   123 records
+GET https://api.openf1.org/v1/drivers?session_key=9617       → 200,    20 records
+GET https://api.openf1.org/v1/position?session_key=9617      → 200,   403 records
+GET https://api.openf1.org/v1/laps?session_key=9617          → 200,  1059 records
+GET https://api.openf1.org/v1/intervals?session_key=9617     → 200, 21041 records
+GET https://api.openf1.org/v1/pit?session_key=9617           → 200,    23 records
+GET https://api.openf1.org/v1/stints?session_key=9617        → 200,    43 records
+GET https://api.openf1.org/v1/race_control?session_key=9617  → 200,   120 records
+```
+
+Three shape facts that constrain any consumer, recorded because they surprised the recording:
+
+- **There is no uniform timestamp field.** Only `position`, `intervals`, `pit` and `race_control`
+  carry `date`; `sessions` and `laps` carry `date_start`; `drivers` and `stints` carry no
+  timestamp field at all.
+- **`laps` is not uniformly dated:** 1058 of 1059 records carry `date_start` and one is null, so
+  no code may assume every lap has a date.
+- **`intervals` is by far the largest family** — 2,965,644 bytes for 21,041 records, roughly one
+  sample per driver per six seconds. Only 1 of those rows predates the session start, so the
+  volume is genuine race-window sampling rather than padding, and a `date>=` bound would remove a
+  single row. It is therefore kept whole rather than bounded to look smaller.
+
+**Point-in-time, not evergreen.** Free-tier history is a snapshot and upstream may revise a past
+session's payload, so these hashes describe what was served on that date and nothing more. No
+fixture here proves anything about live or authenticated behaviour.
 
 ### Base URL and role
 
