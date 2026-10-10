@@ -2,8 +2,12 @@
 
 The public surface is the typed configuration, the secret-safe logging helpers,
 the shared contracts (events, enrichment and dialogue), the injection boundaries
-(the ports plus their shipped in-memory test doubles) and the session fixtures:
-immutable parquet snapshots plus the deterministic replay source that reads them.
+(the ports plus their shipped in-memory test doubles), the session fixtures
+(immutable parquet snapshots plus the deterministic replay source that reads them)
+and, from F08, the Gemini gateway: the thin SDK adapter, the safeguards over any
+model client, the measured usage record and the typed model failures. Measured
+model usage is reported, never enforced: it is not a hard spend limit and no cost
+stop exists before F13.
 """
 
 from __future__ import annotations
@@ -59,6 +63,17 @@ from f1show.fakes import (
     InMemoryBus,
     InMemoryStore,
     ScriptedModelClient,
+)
+from f1show.gemini import (
+    GoogleGenAIClient,
+    ModelError,
+    ModelRateLimitedError,
+    ModelResponseError,
+    ModelServerError,
+    ModelTimeoutError,
+    ModelTransportError,
+    ModelUsage,
+    SafeguardedModelClient,
 )
 from f1show.http import HttpxJsonClient
 from f1show.ingest import EndpointOutcome, SessionSyncResult, ingest_endpoint, sync_session
@@ -118,4 +133,8 @@ __all__ = [
     "AuthenticatedHttpClient", "OpenF1TokenProvider", "TokenDecodeError", "TokenExchangeError",
     "TokenPayload", "TokenPayloadError", "TokenTransportError", "parse_token_payload",
     "DetectedEvent", "GapKind", "GapReading", "classify_gap", "collect_session_events",
+    # F08: the Gemini gateway, its safeguards, its usage record and its typed failures.
+    "GoogleGenAIClient", "SafeguardedModelClient", "ModelUsage", "ModelError",
+    "ModelTimeoutError", "ModelRateLimitedError", "ModelServerError", "ModelTransportError",
+    "ModelResponseError",
 ]
