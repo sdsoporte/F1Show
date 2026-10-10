@@ -770,12 +770,29 @@ new real-service/model calls or automatic publication of the next source unit.
       (module 266/test 595; exports +3/−1), source and root pins unchanged.
       SHA256: ingest `d86b48ff5151324258088404cfb566878a7269b4759c4f2f444b3d5d170513c9`,
       test `e50229ea765f9159997bb879ed96e283406ed834a1726cb116e4d8129606b66b`.
-      Worker reran 48/358; independent functional corroboration still pending.
-      Parent active LSP: three expected negative-call errors cleared; pre-existing root
-      `SnapshotResult` warning and auxiliary `NED` fixture spelling carried, no API weakening.
-      Cached Ruff/Pyright paths supplied for reproduction; harness config is not project CI.
-      ASSESS again unassessable for new files: independent high-risk verification mandatory.
-      No acceptance, native lineage, source commit or new push; 3b stays pending.
+      Independent `mv2jke8c-13-znju` **PASS**: 48 focused/358 full on Python 3.14.4;
+      exact scope/pins/index unchanged before/after; control2 39 passed (33 + proof + 6 probes).
+      Nine isolated semantic mutant runs: **8/8 viable assertion-killed**, zero collection
+      errors; one equivalent claimed-ID mutant excluded because model `extra="ignore"`
+      removes `record_id` before projection. A viable driver-ID prefix mutant was killed.
+      Other killed changes: mixed-session acceptance, first-row-only validation, checkpoint
+      before write, second Clock read, skipped empty checkpoint, swallowed cancellation,
+      zero rather than unknown write-failure count. Same-process import proof recorded.
+      **Probes only, not shipped CI tests:** empty checkpoint from a distinct prior stamp,
+      checkpoint-await cancellation, direct-await KI/SystemExit, no-prior-watermark write
+      failure, drivers input immutability/mixed-session refusal. No concurrent/crash proof.
+      Direct await establishes process-control propagation at ingestion; nested-task cancel
+      observations do not prove KI conversion or ingestion swallowing. No historical RED added.
+      Logs: `/tmp/f03c3a_verify/{focused,full,control2}.log`, `mut_*/result.log` and probes.
+      Parent active LSP: no new primary errors; base `SnapshotResult` warning/NED typo carried.
+      Ruff 0.16.3/harness config: new module/test clean; root I001 reproduced at HEAD.
+      Exact worker Pyright 3.12 command **with CLI `-t` typeshed** corroborated: test 0/0.
+      Its no-venv config on all three files has one unresolved pydantic import + base warning;
+      dependency-aware verifier config (venv/3.13/explicit typeshed) gives 0 errors/base warning.
+      Omitting `-t` caused resolution artifacts, not proof 3.12/Pyright unsupported. No project
+      lint config added; declared Python 3.12 runtime floor remains untested.
+      ASSESS was unassessable for new files; mandatory independent high-risk path completed.
+      Fresh native review and exact-byte local commit pending; no 3a acceptance/new push.
       Surfaces: new `src/f1show/ingest.py`, new `tests/test_ingest.py`, additive exports only
       in `src/f1show/__init__.py`. Other source/tests/config/ports/fakes remain untouched.
       Public `ingest_endpoint(store, clock, *, endpoint, session_key, payload)` supports
@@ -934,12 +951,10 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03c-3a independent scope, functional and adversarial verification.**
-Negative-input annotations are comment-only and parent-corroborated; writer reports
-48 focused/358 full and scaffold assertion RED. Candidate 865 diff lines on three paths.
-Independent verifier must establish pipeline/partial-outcome/checkpoint invariants and
-mutation efficacy. Native review/local commit follow PASS; no source acceptance or new
-push yet. F03c-3b HTTP composition waits for 3a closure.
+Active: **F03c-3a fresh native review**, after independent PASS (48 focused/358 full),
+8/8 viable mutation kills and six extra probes; some assertions remain probes-only, not CI.
+Candidate 865 diff lines on three paths; reviewed-byte local unit commit follows approval.
+No acceptance or new push yet. F03c-3b HTTP composition waits for 3a native/local closure.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
