@@ -618,7 +618,7 @@ and purchases are not authorized by these grants.
     Estimate 450–650 diff lines; verify hard timeout, bounded JSON body, status/header
     visibility, malformed success vs non-JSON error response, no implicit credentials,
     deep-copy parity and idempotent close. No retry implementation in this unit.
-  - **F03c-2 — Pacing/retries. Implementation returned; independent verification pending.**
+  - **F03c-2 — Pacing/retries. Independent verification FAILED; correction in progress.**
     User explicitly authorized: "ok, continua con F03c-2". Existing plan and allowed
     surfaces preceded source writes; no new dependency, config wiring or live calls.
     Separate `MonotonicClock.monotonic()/sleep()` from UTC `Clock.now()`: the shared
@@ -643,8 +643,35 @@ and purchases are not authorized by these grants.
     estimate exceeded by the required test matrix; tests must not be trimmed to fit it.
     ASSESS is unassessable until new files are declared natively; its returned high-risk
     fallback requires independent command-running verification before acceptance.
-    Functional adversarial checks, scope/hash checks, applicable diagnostics, native review,
-    exact acknowledgement and a local Conventional Commit remain pending. No push.
+    **Independent verifier `mv2f7w1r-w-x88s`: FAIL on two proven defects.** Observed
+    focused 115/full 313, +924/−3 = 927, all eight source pins unchanged and index empty.
+    Both rolling windows (half-open intervals), shared/concurrent endpoint budgets,
+    early-wake recomputation, cancellation, response/error identity and fake/adapter parity
+    passed. Six isolated mutations were killed; they are efficacy evidence, not historical RED.
+    D1: RFC-valid delay-seconds with 309+ digits overflows `float()` to infinity, becomes
+    absent advice and retries after 0.5s instead of returning the over-budget response
+    (`request_policy.py:293-294`; `/tmp/f03c2_probe/probe1_retry_after.py`).
+    D2: multiplying by `2**(failed_attempt-1)` before capping raises `OverflowError` at
+    failed attempt 1025 with max_attempts 1100, replacing the promised typed transport
+    error (`request_policy.py:263`; `/tmp/f03c2_probe/probe3_retries.py`).
+    - [ ] **F03c-2-R1 — Preserve huge server advice and cap exponential arithmetic safely.**
+      Continue one bounded writer on only `src/f1show/request_policy.py` and
+      `tests/test_request_policy.py`. First add regressions and observe actual assertion/
+      operation failures on the current defective bytes; collection failure is not RED.
+      Valid integer server advice must never become absent through overflow or Python's
+      integer-string digit limit; include long leading-zero and all-zero forms. Backoff
+      must reach its existing cap without first evaluating an overflowing exponential.
+      Preserve existing defaults, status-as-data, exception identity, cancellation, both
+      windows and parity; do not trim tests or fix unrelated advisories. Reverify the new
+      bytes independently before fresh native inspect/START/acknowledgement/local commit.
+    Child static tools were unavailable, but a parent active LSP probe covered all seven
+    changed paths: four primary findings (pre-existing root `SnapshotResult` export warning
+    and three errors in untouched fake tests), plus auxiliary Protocol-ellipsis/numeric-
+    parse/typo findings. This is not a clean static result; no tools were installed.
+    `SnapshotResult` missing from root imports is pre-existing at HEAD and HEAD~1 and
+    stays a separate follow-up. Concurrent close-vs-wait semantics remain unspecified;
+    neither observation silently expands this corrective unit. Native review, exact
+    acknowledgement and a local source commit remain pending; no lineage started, no push.
   - **F03c-3 — Ingest/checkpoints. Pending.** Validate whole endpoint batch and session
     before mutation; data commit precedes observation checkpoint. A failed checkpoint
     allows idempotent repeat. Valid empty arrays advance the successful observation
@@ -777,10 +804,12 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03c-2 independent verification pending** after the bounded writer returned.
+Active: **F03c-2-R1 correction in progress** after independent verification proved two
+numeric overflow defects despite focused 115/full 313 passing. Keep this unit unaccepted.
 F03c-1 is closed at `32a55aa`; do not reuse or query its burned review lineage.
-Observe independent functional/scope checks on F03c-2, then native review/acknowledgement
-and an exact reviewed-byte local commit before marking this work unit done.
+Observe genuine corrective RED/GREEN and independent reverification on the changed bytes,
+then fresh native review/acknowledgement and an exact reviewed-byte local commit.
+The earlier ready preflight was for the defective candidate; no F03c-2 lineage exists.
 Publication of F03c remains a separate human decision.
 F03c-3/4 and F03d injectable live seam remain pending and authorized for implementation.
 Their publication is a separate decision. F04 onward requires a new implementation grant.
