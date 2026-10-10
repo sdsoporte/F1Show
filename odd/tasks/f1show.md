@@ -581,6 +581,36 @@ and purchases are not authorized by these grants.
     and type-only annotation, and the mutation round must prove the guarantee survived.
     Whole candidate is now +1606/−17 = **1,623 diff lines** against `b592ae5`. Static
     checks remain unverified except two cleared pi-lens I001 findings.
+    **R2 independently re-verified: PASS on every criterion, no open defect.** Verifier
+    `mv1ujie7-u-cl34` recomputed +1606/−17 = 1,623; focused 100 / full 247; the prior probe
+    set held (worst case 0.602 s at timeout 0.3; sync closer 1.000 s documented; no
+    `create_task` in `src`). The new normalization passed a raw-vs-typed matrix in both
+    directions: foreign send and read errors become typed with the cause preserved, malformed
+    JSON stays `HttpDecodeError`, an over-bound body stays `HttpResponseTooLargeError`, the
+    privileged base exceptions propagate raw, and close detection demonstrably precedes
+    normalization. Five mutations of the new machinery were all caught (predicate disabled,
+    cause chain dropped, allowance cap removed, reclassification disabled, note dropped), and
+    the adapted test retained every R1 guarantee. Ruff is genuinely unavailable on this
+    machine, so the I001 formatting claim is the one item that stays unverified.
+    **Native review approved and burned.** A plain START created lineage
+    `review-28a0fc5740cbe93d` (medium, seven files, 1,623 lines, one lens
+    `review-reliability`, correction budget 200). Lesson recorded: passing `lineageId` to a
+    NEW ordinary START projected only the five tracked files and its consent binding expired;
+    `lineageId` belongs to status/advance, not to a fresh start. Forecast: one model run over
+    `pi_host_relay`. The first reviewer run failed `pi-host-relay-transport-failure` /
+    `reviewer-empty-output` (`stopReason: length`, 604 s, no mutation, no findings); fresh
+    STATUS reoffered the same slot, and the retry closed `approved`. Acknowledgement burned
+    authority: consumed revision `sha256:feea4e3e…`, `burn_evidence
+    gentle-ai.review-acknowledged/v1`, delivery under ordinary repository policy. No STATUS
+    was issued after the burn.
+    **Committed as `32a55aa7949a38408163618772922b5ae2115aca`.** `git write-tree` before the
+    commit and the commit tree both equal the reviewed tree
+    `9b92cacdbaa82880722385cba752654897150a97`, so the reviewed bytes are exactly the
+    committed bytes: seven files, +1606/−17. Not pushed.
+    Three informational advisories carried as separate later work, none blocking and none
+    reopening this review; the closure envelope named them without descriptions:
+    `R3-001` (`src/f1show/http.py:286-293`, WARNING), `R3-002` (`src/f1show/fakes.py:81-85`,
+    SUGGESTION), `R3-003` (`src/f1show/http.py:186-190`, SUGGESTION).
     Grow the single `get_json` contract to a typed status/headers/payload response;
     migrate the fake, add scripted outcomes,
     an owned httpx adapter and shared parity tests. Clock stays unchanged. Scope:
@@ -724,9 +754,9 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: F03c-1-R2 independent re-verification `mv1ujie7-u-cl34` of the new bytes,
-within the first historical-sync work unit. Acceptance still needs that round, native
-review and a local work-unit commit.
+Active: F03c-1 closed — the HTTP transport is reviewed, approved and committed as
+`32a55aa`. Next is F03c-2, monotonic pacing and bounded retry over the now-typed errors.
+Publication of F03c remains a separate human decision.
 F03c-2..4 and F03d injectable live seam remain pending and authorized for implementation.
 Their publication is a separate decision. F04 onward requires a new implementation grant.
 
