@@ -618,7 +618,7 @@ and purchases are not authorized by these grants.
     Estimate 450–650 diff lines; verify hard timeout, bounded JSON body, status/header
     visibility, malformed success vs non-JSON error response, no implicit credentials,
     deep-copy parity and idempotent close. No retry implementation in this unit.
-  - **F03c-2 — Pacing/retries. Independently verified; native review/local commit pending.**
+  - **F03c-2 — Pacing/retries. Done, reviewed and locally committed.**
     User explicitly authorized: "ok, continua con F03c-2". Existing plan and allowed
     surfaces preceded source writes; no new dependency, config wiring or live calls.
     Separate `MonotonicClock.monotonic()/sleep()` from UTC `Clock.now()`: the shared
@@ -654,8 +654,8 @@ and purchases are not authorized by these grants.
     D2: multiplying by `2**(failed_attempt-1)` before capping raises `OverflowError` at
     failed attempt 1025 with max_attempts 1100, replacing the promised typed transport
     error (`request_policy.py:263`; `/tmp/f03c2_probe/probe3_retries.py`).
-    - [ ] **F03c-2-R1 — Preserve huge server advice and cap exponential arithmetic safely.**
-      Independent functional verification passed; native review and unit commit pending.
+    - [x] **F03c-2-R1 — Preserve huge server advice and cap exponential arithmetic safely.**
+      Independent functional verification, native closure and exact-byte unit commit observed.
       Continue one bounded writer on only `src/f1show/request_policy.py` and
       `tests/test_request_policy.py`. First add regressions and observe actual assertion/
       operation failures on the current defective bytes; collection failure is not RED.
@@ -706,8 +706,23 @@ and purchases are not authorized by these grants.
     parse/typo findings. This is not a clean static result; no tools were installed.
     `SnapshotResult` missing from root imports is pre-existing at HEAD and HEAD~1 and
     stays a separate follow-up. Concurrent close-vs-wait semantics remain unspecified;
-    neither observation silently expands this corrective unit. Native review, exact
-    acknowledgement and a local source commit remain pending; no lineage started, no push.
+    neither observation silently expands this corrective unit.
+    **Native review approved and exactly acknowledged; authority burned.** Fresh inspect
+    selected both new files; plain ordinary START created `review-23515ec290540af0`
+    (medium, seven files, 1142 lines, one `review-reliability` lens, correction budget 200).
+    Forecast of one model run over `pi_host_relay` was relayed before capture. The first
+    run prepared/submitted one reviewer and closed approved; no retry/correction needed.
+    Fresh bound STATUS offered the exact acknowledgement; its returned envelope consumed
+    revision `sha256:407096f0481044d71031c2c52742a7d561d1d5f1603ba5834340976963ad3731`,
+    authority `burned`, evidence `gentle-ai.review-acknowledged/v1`. No STATUS after burn.
+    **Source unit committed as `badfa5421153d04f4c27cf0d3a9b86c8d2f03386`**, message
+    `feat(http): add global pacing and bounded retry`. Reviewed tree, staged `git write-tree`
+    and committed tree all exactly `d4f44ce8dbd085316e1b74eb68d6452e1cdea13f`; seven files,
+    +1139/−3. Post-commit worktree clean. No push, PR, merge or main update.
+    Three informational native suggestions, descriptions absent from the closure envelope,
+    registered for separate later work and never reasons to reopen this approved candidate:
+    `R3-1` (`request_policy.py:109-122`), `R3-2` (`fakes.py:63-71`),
+    `R3-3` (`request_policy.py:314-322`), all SUGGESTION/non-blocking.
   - **F03c-3 — Ingest/checkpoints. Pending.** Validate whole endpoint batch and session
     before mutation; data commit precedes observation checkpoint. A failed checkpoint
     allows idempotent repeat. Valid empty arrays advance the successful observation
@@ -840,13 +855,13 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03c-2 native review and local work-unit commit pending.** Independent R1
-reverification passed on the pinned bytes: 127 focused/325 full, both original defects
-fixed, five faithful behavioral mutants killed, no open functional defect.
-Keep the unit unchecked until native closure and the exact reviewed-byte commit.
-F03c-1 is closed at `32a55aa`; do not reuse or query its burned review lineage.
-Run fresh inspect with both intended new files, ordinary START without `lineageId`, exact
-capture/acknowledgement and reviewed-tree-matching commit. No F03c-2 lineage exists yet.
+Next: **F03c-3 ingestion/checkpoints**, authorized and pending. F03c-2 is closed at
+`badfa54`: independently verified 127 focused/325 full, both numeric defects fixed,
+five faithful behavioral mutants killed, native approved/acknowledged and exact tree match.
+F03c-1 (`32a55aa`) and F03c-2 review authorities are burned; never query/reuse them.
+Three new non-blocking suggestions and existing static/edge observations remain separate.
+Plan the next unit before source writes: whole-endpoint/session validation, record commit
+before observation checkpoint, idempotent repeat and explicit partial per-endpoint outcomes.
 Publication of F03c remains a separate human decision.
 F03c-3/4 and F03d injectable live seam remain pending and authorized for implementation.
 Their publication is a separate decision. F04 onward requires a new implementation grant.
