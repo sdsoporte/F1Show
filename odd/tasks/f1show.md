@@ -19,6 +19,12 @@ must come from native review; `main` must not change. F04–F13 implementation, 
 of later units, pull requests, merges, deployment, authenticated/live API or model calls
 and purchases are not authorized by these grants.
 
+On 2026-10-10 the user explicitly requested: "ok, procede con el push, revisa la tres
+sugerencias y luego procede con F03c-3". That authorizes a normal feature-branch push of
+the reviewed F03c-1/F03c-2 advance, read-only examination of the three latest suggestions,
+then F03c-3 implementation. It does not authorize advisory fixes, force-push, main/PR/merge,
+new real-service/model calls or automatic publication of the next source unit.
+
 ## Baseline and decisions
 
 - Workspace: `F1Show`; local Git repository, `main` created at the bootstrap commit.
@@ -33,6 +39,9 @@ and purchases are not authorized by these grants.
   local `main` and `origin/main` both resolve to that tip. The separately authorized
   F03a + F03b + F03b-1 advance is published on `origin/feat/f03-source-adapters`
   through `3ec02ea`; `git ls-remote` matched the local commit exactly. Main was unchanged.
+  On 2026-10-10 a normal feature push published the 14 later commits through `3f52c33`,
+  including native-approved source units `32a55aa` and `badfa54`. Before/after remote
+  checks matched `3f52c33889dd02ab63eecfce1880a0cc8f448fb5`; remote main stayed `fc30084`.
 - **Branch chain.** `feat/f1show-bootstrap` (F00–F01) → `feat/f02-python-foundation`
   (F02) → `feat/f03-source-adapters` (F03), each cut from the branch that had already
   landed, so a slice is never reviewed as part of an accumulated chain.
@@ -523,7 +532,9 @@ and purchases are not authorized by these grants.
   needs an explicit, evidenced family adapter. No cross-family atomicity is promised.
   Four bounded units, planned before source writes; roughly 1,450–2,250 authored diff
   lines total, split by behavior, not a hard limit. Existing auto-chain/feature-branch
-  strategy applies; **no F03c push is authorized**. One writer; tests-first offline.
+  strategy applies; **no F03c push was authorized by the original planning grant**.
+  The later F03c-1/F03c-2 publication grant and proof are recorded below; F03c-3 publication
+  remains separately gated. One writer; tests-first offline.
   - **F03c-1 — HTTP response/adapter. Done, reviewed and locally committed.**
     Independent verifier `mv1ir20g-n-ov7w`: 86 focused/233 full tests PASS, but FAIL on
     primary-error masking, raw cleanup-only errors and unbounded close after deadline/
@@ -723,7 +734,22 @@ and purchases are not authorized by these grants.
     registered for separate later work and never reasons to reopen this approved candidate:
     `R3-1` (`request_policy.py:109-122`), `R3-2` (`fakes.py:63-71`),
     `R3-3` (`request_policy.py:314-322`), all SUGGESTION/non-blocking.
-  - **F03c-3 — Ingest/checkpoints. Pending.** Validate whole endpoint batch and session
+  - [x] **F03c-PUB — Publish the reviewed HTTP/pacing advance.** Explicit user grant on
+    2026-10-10. Normal push advanced remote `feat/f03-source-adapters` from `e7247b7`
+    to `3f52c33889dd02ab63eecfce1880a0cc8f448fb5`, 14 commits. Parent required expected
+    root/branch/HEAD/origin, clean worktree/index and remote ancestor; before/after
+    `git ls-remote` matched the intended tip and proved remote main stayed `fc30084`.
+    No force-push, main update, PR or merge. Evidence: `/tmp/f1show_push_f03c_refs_before.txt`
+    and `/tmp/f1show_push_f03c_refs_after.txt`. Future source publication is a new decision.
+  - [ ] **F03c-2-ADVICE — Review the three latest suggestions read-only.** Retrieve the
+    actual stored reviewer descriptions without querying/reopening burned authority;
+    compare code/tests, assess practical risk and register separate follow-ups. If text
+    cannot be recovered, name the limitation rather than inventing the finding's meaning.
+    No fixes authorized by "revisa". Explorer `mv2hchsk-z-n6zl` reviews these first,
+    then maps the next unit; source remains unchanged until the bounded writer is planned.
+  - **F03c-3 — Ingest/checkpoints. Authorized; read-only mapping in progress.**
+    User explicitly requested continuation on 2026-10-10 after publication/advisory review.
+    Validate whole endpoint batch and session
     before mutation; data commit precedes observation checkpoint. A failed checkpoint
     allows idempotent repeat. Valid empty arrays advance the successful observation
     checkpoint; malformed/failing responses do not. Explicit per-endpoint outcomes,
@@ -855,14 +881,16 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Next: **F03c-3 ingestion/checkpoints**, authorized and pending. F03c-2 is closed at
-`badfa54`: independently verified 127 focused/325 full, both numeric defects fixed,
-five faithful behavioral mutants killed, native approved/acknowledged and exact tree match.
-F03c-1 (`32a55aa`) and F03c-2 review authorities are burned; never query/reuse them.
-Three new non-blocking suggestions and existing static/edge observations remain separate.
-Plan the next unit before source writes: whole-endpoint/session validation, record commit
-before observation checkpoint, idempotent repeat and explicit partial per-endpoint outcomes.
-Publication of F03c remains a separate human decision.
+Active: **read-only review of the three F03c-2 suggestions, then F03c-3 mapping** by
+explorer `mv2hchsk-z-n6zl`; no source writer launched. Both approved source units and their
+tracking history were normally pushed through `3f52c33`; exact remote SHA and unchanged
+remote main were verified. F03c-2 is closed at `badfa54`: independently verified
+127 focused/325 full, both numeric defects fixed, five faithful mutants killed and exact
+reviewed-tree commit. F03c-1/F03c-2 authorities are burned; never query/reuse them.
+No advisory fix is authorized. After the map, derive narrow source/test surfaces and
+register the concrete F03c-3 plan before writing: whole-endpoint/session validation,
+record commit before observation checkpoint, idempotent repeat and explicit partial outcomes.
+Future source publication remains a separate human decision.
 F03c-3/4 and F03d injectable live seam remain pending and authorized for implementation.
 Their publication is a separate decision. F04 onward requires a new implementation grant.
 
