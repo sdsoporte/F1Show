@@ -1868,6 +1868,61 @@ No live call, credential or purchase was made for this unit.
   rule set lives outside it, in whatever selection each caller's harness provides: the same tree
   either "passes all checks" or reports findings depending on that selection, and every
   `# noqa: S105` directive reads as unused without `S` selected. Tracked in issue #7.
+- **A second review pass over byte-identical content, and what it found.** The step-1/F04 session
+  reviewed the integrated range — their resolution plus these bytes — and it approved, producing
+  **six informational findings, all in `gemini.py`** and none in the resolution or the documentation:
+  `R3-001` (WARNING) `:484-488`, `R3-002` `:477-480`, `R3-003` `:348-354`, `R3-004` `:258-259`,
+  `R3-005` `:488`, `R3-006` `:559-566`. No bodies were returned and none are persisted, so the parent
+  read the regions rather than inventing provider intent; **the readings below are ours, not the
+  provider's**:
+  - `:477-480`, `:484-488` and `:488` (the WARNING): the retry loop catches the builtin `TimeoutError`
+    — which is also the OS and transport timeout, not only our deadline — and relabels it as
+    `ModelTimeoutError`; and it re-raises the captured failure with a bare `raise failure`, discarding
+    the original exception and its traceback. The taxonomy stays typed and sanitized, but a caller
+    debugging a live failure loses the cause. Carried, not fixed: these bytes are approved and burned,
+    so any change here is a new candidate with its own review.
+  - `:258-259`, and this one is **checkable rather than a guess**: `_classify_provider_failure` reads
+    `getattr(exc, "code", None)` and requires an `int`. The installed SDK's own source
+    (`google.genai.errors.APIError.__init__`) sets `self.code = code if code else
+    self._get_code(response_json)`, and `_get_code` passes through whatever the response JSON carries —
+    so a provider returning `"429"` as a **string** yields `code == "429"`, the classifier declines to
+    classify, and the failure is re-raised **without being retried**. Our offline tests cannot see it
+    because the scripted doubles construct the error with an integer. Recorded as the most
+    consequential of the six and as live-path work (F13), where a rate limit is exactly what must be
+    retried.
+  - `:348-354`: `_to_model_response` refuses blank text but stores the provider's text **unstripped**,
+    unlike `dialogue.Turn`, which strips. Cosmetic today and invisible until a provider pads.
+  - `:559-566`: the threshold warning latches once per wrapper while its message names a model, so a
+    second model crossing the same threshold inside one wrapper never warns. Consistent with the
+    documented "a crossed threshold is a state, not a repeated event", but the wording and the latch
+    disagree about scope.
+  - **Worth recording as a fact about our process**: our own verification (10/10 mutants) and this
+    review examined byte-identical content and the review still produced six findings the mutant
+    matrix did not. That is not a defect in either method — it is evidence that a mutant matrix tests
+    the invariants we already thought of.
+- **The granted real call, and what it did and did not prove (2026-10-10).** The remainder of this
+  task was granted as one metadata call plus one minimal generation, and it completed. The configured
+  endpoint is a **loopback gateway** (`http://127.0.0.1:8317/v1`, no credentials embedded in the URL).
+  Its **OpenAI-compatible** surface answered `GET /v1/models` with **200 in 0.02 s** and twelve model
+  ids (`claude-opus-4-6-thinking`, `claude-sonnet-4-6`, `gemini-3.7-flash-high`, `gemini-3.8-flash-high`,
+  `gemini-3.1-flash-image`, `gemini-3.1-flash-lite`, `gemini-3-flash`, `gemini-pro-agent`,
+  `gemini-3.1-pro-low`, `gpt-oss-120b-medium`, `gemini-3.5-flash-lite`), and
+  `POST /v1/chat/completions` with `gemini-3.5-flash-lite` returned **200 in 0.82 s**, the text `ok`,
+  usage 8/1/9 and a `model` field echoing the requested id. **Two** HTTP requests in total, no retries,
+  no other host; the credential was read by line-splitting in a subprocess and never printed, hashed
+  or logged. The failed first attempt is part of the record too: it requested
+  `{base}/v1beta/models`, but the configured base already carries `/v1`, so the path doubled and the
+  server answered 404 in 0.02 s **without any provider being contacted** — the ambiguity was the
+  parent's brief, not the gateway, and the same defect was found by measuring the base instead of
+  assuming it.
+  **What this does not prove, and it matters**: those ids are **gateway aliases** — the `-high`/`-low`
+  suffixes encode the gateway's own effort tiers — so they are not first-party model ids and none may
+  enter configuration until the first-party documentation and this list are reconciled; the `model`
+  field is gateway-reported, so the wiring works while the serving weights stay unverified; the list is
+  what the gateway reaches **today**, not a stable contract; and **our `GoogleGenAIClient` was never
+  exercised**, because it speaks the native Gemini dialect, whose correct path on this gateway remains
+  unprobed while the route that worked is the OpenAI-compatible one. That native-dialect compatibility
+  is the one remaining wiring unknown, and it belongs to F10's composition rather than to this unit.
 
 ### F09 — Implement the two-person commentary booth
 
