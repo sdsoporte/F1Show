@@ -1482,7 +1482,11 @@ that a reader can see the two-persona commentary and a replay re-produces it.
    (294) and additive root exports (+8): **574 additions, 0 deletions**, within the 300–600
    forecast. Focused 18 / full **573**, with the 555 baseline green. Public surface:
    `collect_session_events(session_key, payloads)` plus `classify_gap(raw)` as the intervals
-   normalization helper, with `DetectedEvent`, `GapKind`, `GapReading` exported additively.
+   normalization helper, with `DetectedEvent`, `GapKind`, `GapReading` exported additively. That
+   helper carries a **named future consumer and an expiry condition**, recorded in the F06 section
+   below rather than left as an intention: the risk it holds is not deferred-scope creep but
+   **orphan code**, since pure normalization with no MVP caller can pass a review *by looking like
+   normalization* and then prove nothing about any behaviour. F06 must consume it or it is deleted.
    Ordering is documented as a total order — timestamped events first by
    `(timestamp_value, family_rank, record_index)`, untimestamped after by
    `(family_rank, record_index)` — which matters because `stints` and `drivers` carry no timestamp
@@ -1509,6 +1513,32 @@ that a reader can see the two-persona commentary and a replay re-produces it.
    rests entirely on the independent verifier's mutation testing rather than on any RED. Dedup has
    the same shape of problem in miniature: it is **unexercisable on the real fixtures** because no
    family repeats an update, so it is proven only synthetically.
+   **Independent verification PASS, 8/8 mutants killed with no survivor.** Verifier
+   `mv2ze9ly-1n-fguu` confirmed the three pins unchanged at start and end, the **574 additions / 0
+deletions** count, `events.py` and the `fixtures/` tree byte-identical, 18 focused and 573 full,
+   two runs byte-identical, the documented total order exactly as written, and **all 1,648 events
+   tracing back to their exact source record**. On the real fixtures it independently reproduced the
+   non-claims: no overtake spelling anywhere, position evidence exactly `{"position"}` with no cause
+   claim, 20 lap-1 completions with no lap-time record to enter, and the unknown-preservation for the
+   two null durations, the null `date_start` (with a stated reason rather than a borrowed clock) and
+   the 846 partial segment arrays. It also **confirmed the parent's static judgement** that the two
+   auxiliary numeric-parse warnings are false positives, with the nuance that Unicode decimal digits
+   pass `\d` but `int()` accepts them, so nothing breaks. It read both interpretation decisions as
+   **consistent with the registered design**, not departures. Kills by mutant: overtake emission,
+   lap-1 record, gap coercion, pit-duration collapse, null coercion, order change, dedup removal and
+   foreign-session attribution.
+   **One real robustness hole it found, and the fix is underway before review.**
+   `classify_gap(10**400)` — an **oversized integer**, which a corrupt payload could genuinely carry
+   because JSON parses a long integer literal into a Python `int` — raises **`OverflowError`** from
+   `float(raw)` at `collector.py:196` instead of returning an unknown reading. That contradicts the
+   design's own spine, that a missing or unusable value stays **unknown** rather than crashing, so it
+   is being fixed rather than carried: the guard must catch the overflow and yield `UNKNOWN`, with a
+   test proving the huge-int case does not raise. It is **not** fixture-reachable, which is why it
+   survived the writer's own testing, but "not reachable today" is not "cannot happen".
+   **Thinness noted, not fixed:** three of the eight mutants were killed by exactly **one** test each
+   (null coercion, dedup, foreign session), and the untimestamped tail order is pinned only through
+   a final-element assertion — effective but thin, which belongs with the probe-promotion work in
+   issue #8 rather than in this unit.
 3. **F08 — Gemini gateway**, exercised against a fake provider, with one separately granted real
    generation to prove the wiring. One model call is a budget decision, not an assumption.
 4. **F09 — the two-person booth.** Lead and colour personas, explicit turn order, bounded context,
@@ -1551,6 +1581,21 @@ the two-persona commentary claim.
 
 **Deferred from the MVP** (see the MVP cut above): tactical alerts add value on top of commentary
 but are not a precondition for it.
+
+**A named handoff, not a promise.** F04 ships `classify_gap(raw)` — a pure classifier turning one raw
+`gap_to_leader`/`interval` value into absent, unknown, seconds or laps — and **F06 is its intended
+consumer**: the tactical reading of gaps is exactly what F06 defers today. The specific case F04
+pre-validates against the real fixture is the **`+1 LAP` string form** (1,331 of the 21,041 interval
+values, alongside 19,604 numbers and 106 nulls), which is the one that would otherwise be mis-cast
+to a number by a naive implementation.
+
+**The condition attached to it, recorded before it can be forgotten.** F06 must either consume this
+classifier or **delete it**. That is not a stylistic preference: the danger is not scope creep but
+**orphan code** — pure, plausible-looking normalization with no MVP caller can survive a review
+precisely *because* it looks like normalization, and then sit in the tree forever with tests that
+prove nothing about any behaviour. Naming the recipient converts it from a promise into a handoff
+with a deadline. If F06 lands and does not use it, removing it is the correct outcome, not keeping it
+out of politeness.
 
 - [ ] Calculate contextual gap/pace/stint alerts with configurable circuit/session
   parameters. Treat tyre-life and pit-loss estimates as assumptions, not facts.
