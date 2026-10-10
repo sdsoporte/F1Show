@@ -74,8 +74,10 @@ and purchases are not authorized by these grants.
 
 ## ODD execution rules
 
-1. Reconcile this file, the full Engram mirror `odd/f1show/tasks` and the visible
-   todo projection before resuming. Keep stable IDs and one active task.
+1. Reconcile this file, the Engram mirror and the visible todo projection before
+   resuming. Keep stable IDs and one active task. This file has outgrown the ~49.8 KB
+   Engram record cap, so the mirror is split: `odd/f1show/tasks` holds the prefix and
+   `odd/f1show/tasks-part2` holds the remainder. The on-disk file is authoritative.
 2. Explore each bounded unit and resolve product uncertainty before source edits.
    Use a read-only explorer when evidence exceeds a small targeted read.
 3. Derive narrow edit surfaces; delegate multi-file changes to one writer. Writers
@@ -89,7 +91,8 @@ and purchases are not authorized by these grants.
 7. Native review runs only under the user's RDD switch and provider continuations,
    against a work-unit commit or bounded PR slice, never a checkbox or the entire
    project backlog. Review does not authorize push, PR creation or merge.
-8. Update this file, its full mirror and todo after each actual task transition.
+8. Update this file, its split mirror (both parts) and todo after each actual task
+   transition.
    Never close a task with failing required checks or missing implementation.
 
 ## Review workload and routing
@@ -528,9 +531,18 @@ and purchases are not authorized by these grants.
     Machine-counted candidate: 1,016 additions +17 deletions = **1,033 diff lines**
     (forecast 450–650 exceeded; seven planned paths, tests retained). ASSESS remains
     unassessable for undeclared new files: high-risk fallback. Static checks unverified.
-    **F03c-1-R1:** bounded, non-masking cleanup in `http.py` + regression cases in
-    `test_http.py`; preserve primary identity, surface cleanup-only errors port-typed,
-    document actual deadline/cleanup budgets. Reverify independently before acceptance.
+    **F03c-1-R1 implemented; independent reverification in flight, not accepted.**
+    Writer `mv1j7w77-o-lggk` reports RED 9 failed/37 passed, then 95 focused/242 full
+    (baseline 185). User shell independently re-ran the focused file: 46 passed, and
+    `-k close` 9 passed/deselected 37 — user-run evidence, not independent verification.
+    Pinned candidate at HEAD `0b8cb9f`, empty index, seven paths: 1,430 additions +17
+    deletions = **1,447 diff lines** (2.23× the 450–650 forecast; overage accepted by the
+    parent, tests not trimmed). `http.py` 343 and `test_http.py` 766; sha256 pinned:
+    `http.py:e49fe5d1…`, `test_http.py:b105dde7…`. Verifier `mv1tlpc8-s-3yux` re-probes
+    the four original failures, measures the real `timeout_seconds + min(timeout,1s)`
+    bound, attacks the `is_closed` reclassification heuristic in both false-positive and
+    false-negative directions, and mutation-tests the 9 regressions on a `/tmp` copy with
+    proof of the imported module path. Static checks remain unverified (no ruff/mypy).
     Grow the single `get_json` contract to a typed status/headers/payload response;
     migrate the fake, add scripted outcomes,
     an owned httpx adapter and shared parity tests. Clock stays unchanged. Scope:
@@ -674,7 +686,8 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: F03c-1-R1 cleanup correction, within the first historical-sync work unit.
+Active: F03c-1-R1 independent reverification `mv1tlpc8-s-3yux`, pinned candidate
+`0b8cb9f`/1,447 diff lines, within the first historical-sync work unit.
 F03c-2..4 and F03d injectable live seam remain pending and authorized for implementation.
 Their publication is a separate decision. F04 onward requires a new implementation grant.
 
