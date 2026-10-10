@@ -524,7 +524,7 @@ and purchases are not authorized by these grants.
   Four bounded units, planned before source writes; roughly 1,450–2,250 authored diff
   lines total, split by behavior, not a hard limit. Existing auto-chain/feature-branch
   strategy applies; **no F03c push is authorized**. One writer; tests-first offline.
-  - **F03c-1 — HTTP response/adapter. Corrective work in progress, not accepted.**
+  - **F03c-1 — HTTP response/adapter. Done, reviewed and locally committed.**
     Independent verifier `mv1ir20g-n-ov7w`: 86 focused/233 full tests PASS, but FAIL on
     primary-error masking, raw cleanup-only errors and unbounded close after deadline/
     cancel (`http.py:146-148`). Existing tests used no-op close. Native review not started.
@@ -618,10 +618,33 @@ and purchases are not authorized by these grants.
     Estimate 450–650 diff lines; verify hard timeout, bounded JSON body, status/header
     visibility, malformed success vs non-JSON error response, no implicit credentials,
     deep-copy parity and idempotent close. No retry implementation in this unit.
-  - **F03c-2 — Pacing/retries. Pending.** Separate monotonic scheduler from UTC Clock;
-    global free-tier pacing (3/sec and 30/min), finite attempts, 429 Retry-After when
-    supplied and retryable transport/5xx errors. No new dependency; invalid/over-budget
-    wait rules explicit, no early retry below server advice. Estimate 350–550 lines.
+  - **F03c-2 — Pacing/retries. Implementation returned; independent verification pending.**
+    User explicitly authorized: "ok, continua con F03c-2". Existing plan and allowed
+    surfaces preceded source writes; no new dependency, config wiring or live calls.
+    Separate `MonotonicClock.monotonic()/sleep()` from UTC `Clock.now()`: the shared
+    `RateLimiter` owns one monotonic source for pacing and backoff; UTC is used only
+    to derive a duration from an HTTP-date `Retry-After`.
+    `PacingPolicy` defaults to 3/second and 30/minute with both rolling windows enforced
+    globally across endpoints. `RetryPolicy`: three total attempts including the first,
+    exponential backoff 0.5s capped at 8s, no jitter, admitted retry wait at most 60s;
+    statuses 408/429/500/502/503/504 and typed transport/timeout errors are retryable.
+    Every attempt must pass the limiter. Retry waits take the maximum of backoff and
+    valid server advice; invalid advice falls back to backoff, and over-budget advice
+    never causes an early retry. Exhausted/over-budget statuses return the last response;
+    exhausted/over-budget transport errors re-raise. Decode, size and cancellation never
+    retry. Wrapper close delegates once and refuses requests after closure.
+    Seven narrow surfaces: `src/f1show/{ports,fakes,request_policy,__init__}.py` and
+    `tests/test_{request_policy,fakes,ports}.py`; the reviewed `http.py` is untouched.
+    Writer `mv2eorwl-v-pave` reported **115 focused/313 full tests**, baseline 247;
+    claimed RED was an import/collection error, **not an observed behavioral RED**.
+    Coverage-only validation variants were disclosed; no retrospective TDD claim is made.
+    Whole candidate reported **924 additions +3 deletions = 927 diff lines** versus
+    `4dc1e9e`, including both new files (304 policy/515 test lines). Original 350–550
+    estimate exceeded by the required test matrix; tests must not be trimmed to fit it.
+    ASSESS is unassessable until new files are declared natively; its returned high-risk
+    fallback requires independent command-running verification before acceptance.
+    Functional adversarial checks, scope/hash checks, applicable diagnostics, native review,
+    exact acknowledgement and a local Conventional Commit remain pending. No push.
   - **F03c-3 — Ingest/checkpoints. Pending.** Validate whole endpoint batch and session
     before mutation; data commit precedes observation checkpoint. A failed checkpoint
     allows idempotent repeat. Valid empty arrays advance the successful observation
@@ -754,10 +777,12 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: F03c-1 closed — the HTTP transport is reviewed, approved and committed as
-`32a55aa`. Next is F03c-2, monotonic pacing and bounded retry over the now-typed errors.
+Active: **F03c-2 independent verification pending** after the bounded writer returned.
+F03c-1 is closed at `32a55aa`; do not reuse or query its burned review lineage.
+Observe independent functional/scope checks on F03c-2, then native review/acknowledgement
+and an exact reviewed-byte local commit before marking this work unit done.
 Publication of F03c remains a separate human decision.
-F03c-2..4 and F03d injectable live seam remain pending and authorized for implementation.
+F03c-3/4 and F03d injectable live seam remain pending and authorized for implementation.
 Their publication is a separate decision. F04 onward requires a new implementation grant.
 
 The user now authorized publishing this reviewed advance to `origin/feat/f03-source-adapters`
