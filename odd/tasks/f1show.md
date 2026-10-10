@@ -618,7 +618,7 @@ and purchases are not authorized by these grants.
     Estimate 450–650 diff lines; verify hard timeout, bounded JSON body, status/header
     visibility, malformed success vs non-JSON error response, no implicit credentials,
     deep-copy parity and idempotent close. No retry implementation in this unit.
-  - **F03c-2 — Pacing/retries. Independent verification FAILED; correction in progress.**
+  - **F03c-2 — Pacing/retries. R1 implemented; independent reverification pending.**
     User explicitly authorized: "ok, continua con F03c-2". Existing plan and allowed
     surfaces preceded source writes; no new dependency, config wiring or live calls.
     Separate `MonotonicClock.monotonic()/sleep()` from UTC `Clock.now()`: the shared
@@ -655,6 +655,7 @@ and purchases are not authorized by these grants.
     failed attempt 1025 with max_attempts 1100, replacing the promised typed transport
     error (`request_policy.py:263`; `/tmp/f03c2_probe/probe3_retries.py`).
     - [ ] **F03c-2-R1 — Preserve huge server advice and cap exponential arithmetic safely.**
+      Implementation returned; independent reverification and unit closure pending.
       Continue one bounded writer on only `src/f1show/request_policy.py` and
       `tests/test_request_policy.py`. First add regressions and observe actual assertion/
       operation failures on the current defective bytes; collection failure is not RED.
@@ -664,6 +665,25 @@ and purchases are not authorized by these grants.
       Preserve existing defaults, status-as-data, exception identity, cancellation, both
       windows and parity; do not trim tests or fix unrelated advisories. Reverify the new
       bytes independently before fresh native inspect/START/acknowledgement/local commit.
+    **R1 writer `mv2fui68-x-uccu` returned only the two permitted paths.** New regressions
+    first ran against the defective source: **7 failed/5 passed**, zero collection errors;
+    four huge-advice assertions and three high-attempt overflow operations are genuine RED.
+    Five already-passing parser guards are coverage-only. Corrective set then passed 12;
+    reported GREEN **127 focused/325 full**, baseline 313. The original R0 TDD gap remains.
+    ASCII integer advice strips leading zeros and uses significant-digit admission before
+    conversion, with infinity denoting over-budget rather than absent advice; invalid
+    numeric extensions and HTTP-date paths remain unchanged. Backoff doubles only until
+    the existing cap, without unbounded exponentiation or restricting `max_attempts`.
+    Writer reran the original D1/D2 probes: huge advice returned 429/one call/no sleeps,
+    and 1100 transport failures raised the original typed error instead of OverflowError.
+    Parent re-pinned the complete candidate: **1139 additions +3 deletions = 1142 diff
+    lines**, policy 343/test 691 lines, other five source paths and reviewed `http.py`
+    unchanged. New SHA256 pins: policy `6c35023e57c4ef0030da0085011a7050e3135fce3f82517d515faf03e0e9eeb9`,
+    test `4cbf717abe1912ac0d1086a832acf87641319c38175122d77fb28c36eff33160`.
+    Parent active LSP on the two R1 paths reported no primary findings and three auxiliary
+    numeric-parse/typo findings, not an all-checks-clean claim. Ruff/mypy remain unavailable
+    to the child; no static tools installed. Fresh ASSESS still returned unassessable for
+    untracked files and the exact high-risk independent-verifier plan, which remains due.
     Child static tools were unavailable, but a parent active LSP probe covered all seven
     changed paths: four primary findings (pre-existing root `SnapshotResult` export warning
     and three errors in untouched fake tests), plus auxiliary Protocol-ellipsis/numeric-
@@ -804,12 +824,13 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03c-2-R1 correction in progress** after independent verification proved two
-numeric overflow defects despite focused 115/full 313 passing. Keep this unit unaccepted.
+Active: **F03c-2-R1 independent reverification pending** on the new pinned bytes.
+The writer observed genuine 7-failure corrective RED, then reported 127 focused/325 full;
+keep the work unit unaccepted until independent checks and native closure are observed.
 F03c-1 is closed at `32a55aa`; do not reuse or query its burned review lineage.
-Observe genuine corrective RED/GREEN and independent reverification on the changed bytes,
-then fresh native review/acknowledgement and an exact reviewed-byte local commit.
-The earlier ready preflight was for the defective candidate; no F03c-2 lineage exists.
+After independent PASS, run fresh native inspect/review/acknowledgement and an exact
+reviewed-byte local commit. The earlier ready preflight was for the defective candidate;
+no F03c-2 lineage exists.
 Publication of F03c remains a separate human decision.
 F03c-3/4 and F03d injectable live seam remain pending and authorized for implementation.
 Their publication is a separate decision. F04 onward requires a new implementation grant.
