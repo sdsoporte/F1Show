@@ -1172,6 +1172,108 @@ new real-service/model calls or automatic publication of the next source unit.
         `Authorization` refusal, and caller ownership. Honest limit unchanged: the real
         exchange, the real expiry behaviour and real live responses stay unverified without the
         paid subscription, and live validation belongs to F13.
+      **Implementation returned; independent verification in flight.** Writer `mv2vrc25-1c-yjv4`
+      produced `src/f1show/auth.py` (416 lines), `tests/test_auth.py` (431) and additive
+      `__init__.py` exports (+16/−0): **863 total** against the 300–500 forecast (1.73×,
+      disclosed, no test or docstring trimmed). Focused 52 / full **548** (baseline 496), on
+      Python 3.14.4. Pins: `auth.py`
+      `f23d28aed9991363455a98de251b6a9aeb1554580994555badddd0c41b271337`, `tests/test_auth.py`
+      `f505541c76e0528ddb96ea58c7a786d4c8b94e2a3639532b10a302a8e77c9cc1`, `__init__.py`
+      `b3fad40a20a7ad304a50323298184a6d8dfc6c425d32956e8b0922bc053e489a`.
+      **Parent design decision, resolving an ambiguity the parent brief created.** The brief both
+      told the writer to follow `request_policy.py`'s convention and forbade closing
+      caller-owned objects. The writer asked, and the reading is confirmed: during a request
+      nothing is opened, closed or replaced, and the single ownership act is `close()`, which
+      releases the adopted inner client exactly once and is safe to repeat — exactly the
+      documented precedent at `request_policy.py:289-294`. The class docstring states this
+      precisely. The composition caveat stays honest and unstated in code: nothing prevents a
+      provider from sharing the same inner client as the auth client, in which case closing the
+      auth client makes the provider unusable, so **the caller owns its composition**. That is
+      recorded here rather than patched into a docstring now, because one sentence would cost a
+      full re-verification and re-review cycle.
+      **Auxiliary static judgement.** The parent's LSP found only the pre-existing
+      `SnapshotResult` warning plus two auxiliary `unchecked-numeric-parse-python` warnings at
+      `auth.py:104` and `:143`, judged **false positives**: `expires_in` is guarded by
+      `str.isdigit()` before `int()`, and `_positive_seconds` validates before `float()`. The
+      same auxiliary pattern already exists in `http.py`, `fakes.py` and `request_policy.py`.
+      The writer's reported `f1show.auth` unresolved import was a **stale index artifact**: the
+      parent's LSP resolved the module and returned findings.
+      **TDD honesty carried into review.** Collection RED was separate
+      (`ModuleNotFoundError`). The behavioural RED was stub-shaped — 50 failed / 1 passed / 1
+      **deselected** — where the single pass was the structural `isinstance` test that a
+      no-logic stub satisfies by exposing method names, every failure stopped at its first
+      exercised call so later in-body assertions were unreached, and the **single-in-flight
+      concurrency test was deselected because it hangs under the stub**. The first GREEN attempt
+      was 51 passed / 1 failed from a test-side missing `params=` registration and that interim
+      log was overwritten. The consequence is explicit: the concurrency proof has **no RED
+      evidence at all**, and a hang instead of a failure is itself a hazard the verifier is
+      asked to judge rather than repair.
+      **Independent verification of the returned bytes: PASS, with two findings it did not hide.**
+      Verifier `mv2weiqx-1d-5jqc` confirmed 52 focused/548 full on Python 3.14.4, candidate pins
+      identical at start and end, **863 added / 0 deleted**, and the refresh boundary as
+      skew-correct rather than off by one. Ten faithful mutants, **nine killed**, and it reported
+      the fourth thing a self-report would have missed:
+      (1) **A confirmed hang hazard.** It removed the gate's `started.set()` and the concurrency
+      test was killed by `timeout 20` with **exit 124** at `test_auth.py:280` — a suite that
+      hangs instead of failing. (2) **One surviving mutant (m9).** Deleting `_require_open()`
+      from `post_form_json` was not caught, because after `close()` the adopted inner client
+      also refuses; the guard **is** present at `auth.py:404`, so this was a **coverage gap, not
+      a behaviour defect** — the double refusal masked the wrapper's own guard.
+      (3) It **refined a parent judgement**: the parent had called the `unchecked-numeric-parse`
+      warnings false positives because `isdigit()` supposedly makes `int()` infallible, and the
+      verifier probed that `'²'.isdigit()` is True while `int('²')` raises. The verdict stands
+      (the raise happens inside a pydantic validator and becomes a typed, value-free error) but
+      **the parent's stated rationale was imprecise**, and that is recorded rather than smoothed.
+      (4) It **declared its own deviation** instead of hiding it: in-process `pytest.main` did not
+      observe mutated file edits (proven with a marker probe), so each mutant ran as an isolated
+      frozen pytest process rather than literally in the same one.
+      It also confirmed that the single-in-flight property had **zero RED evidence** — the only
+      RED was that test's deselection — and supplied that evidence itself via the m3 kill and a
+      live five-caller gated proof.
+      **Test-only correction `mv2wr5ji-1e-c0ss`, with both fixes proven load-bearing.**
+      `tests/test_auth.py` moved 431→457 lines and `f505541c…`→`b26381f7…` while `auth.py` and
+      `__init__.py` stayed byte-identical; no test was added, so the count stays 52. The
+      concurrency test now bounds both waits with `asyncio.wait_for(..., timeout=5.0)` and
+      `pytest.fail` naming the hazard — the writer re-ran the never-starting probe and it now
+      **fails in 5.16 s with exit 1 instead of hanging** — and the after-close assertion now
+      demands the wrapper's own message (`AuthenticatedHttpClient is closed`) for **both**
+      methods, which the writer showed kills m9 in a `/tmp` shadow (`Actual message:
+      'FakeHttpClient is closed'`). The follow-up disclosed one residual honestly: the bound is a
+      fixed wall-clock wait, so a pathologically slow but correct exchange would fail as a
+      hazard; for in-process fake-driven work that trade is accepted. A focused independent
+      re-verification of these new bytes is in flight.
+      **Focused re-verification of the corrected bytes: PASS.** `mv2wv6hv-1f-lz4d` reproduced both
+      fixes independently: the corrected concurrency test failed in 5.15 s with the hazard-naming
+      message instead of hanging (exit 1, never exit 124) while the unmodified control passed in
+      0.38 s; and in a shadow with `_require_open()` removed from `post_form_json` the tightened
+      assertion failed on the wrapper's own message (`Actual message: 'FakeHttpClient is closed'`)
+      while the pristine control passed with the import proof. It confirmed 52 focused/548 full,
+      static cleanliness on the three paths, and judged the fixed 5 s bound a reasonable trade
+      (~12× headroom over a ~0.4 s control, with the only other wait test-controlled). It also
+      **misread one thing, and the parent caught it**: it reported a non-empty index, but a
+      re-check showed the index clean — the verifier had measured the worktree against HEAD while
+      a parent documentation edit was still uncommitted. The observation was real; the label was
+      not.
+      **Closed** as `30f4fa4fad54d708f0e47df013749341441ae2b5`, Conventional Commit
+      `feat(auth): add OAuth2 token handling and an authenticated HTTP client`, three paths
+      **+889/−0**; reviewed = staged = committed tree `06b15a031a7f960523786b5a87e25eacef228634`.
+      Native `review-aedd0260ee5d2fd7` was tiered **high** (hot path: authentication) and ran
+      **four lenses** — risk, resilience, readability, reliability. The first capture died with
+      `reviewer-empty-output` on `review-risk` (stopReason `stop`, 116 s, **nothing prepared,
+      nothing submitted, no mutation**); a fresh bound STATUS reoffered the byte-identical
+      four-lens group and the retry approved in 165 s with four reviewers prepared and submitted.
+      Exact bound STATUS/ack returned authority **burned**; consumed revision
+      `sha256:1bda6145f2cbfc6081a0666e73f8adb957b2f1f2ab28bc6383c6cbc494e58c5f`; never query it
+      again. **Fourteen informational findings, no correction opened and no bodies returned**
+      (six `WARNING`s, eight `SUGGESTION`s). They are carried as later work and **not**
+      reconstructed: `R1-001` auth.py:391-394, `R1-002` :263-264, `R1-003` :140-148,
+      `R3-001` :211-222, `R4-retry-amplification` :283-292 and `R4-stale-token` :305-311 are the
+      warnings; `R2-exchange-lifecycle` :272-295, `R2-post-except-raise` :168-173,
+      `R2-repr-secret-materialization` :193-200, `R3-002` :279-291, `R3-003` :282-288,
+      `R3-004` :405-415, `R3-005` :256-269 and `R4-transport-taxonomy` :325-335 are suggestions.
+      **The warnings cluster on authentication material, retry amplification and token staleness,
+      which is precisely the material that matters once this code runs against the live service**,
+      so retrieving those bodies is real later work rather than bookkeeping.
   Honest limit unchanged: without the paid subscription the real exchange, the real expiry
   behaviour and real live responses remain unverified; a fake transport proves only our
   handling, and live validation belongs to F13 under its own authorization.
@@ -1290,19 +1392,21 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F03d-2 authentication and the live seam**, one bounded writer after this F03d-1
-closure and design registration, under the existing F03 authorization. F03d-1 is closed as
-`d807cbc` — ten paths, +1050/−40 = 1090, independent verifier PASS with 7/7 mutants killed and
-no survivor, native approval and exact acknowledgement, reviewed = staged = committed tree
-`1e9ca9d6b4d088ceab66150bfa20b27d6d746a63`. F03d-2 adds a new auth module with a token model, an
-expiry-with-skew refresh policy, a caching provider and an auth-injecting client, all offline
-against a fake or `MockTransport`. Carried, not fixed: the 3 pre-existing `tests/test_fakes.py`
-static errors, two base `I001` findings, the overstated `http.py` header-default wording the
-reviewer independently flagged, the unverified Python 3.12 floor, the unverified POST-retry
-assumption, probes-only CI gaps, and informational native suggestions whose bodies were never
-returned. Forecast calibration remains a standing concern: F03c ran 2620 against ~1000 forecast
-and F03d-1 1090 against 450. No new source push; remote `3f52c33` and main `fc30084` remain as
-published. F04 onward stays unauthorized.
+Active: **F03 complete; F03d-2 closed locally and awaiting its own publication decision.**
+Every F03 unit is now closed: `F03a`, `F03b`/`F03b-1`, `F03c-1`, `F03c-2`, `F03c-3a`, `F03c-3b`,
+`F03c-4`, `F03d-1` and `F03d-2`, each with its own independent verification, native approval and
+exact-tree local commit. `F03c` and `F03d-1` are merged into `main` through PR #1 (`77f22466`);
+F03d-2 source `30f4fa4` plus two documentation commits (`620eb8c`, `b773217`) sit on the feature
+branch and are **not** in `main`. Publishing them is a separate human decision, exactly as the
+previous push and merge were. ASSESS is unassessable for candidates with undeclared new files, so
+that mandatory high-risk plan governs each such unit. Carried, not fixed: the fourteen
+informational F03d-2 findings above (six warnings), pre-existing `tests/test_fakes.py` and
+`conftest.py` findings, base lint findings, the unverified Python 3.12 floor, the unverified
+POST-retry assumption, scripted-only race coverage, the F03c-4 generation branch unreachable by
+the public API, probes-only CI gaps, the caller-owns-its-composition caveat, and the earlier
+informational advisories whose bodies were never returned. Forecast calibration remains a
+standing concern. **F04 onward stays unauthorized**, and no live, purchase, subscription or
+model call has been made or is implied by this work.
 The three registered advisory regions were examined read-only; native descriptions were
 not found locally, observations are explicitly independent, no fixes authorized or made.
 Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
