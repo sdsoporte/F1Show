@@ -1539,6 +1539,31 @@ deletions** count, `events.py` and the `fixtures/` tree byte-identical, 18 focus
    (null coercion, dedup, foreign session), and the untimestamped tail order is pinned only through
    a final-element assertion — effective but thin, which belongs with the probe-promotion work in
    issue #8 rather than in this unit.
+   **Correction applied and re-verified, inside the same uncommitted unit.** The overflow hole was
+   fixed rather than carried: `collector.py` `2be54125…`→`d5d2fe23…` and `tests/test_collector.py`
+   `50b5c2cd…`→`fa83fa15…`, five tests appended, **23 focused / 578 full** on the 573
+   pre-correction total. **This correction produced the genuine RED the original unit lacked**: on
+   the pre-fix source the oversized-integer tests failed with the real `OverflowError` and the
+   non-finite test failed on `SECONDS` versus `UNKNOWN` — 3 failed / 20 passed before, 23 passed
+   after. A non-finite numeric now classifies as unknown as well; that is a **parent decision, not
+   the verifier's finding**, and it is labelled as such in the source comment, both docstrings and
+   the test comment so the record does not misattribute it.
+   Focused re-verification `mv2zsp18-1p-7ehx` PASS, and it went beyond the brief: it rebuilt the
+   pre-fix collector in a shadow and showed the new tests fail there with the real `OverflowError`
+   while the fixed control passes, and — because the earlier verifier's pre-fix copy **survived under
+   `/tmp`** — it could prove the test change is **strictly append-only: 0 lines removed, 67 added**,
+   with the collector diff confined to `import math`, one module-docstring line, the `classify_gap`
+   docstring and the guard body. It confirmed the total-order and dedup code untouched, the
+   classification deterministic across two passes over all 21,041 interval values, the
+   parent-decision labelling present and unmisattributed, and the writer's disclosed docstring slip
+   fully repaired: both files parse, `inspect.getdoc` is well-formed, indentation correct, no
+   trailing whitespace.
+   **A trap worth carrying forward.** Its first shadow attempt silently imported the **original**
+   module, because copying the repository's `.venv` baked the original paths into the launcher, and
+   the outcome was a **false pass of 23 tests**. It caught that with an import proof and switched to
+   a `.venv`-free tar shadow. The lesson generalises: a shadow test without an import proof can pass
+   while proving nothing, which is precisely why every shadow instruction in this project demands
+   that proof.
 3. **F08 — Gemini gateway**, exercised against a fake provider, with one separately granted real
    generation to prove the wiring. One model call is a budget decision, not an assumption.
 4. **F09 — the two-person booth.** Lead and colour personas, explicit turn order, bounded context,
@@ -1686,18 +1711,18 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F04 independent verification**, then fresh native review and the exact-byte local unit
-commit. The candidate is three paths and **574 additions**, with 18 focused and **573** full tests
-green. ASSESS is unassessable for the two undeclared new files, so its mandatory high-risk plan
-applies and a separate verifier is running; that verifier carries unusual weight here because this
-unit's RED never exercised a single assertion against a real implementation, so mutation testing is
-the only efficacy evidence that exists. The MVP order after F04 is F08 against a fake provider with
-one separately granted real generation, then F09's two-person booth, then a thin single-process F10
-that prints a transcript. Seven deferred items stay tracked as issues #3–#9, the user chose **free
-mode**, and nothing on the MVP path needs authenticated or real-time access. `main` stays at
-`2c83a150`: the F03-cleanup work, the fixtures and F04 sit on the feature branch awaiting their own
-publication decision. Housekeeping: the ODD mirror is now **four** records — #5666, #5747, #5800 and
-#5838 (`odd/f1show/tasks-part4`) — and the splitter handles any number of parts.
+Active: **F04 fresh native review**, then the exact-byte local unit commit. The candidate is the
+whole F04 unit in one piece — `collector.py`, `test_collector.py` and the additive root exports —
+now carrying the classifier correction as well: 574 additions plus the fix, with 23 focused and
+**578** full tests green. Independent verification PASSED the original bytes with **8/8 mutants
+killed and no survivor**, and a focused re-verification PASSED the corrected bytes, proving the test
+change strictly append-only; that correction also produced the genuine RED the unit originally
+lacked. The MVP order after F04 is F08 against a fake provider with one separately granted real
+generation, then F09's two-person booth, then a thin single-process F10 that prints a transcript.
+Seven deferred items stay tracked as issues #3–#9, the user chose **free mode**, and nothing on the
+MVP path needs authenticated or real-time access. Housekeeping: the ODD mirror is four records —
+#5666, #5747, #5800 and #5838 (`odd/f1show/tasks-part4`) — and the splitter handles any number of
+parts.
 **Parallel track, coordinated 2026-10-10.** A second session implements **F08** (the Gemini gateway)
 in an isolated worktree `/home/s/dev/projects/work/F1Show-f08`, branch `feat/f08-gemini-gateway`,
 based on `0b1f0c7`, registering its own design in that branch's copy of the F08 section. Verified
@@ -1712,18 +1737,16 @@ is **never rewritten**: only fast-forward pushes (`3f52c33`→`ce7d113`→`7b56e
 ever landed on it, never a force-push, squash or rebase. At that moment the remote sat at `7b56e49`
 while the local tip was `e999a10`, six commits unpublished, and the F04 source was still uncommitted
 pending verification — both facts were disclosed to the other session rather than left implicit.
-The three registered advisory regions were examined read-only; native descriptions were
-not found locally, observations are explicitly independent, no fixes authorized or made.
-Published approved source/tracking remains `3f52c33`, remote main unchanged. F03c-1/F03c-2
-review authorities are burned; never query/reuse them. Keep writes single-threaded and
-limit 3a to ingest.py/test_ingest.py/additive package exports, with genuine behavior RED,
-shared Store parity, records-before-observation-checkpoint and honest partial outcomes.
-Future source publication remains a separate human decision.
-F03c-3/4 and F03d injectable live seam remain pending and authorized for implementation.
-Their publication is a separate decision. F04 onward requires a new implementation grant.
+**Delivery state.** `main` sits at `2c83a150` and contains all nine F03 units, merged through PR #1
+and PR #2. The feature branch is ahead of it with the F03-cleanup work, the recorded fixtures and
+F04, all unpublished: the remote is at `7b56e49` while the local tip has moved past it, and F04's
+source is still uncommitted pending review. Publication of any of it remains a separate human
+decision. The native authorities for F03c-1, F03c-2, F03c-3a, F03c-3b, F03c-4, F03d-1, F03d-2 and
+the advisory follow-up are **burned**; never query or reuse them. Two earlier advisory regions were
+examined read-only, with native descriptions never found locally and the observations explicitly
+labelled as the parent's own rather than the provider's intent.
 
-The user now authorized publishing this reviewed advance to `origin/feat/f03-source-adapters`
-only, not to `main`; future units need their own delivery decision. No model ID may enter
-configuration or code until account enumeration and current documentation verify it.
-No live/model calls, purchases or deployment are authorized; real-service correctness
-remains pending F13.
+**Standing constraints.** Writes stay single-threaded. No model ID may enter configuration or code
+until account enumeration and current documentation verify it. **No live, model, purchase or
+deployment call is authorized**, and no subscription exists: the project runs in **free mode**, so
+real-service correctness remains an F13 question and the live gaps are tracked as issue #3.
