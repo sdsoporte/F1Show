@@ -36,14 +36,21 @@ enough to name a subject, the entry says so instead of inventing one.
   against.** A file whose length changed has **every** row in it flagged until re-derived by subject, and the
   table says so in one line instead of carrying numbers that read as verified. Measured at the F09b closure:
   `gemini.py` and `run.py` unchanged (rows current), `booth.py` +148, `auth.py` +70 and `collector.py` +42 —
-  the last two never re-derived until then.
-- **A closure has a TYPE, and "closed" alone is not evidence.** Three kinds appear here and they are not
+  the last two never re-derived until then. **The mechanism is named here so that the re-derivation is done for
+  a reason and not by rote**: the error that created this rule was a `sed -n '286,295p'` window printed and then
+  read as if it were the cited range `288-294` — a real measurement of a **different object** than the row
+  asserts, which is why it survived every check that only asked whether the number looked right.
+- **A closure has a TYPE, and "closed" alone is not evidence.** Four kinds appear here and they are not
   interchangeable: closed by **change** (bytes moved and a test went red first), closed by **pin** (a test was
-  added that also passes on the unaffected code, so behaviour did not change and there was **no RED**), and
-  closed as a **dead record** (no future condition forces it). A pin proves that an intended behaviour is now
-  watched; it proves nothing about a defect having been fixed, so a row closed by pin must say so. Added after
-  the F09b unit, whose `R3-004` closed by pin while this register first recorded it as superseded by a
-  rewrite — see that row.
+  added that also passes on the unaffected code, so behaviour did not change and there was **no RED**), closed
+  as a **dead record** (no future condition forces it), and closed as **superseded by a rewrite**, where the
+  location no longer holds the subject at all. A pin proves that an intended behaviour is now watched; it
+  proves nothing about a defect having been fixed, so a row closed by pin must say so. **The fourth kind earns
+  its own sentence because it is the dangerous one: it depends on coordinates, and a coordinate can be
+  asserted without measuring anything** — which is how the error this rule came from was born. "Superseded"
+  proves nothing until the subject descriptor shows that the location really changed. Added after the F09b
+  unit, whose `R3-004` closed by pin while this register first recorded it as superseded by a rewrite — see
+  that row.
 - **"Carried as informational" is not a resting place.** It is how a broken public export survived five
   units in this repository, registered in every static report with a name and a line number and with
   nothing forcing anyone to look again.
