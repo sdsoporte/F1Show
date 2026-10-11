@@ -2327,6 +2327,50 @@ the source files only, while the register also carries rows in the test files. T
 was applied rather than in the rule, and it is the second time in this round that applying a rule found more
 than the case that motivated it.
 
+### F09c — Declare the fifth airing shape
+
+**Assignment received in writing on 2026-10-10**, surfaces `src/f1show/booth.py` and
+`tests/test_booth.py` only, **no behaviour change**, no `__init__.py` (no new public name), and
+`_CITATION_SHAPED` plus the violation predicate explicitly untouched. Branch based on this track's own
+`da5cf79`.
+
+- **The finding**: the integration review left `R3-docstring-omits-bracket-fragment-leak` (SUGGESTION,
+  `booth.py:53-54`). The module docstring declares **four** shapes deliberately left airing plus one
+  known leak (`U+034F`); the **bracketed fragment separated from a clean reference** is not among them
+  except by a generous reading of "a dotted suffix is prose". Measured before writing: the separated
+  forms `position[0].position.[99].evil`, `position[0].position.[99]` and
+  `position[0].position [99].evil` **air**, while the *attached* forms `position[0].position[99]` and
+  `position[0].position[99].evil` are **refused**.
+- **Decision: (a) — a fifth declared shape, not an instance of the dotted-suffix boundary.** Reason, and
+  it is the crux of the ambiguity: the two do not coincide. The dot-separated fragment could pass as a
+  dotted suffix, but the **space-separated** form (`position[0].position [99].evil`) contains no dot at
+  all, so calling the whole family a dotted suffix would be false for one of the three measured cases and
+  would relocate the ambiguity instead of removing it. The fifth shape is therefore described by its
+  **mechanism**: the attached-bracket rule requires the bracket to be *immediately* after the matched
+  token, and `finditer` consumes the word a later fragment would need, so a fragment separated by a dot
+  or by whitespace defeats both rules.
+- **The docstring must say it is deliberate and that closing it is a product trade**, not an oversight:
+  closing it costs false refusals, and the trade is tied to `R3-marker-word-false-refusal`, which already
+  carries two independent reviewers. That trade belongs to the user, so this unit **declares and pins**
+  and does not change behaviour.
+- **The pin**: one parametrized test in `tests/test_booth.py` covering **every** declared airing shape —
+  the four existing, the new fifth, and the known `U+034F` leak — one case each, asserting the shape
+  airs with the supplied evidence intact. The docstring's list is written as an explicit enumeration so
+  the count and the items cannot disagree, and a declared shape with no case exercising it is an
+  unsupported claim rather than a boundary.
+- **Evidence, and the RED is declared absent rather than manufactured**: a docstring change has no
+  behavioural RED, and this unit says so plainly. Instead: (i) the pin has teeth **by mutation** — in a
+  `/tmp` copy, extend the attached-bracket check to skip whitespace and dots so the fragment is refused,
+  and the new pin must go **RED**, then restoring it must go green; (ii) **every changed line in
+  `booth.py` lies inside the module docstring**, which is how "no behaviour change" is checked rather
+  than asserted; (iii) the full suite stays green.
+- **Docs placement**: this block sits after the F09b evidence block and before `### F10`; the other
+  session's F09b integration record will sit between them in its copy, and on conflict its document wins.
+- **Placement in this copy (parent)**: the block landed **after** the parent's F09b
+  integration record, the next-units block and the debt plan, immediately before `### F10`, because
+  that is where this copy's F09b material ends. The peer's own copy has no integration record, which
+  is why its anchor differs; **no content of the block was changed**, only its position.
+
 **Next units, assigned in writing after the F09b closure (2026-10-11).** Two, split on file ownership so
 that neither session edits a file the other owns — the peer raised this itself, correctly: this register
 exists in `main` and **not** in its branch, so editing it there would create a competing creation of a file it
