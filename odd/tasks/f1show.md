@@ -2213,6 +2213,40 @@ is **never rewritten**: only fast-forward pushes (`3f52c33`→`ce7d113`→`7b56e
 ever landed on it, never a force-push, squash or rebase. At that moment the remote sat at `7b56e49`
 while the local tip was `e999a10`, six commits unpublished, and the F04 source was still uncommitted
 pending verification — both facts were disclosed to the other session rather than left implicit.
+
+**F09 integrated, and its closure was verified by identity rather than by report.** The peer's final data:
+tip `b1990deae61684ca3b2028e3788066ad4fa654d5`, seven commits over `ed41add` — five design and correction
+documents, the source commit `52ab80f209aeceae153e3fae37df9a71e5517ba6`, and the evidence commit. The
+parent measured the tip itself because the peer's message had left a literal placeholder in its place,
+and then verified the identity chain the peer claimed: the source commit's tree **is** the reviewed tree
+`6b35c7067b138bc8564c13ba02f7ae74d71f111a`, its parent's tree **is** the controller's frozen `base_tree`
+`b0f5e6b48757a161f6a5341d11ae4de0c46fb009`, the scope is exactly three paths, and every documentation
+commit touches only `odd/tasks/f1show.md`. File sha256 at that commit — `booth.py` `c8b18f4a…`,
+`test_booth.py` `1d5ee7d7…`, `__init__.py` `458afd4c…` — all match the peer's report.
+**A false alarm the parent caught by logic rather than by asking**: those three values were first compared
+against git **blob OIDs** and appeared not to match. A tree match is logically impossible with differing
+content, so the error had to be in the comparison — the peer quotes **sha256** while the parent was reading
+blob OIDs, two different functions over different byte streams. That confusion has now appeared three times
+in one round, and this was the first time the parent caught it unaided.
+**The integration itself**: seven cherry-picks in order, and the source commit applied with **no conflict
+at all** — git merged the additive export block by itself. A clean merge proves nothing, so the parent
+verified the result instead: `booth.py` and `test_booth.py` now hash **exactly** to the reviewed tree,
+`__init__.py` holds **101 exports** with **zero duplicates**, **both** export sets present, and **zero
+advertised names that fail to resolve** — which both explains the peer's earlier 101 measurement and shows
+the new public-surface guard covering the peer's eight names without a line of extra work. The suite is at
+**706 passed**: this branch's 644 plus the booth's 62.
+**What F09 declined to call capability**, and where it goes: the semantic half of F04's rules belongs to
+F13; the residual citation channels — a leading bullet, `EVIDENCE` with a space before the colon, a mid-line
+mention, and a bare reference, all of which escape while the evidence tuple stays validated — are the
+peer's next assigned unit; the duplicate-citation collapse works but has no test, so it is a pin rather
+than a change; and two pins encode intent more than completeness. The peer ran **three independent
+verification rounds**, each killing 10 of 10 mutants with copies guarded by import proofs, and the first
+round found the citation-protocol defect the native review had missed — the fourth time in this session
+that verification found what the author and the reviewer did not. Its first candidate's review
+(`review-e102f9481318fa6f`) stayed **superseded and unacknowledged**, because it approved bytes that were
+then corrected; the final review `review-25573bd84c132770` approved on its first run and its authority is
+**burned**. That ordering — complete verification before the native review, never in parallel — is the lesson
+that cost the peer a wasted model run, and it is recorded with its price attached.
 **Delivery state.** `main` sits at `2c83a150` and contains all nine F03 units, merged through PR #1
 and PR #2. The feature branch is ahead of it with the F03-cleanup work, the recorded fixtures and
 F04, all unpublished: the remote is at `7b56e49` while the local tip has moved past it, and F04's
