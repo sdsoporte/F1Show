@@ -2327,6 +2327,38 @@ the source files only, while the register also carries rows in the test files. T
 was applied rather than in the rule, and it is the second time in this round that applying a rule found more
 than the case that motivated it.
 
+**Next units, assigned in writing after the F09b closure (2026-10-11).** Two, split on file ownership so
+that neither session edits a file the other owns — the peer raised this itself, correctly: this register
+exists in `main` and **not** in its branch, so editing it there would create a competing creation of a file it
+does not own and turn a clean cherry-pick into a reconciliation.
+1. **The scanner's declared boundaries — the peer's.** Surfaces `src/f1show/booth.py` and
+   `tests/test_booth.py`, branch based on its own `feat/f09b-citation-channels`, whose `booth.py` is
+   **blob-identical** to main's `0d1191c626fc`, so the cherry-pick applies cleanly again and `__init__.py`
+   stays untouched. Objective: declare the **fifth airing shape**, the bracket fragment, and pin it, closing
+   the integration review's `R3-docstring-omits-bracket-fragment-leak`. Measured by the parent: the module
+   docstring declares **four** shapes plus one known leak (`U+034F`), while `position[0].position.[99].evil`,
+   `position[0].position.[99]` and `position[0].position [99].evil` all air and `position[0].position[99]` with
+   its controls is refused. The peer must choose **explicitly** between reading the fragment as a fifth shape
+   or as an instance of the dotted-suffix boundary; the ambiguity itself is what the finding is about.
+   **Hard limit: no behaviour change** — the rule already airs it, and if the analysis suggests the rule should
+   change, the unit stops, because that trade belongs to the user and is tied to the finding below. Evidence
+   demanded: a **mutation proof** that the pin has teeth (invert the code, the pin goes red), every declared
+   shape exercised by a test that makes it air, the full suite, and the identity chain. A docstring has no
+   behavioural RED, so the peer is asked to **say that** rather than manufacture one.
+2. **The register's per-subject re-derivation — the parent's.** Surface `docs/CARRIED-FINDINGS.md`. Remaining:
+   `auth.py` (11 rows) and `collector.py` (7), whose measured anchors are already recorded; the two test-file
+   rows the blob hash surfaced (`tests/test_auth.py`, `tests/test_collector.py`); and `gemini.py`'s six rows,
+   whose coordinates are current but whose **subjects were never read**. Acceptance is measurable — every row
+   carries a subject, and every key in **Staleness keys** matches or is explicitly STALE. One item is not a
+   number edit: `auth.py:347` is **NOT FOUND**, the line no longer exists, so deciding whether that row is
+   closed is real work.
+**A decision deliberately NOT taken, and the reason.** The over-refusal
+`R3-marker-word-false-refusal` is left alone. It is a **trade, not a bug**: the unit closed four escape
+channels by **widening** its refusal predicate, so narrowing it re-opens the channel that was just shut. With
+no live trial there is no measurement of how often a model opens a line with the marker's own word, and
+without that number neither side of the trade can be weighed. Its registered trigger stands, and the unit that
+does pick it up inherits the two independent reviewers who found it.
+
 ### F10 — Wire bounded end-to-end orchestration
 
 - [ ] Correlate enrichment by event/session/version, apply bounded join deadlines,
