@@ -391,9 +391,19 @@ by spending another call:
   `http://127.0.0.1:8317/v1/v1beta/models/models/gemini-3.5-flash-lite:generateContent` — a
   **doubled version segment** (`/v1/v1beta/`) that the gateway answers with 404. The known-good native
   routes sit at the host root (`/v1beta/models`).
-- Note the second, independent trap in the same string: `models/` appears twice, because the adapter
-  passes the model id through and the SDK prefixes the resource path as well. A model id handed to the
-  SDK is not the same shape as the name the listing returns.
+- **A correction, because an earlier version of this note was wrong.** The composed URL originally
+  recorded here (with `models/` appearing twice) was a **reconstruction error, not an observation**: the
+  SDK does not produce it. Verified in `google.genai._transformers.t_model` on the non-Vertex path —
+  `if model.startswith('models/'): return model` — so the prefix is **idempotent** and both `gemini-x`
+  and `models/gemini-x` compose to a single `models/gemini-x`; `join_url_path` likewise yields one
+  `models/`. The model-id shape is therefore **not** a trap, and an F10 that trims or normalises the
+  prefix would be making an unnecessary change. The only real defect here is the doubled version
+  segment above.
+
+**Lesson carried into F10 and worth applying to every future diagnosis: capture a composed URL from the
+wire, never rebuild it.** A reconstructed string looks like evidence and is not, and the error corrected
+above is its own demonstration — it survived into this file because it was written as an observation
+when it was a derivation. If a URL cannot be captured, say so and label it as reconstructed.
 
 **What this does and does not establish.** It establishes that the **declared configuration** is the
 blocker at the URL layer: the failure happened before the dialect or the adapter's mapping could be

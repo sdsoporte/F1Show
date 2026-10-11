@@ -1998,9 +1998,17 @@ rather than by spending a second call: when an `api_key` is set the SDK appends 
 path** (`v1beta/...`) to any custom base URL, so a declared value already ending in `/v1` composes to
 `http://127.0.0.1:8317/v1/v1beta/models/models/gemini-3.5-flash-lite:generateContent` — a **doubled
 version segment** that the gateway answers with 404, while the good native routes sit at the host root.
-A second, independent trap hides in the same string: `models/` twice, because the adapter passes a model
-id through and the SDK prefixes the resource path too, so an id from the listing is not the shape the
-SDK wants. The parent had predicted exactly this class of finding when it noticed the declared `/v1`
+A second, independent trap was **claimed here and has since been REFUTED**: the record said `models/`
+appeared twice because the adapter passes a model id through while the SDK prefixes the resource path.
+That is **wrong**, and the peer session caught it with lines from the installed source; the parent then
+re-verified it independently rather than accepting it: `google.genai._transformers.t_model` on the
+non-Vertex path does `if model.startswith('models/'): return model`, so the prefix is **idempotent**, and
+`_api_client.join_url_path` with the declared base composes `/v1/v1beta/models/<id>` with a **single**
+`models/`. The doubled `models/` came from a **reconstruction in the previous report, not from the SDK**.
+So the model-id shape is not a trap and F10 must not trim or normalise the prefix for it. **The lesson is
+the one this session keeps meeting from another angle: a rebuilt string is not an observation.** The
+previous report's URL was assembled rather than captured, and it reached this document as a fact. Any
+future composed URL must be **captured from the wire**, or explicitly labelled as reconstructed. The parent had predicted exactly this class of finding when it noticed the declared `/v1`
 against the working `/v1beta`, and its decision to keep the declared value and forbid a repair is what
 turned a probable false success into a precise diagnosis. **What it establishes:** the declared
 configuration is the blocker at the URL layer, and the failure happened before the dialect or the
