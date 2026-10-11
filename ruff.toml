@@ -1,0 +1,91 @@
+# The repository's own Ruff configuration, committed so that a lint claim names a selection
+# that lives *inside* the repository.
+#
+# Before this file existed the effective standard lived outside the repository, in pi-lens'
+# bundled `config/ruff/core.toml`, and three different Ruff versions (0.16.1, 0.16.3, 0.16.8)
+# were observed across agents inside one session. "Ruff clean" was therefore neither
+# reproducible nor reviewable. The selection below is that bundled selection, ported
+# faithfully; the version that runs it is pinned in `.github/workflows/ci.yml` as
+# `uvx ruff@0.17.0`, which is also the version every number in this file was measured with.
+#
+# Measured 2026-10-11 with ruff 0.17.0 **on revision 26dc06da**, over `src/` and `tests/`:
+#   - selection alone: 2396 findings (S101 1552, E501 809, UP017 24, UP042 9, I001 2)
+#   - with the exceptions below: 0 findings, so a fresh clone starts green
+#   - per rule, split by tree: E501 279 src / 530 tests; S101 0 src / 1552 tests;
+#     UP017 5 src / 19 tests; UP042 9 src / 0 tests; I001 0 src / 2 tests
+# A number here is a measurement *of a revision*, so the revision is named next to it.
+#
+# Two rules govern the exceptions, and both halves are measurable:
+#   1. An exception exists only where a rule actually reports, so the list stays readable and
+#      nothing is silenced "just in case". Rules from the bundled selection that report nothing
+#      in this tree are deliberately absent (see the note at the end).
+#   2. Each exception below must have a row in `docs/CARRIED-FINDINGS.md` carrying the same
+#      count, the revision and version it was measured on, an owner and the condition that
+#      removes it. Those rows are written by the register's owner **when this configuration
+#      lands**, because a row about a file that is not committed yet would be a claim about a
+#      future state. Until they land, this sentence is an obligation, not a description: the
+#      configuration is reviewable only when a reader can follow every silence to an owner.
+
+line-length = 88  # black-compatible default
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes: undefined names, unused imports
+    "I",   # isort: import ordering
+    "B",   # flake8-bugbear: likely bugs and design issues
+    "UP",  # pyupgrade: modernize syntax for the target Python version
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+    "PIE", # flake8-pie
+    "S",   # flake8-bandit: Bandit-equivalent security checks
+]
+
+# Only rules that report in **both** trees are silenced globally, because a global exception
+# cannot be scoped afterwards.
+ignore = [
+    "E501",   # 809 findings (279 src, 530 tests). Owner: the carried-findings register. The
+              # bundled reason is that the formatter owns line length, but this repository
+              # configures no formatter, so the trigger is *adopting one*, or an explicit
+              # line-length policy. Trigger: adopting a formatter or an explicit line-length
+              # policy; until then the count stays visible here rather than turning a fresh clone
+              # red.
+    "UP017",  # 24 findings (5 src, 19 tests): `datetime.timezone.utc` where `datetime.UTC` is
+              # meant. Owner: the carried-findings register. Trigger: the next unit touching an
+              # affected module, where the rename is mechanical and behaviour-identical (`UTC`
+              # aliases `timezone.utc`).
+]
+
+# Rules that report in **one** tree are silenced only there, so the same pattern appearing in
+# the other tree still reports. This is the point of the split: an `assert` in `src/` is a
+# genuinely different proposition from an `assert` in a test, because asserts are removed
+# under `-O`.
+[lint.per-file-ignores]
+"tests/**" = [
+    "S101", # 1552 findings, all in tests, where `assert` is the pytest idiom. Owner: the
+            # carried-findings register. Not silenced in
+            # `src/`: a bare assert compiled out under `-O` is a hole in production code, which is
+            # exactly what this repository hunts. Trigger: a unit that introduces a
+            # security-relevant assert under `src/` (none exists today).
+    "I001", # 2 findings, both in tests, in files this repository did not write in one pass.
+            # Owner: the register. Trigger: the next commit that touches an affected file, where
+            # ordering rides along in the same diff.
+]
+"src/**" = [
+    "UP042", # 9 findings, all in `src/`: a `str`-mixin Enum that could be `StrEnum`. Owner: the
+             # register. Trigger: a unit that changes an enum's input or serialisation surface,
+             # where the swap must be shown not to change `str()`, formatting or `isinstance`.
+]
+
+# Deliberately NOT ignored anywhere:
+#   B008 (function call in a default argument) and SIM108 (ternary operator) report **0**
+#   findings here, and their bundled rationales do not transfer: B008's reason names FastAPI and
+#   typer idioms, and neither framework is a dependency of this project, while SIM108's reason is
+#   a subjective readability judgement.
+#   S311 (non-cryptographic random), S603 (subprocess without shell=True) and S607 (partial
+#   executable path) also report **0** findings here. Their bundled triage was measured on
+#   `requests` and `pip`, not on this code, so porting those exclusions would silence a rule
+#   where it currently has nothing to say. When one of them fires on **new** code, the remedy is
+#   an in-site `# noqa: <rule>` with its reason written at the call site — never a global
+#   exception, which would answer "whoever reads this next" instead of "here, because this".
