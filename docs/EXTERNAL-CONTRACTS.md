@@ -418,6 +418,42 @@ through the SDK's `http_options`, or the gateway's OpenAI-compatible surface is 
 adapter. That is a composition decision for F10, and the model-prefix trap above has to be settled with
 it. Until one of those is exercised, no native-dialect capability may be claimed.
 
+#### Resolved 2026-10-10: the native route works with a version-less base URL
+
+A second granted probe settled it, and **it succeeded**. A native Gemini generation through the
+published `GoogleGenAIClient`, with the base URL derived **in memory** from the declared one by
+stripping its trailing version segment, returned `text='ok'` in **1,015.6 ms** with usage 8 input and
+1 output tokens, against the alias `gemini-3.5-flash-lite` selected at runtime from the gateway's
+native listing.
+
+**The composed URLs were captured from the wire this time, not reconstructed**, through a recording
+transport with a fabricated response — so both strings below are observations:
+
+- The **declared** base URL `http://127.0.0.1:8317/v1` composed to
+  `http://127.0.0.1:8317/v1/v1beta/models/gemini-3.5-flash-lite:generateContent` and returned **404**,
+  with the doubled version segment.
+- The **corrected** base URL `http://127.0.0.1:8317` composed to
+  `http://127.0.0.1:8317/v1beta/models/gemini-3.5-flash-lite:generateContent` and returned **200** with
+  the generation.
+
+Both strings carry **one** `models/`, which independently confirms the correction above: the doubled
+one came from a reconstruction, and the SDK's own composition never produced it. The SDK source agrees —
+`api_key` set forces the versioned path to be joined (`_api_client.py`), and `t_model` leaves an existing
+`models/` prefix alone.
+
+**What is now established:** the gateway does serve a native Gemini **generation**, and the published
+adapter composes correctly there **provided the base URL carries no version segment**. The declared
+configuration is therefore a defect to fix rather than a limitation of the dialect or the adapter.
+
+**What is not established, and must not be claimed:** behaviour of the `-high`/`-low` effort-tier
+aliases (untouched), streaming, multimodal input, the fidelity of error shapes for timeouts, refusals
+and rate limits, thinking-configuration passthrough, latency or stability under load, and correctness
+for the other eleven aliases. One alias with one trivial prompt proves the route, not the surface.
+
+**Action for the project:** either the declared base URL is changed to drop its version segment, or F10
+derives it. The declared value lives in the operator's credential file, so changing it is an operator
+decision rather than a source change.
+
 ### Authentication paths
 
 **VERIFIED (first-party)** — from <https://ai.google.dev/gemini-api/docs/api-key>

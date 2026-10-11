@@ -1980,9 +1980,9 @@ that gateway**: the OpenAI-compatible one returned `GET /v1/models` 200 in 0.02 
 `POST /v1/chat/completions` 200 in 0.82 s with usage 8/1/9, while the native one returned
 `GET /v1beta/models` 200 in 0.002 s in native shape and advertised **the same twelve entries**. So
 the native route **exists** and `GoogleGenAIClient` has a real endpoint there — which downgrades the
-risk raised when only the OpenAI-compatible surface had answered. What remains **unproven is a
-native-dialect generation**, and matching listing shape is necessary but not sufficient; that stays
-open for F10/F13 rather than being counted as a capability. And the advertised ids are **gateway
+risk raised when only the OpenAI-compatible surface had answered. What remained **unproven is a
+native-dialect generation**, and matching listing shape is necessary but not sufficient — that question
+was later **closed with a positive result** by two granted probes, recorded below. And the advertised ids are **gateway
 aliases** whose `-high`/`-low` suffixes are the gateway's own effort tiers, so **no id from that
 enumeration may enter configuration as a provider contract** before reconciling with Google's
 documentation. The full record lives in `docs/EXTERNAL-CONTRACTS.md`. A hygiene note worth keeping:
@@ -2021,6 +2021,27 @@ version through `http_options`, or use the OpenAI-compatible surface with a diff
 capability may be claimed**. Credentials: the file was only read (SHA256 identical before and after),
 never sourced or eval'd, and no secret was printed. **Closing this needs one more granted call** with a
 corrected composition; the first grant is spent and was not stretched.
+
+**The second grant closed it, and the native route WORKS.** A second granted probe succeeded: a native
+Gemini generation through the published `GoogleGenAIClient`, with the base URL derived **in memory** by
+stripping the declared trailing version segment, returned `text='ok'` in **1,015.6 ms** with usage 8
+input / 1 output token against the alias `gemini-3.5-flash-lite` chosen at runtime from the native
+listing. **And this time the composed URLs were captured from the wire** — through a recording transport
+with a fabricated response, zero network I/O, the grant untouched — which is exactly what the previous
+report failed to do. The declared base composes
+`http://127.0.0.1:8317/v1/v1beta/models/<id>:generateContent` and 404s, while the corrected one composes
+`http://127.0.0.1:8317/v1beta/models/<id>:generateContent` and returns the generation. **Both carry a
+single `models/`**, independently confirming that the doubled one was a reconstruction artifact rather
+than the SDK's doing. **What is established:** the gateway does serve native Gemini generation and the
+published adapter composes correctly there **provided the base URL carries no version segment** — so the
+declared configuration is a defect to fix, not a limitation of the dialect or the adapter. **What is not
+established, and must not be claimed:** the `-high`/`-low` effort-tier aliases, streaming, multimodal
+input, error-shape fidelity for timeouts, refusals and rate limits, thinking-configuration passthrough,
+latency or stability under load, and correctness for the other eleven aliases. One alias with a trivial
+prompt proves the route, not the surface. **Action:** either the declared base URL drops its version
+segment — an **operator decision**, because that value lives in the credential file rather than in
+source — or F10 derives it. The dialect question is settled in favour of the native route, so **F10 can
+use the already-published adapter** instead of needing a new one.
 
 **A blocker that was carried, questioned, and then cleared on the user's instruction.** The automated
 lens check reported `src/f1show/__init__.py:13 I001` as a blocker every time that file was touched.
