@@ -2581,6 +2581,38 @@ agree on is a **convention**.
 to the simpler rule sent earlier. The honest reading is that the profile follows the tool-written work **recorded
 for the root**, pending or recent, and that a **fresh root always falls back**; the exact window is unmeasured and
 recorded as such rather than smoothed.
+**F12d and F12e integrated and published together (2026-10-11).** Two units on one file, both verified by an
+independent verifier and **neither needing a native review** — which is the measured consequence of keeping
+`.github/workflows/ci.yml` out of the diff.
+**F12d** (`0ba3e67c` → `21e382a`, 244 lines): the two gaps the F12c verification had found. The **charset false
+green** is closed — the scans read job keys **permissively by indentation** and a **test** rejects the charset,
+so a malformed key fails loudly instead of hiding from both scans — and the **m1 survivor** is dead: the mirror
+comparison became `missing_register_rows(config_text, register_text)` and neutering it now kills exactly one
+test. Verified three times over: I reproduced the three load-bearing mutations (all KILLED), the unit's own
+verifier did it with its own mutants and confirmed the converse independence, and my verifier measured the
+closure **by deletion** — removing the whole `register` job gives **exactly five reds** — and proved that the
+**readability assertions are the killer**.
+**F12e** (`879e3b5` → `5923015`, 114 lines): **the class closed, four instances to zero.** `R2-assignment-context-leak`
+was not a line but a **pattern** — citing the unit that produced something instead of the property it protects —
+and the criterion fixed here is that **the class is citing the UNIT**, a referent that dies at the merge, while
+citing a **measured state of the code IS evidence** and fully so when it **names the revision**. That is why five
+sibling phrases **stay**. Its most valuable finding is the discriminator at a **second level**: a mutant that
+replaces the refusal's **subject** with a generic phrase keeps the prefix AND the exit code, and **survived the
+earlier review of that file** — the prefix was the right carrier against a `KeyError` and **insufficient**
+against a generic message from the same guard. Two findings were closed **by characterisation**, with the reason
+written rather than "no longer applies", because their bodies are unrecoverable and the harness never returns
+them.
+**And the round's method rules came out of these units**, all now in the register: the discriminator has **two**
+failure modes and one repair (assert the subject), and **a new message can silently weaken an existing
+assertion**; **the object of the claim determines the obligation** (existing bytes: measure now, whoever the
+author; future bytes: label the candidate and re-measure when they exist); a store record is **reliable as an
+execution and never as authority**; and the review **budget** is a second knob from the threshold, with tier and
+size **confounded** in every point we have. Four boundaries were named with their experiments and deliberately
+not run, and the reading rule for the fourth was **pre-registered before the datum existed**.
+**Two residual gaps stay open** with owners and triggers: an inner-colon job key (`a:b`) escapes **both** scans on
+planted texts, with a **measured candidate fix** recorded as a candidate rather than as a fix; and the charset
+test's assertion is **vacuous over the real tree** with no other test calling it, so neutering its body is
+uncatchable — **a property of the tree, not of the test**.
 
 **Implementation, verification and native review (observed).**
 
