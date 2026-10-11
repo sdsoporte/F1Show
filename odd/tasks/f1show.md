@@ -2084,3 +2084,32 @@ whole harness config report *All checks passed!*, and the module still exports 9
 checks on both parties' symbols. ASSESS returned **`reviewDue: false`, `under_budget`** at 11 changed
 lines, so no native review was run for it — a decision on the record, not an omission. It is
 **unpublished** work awaiting its own delivery decision.
+
+**Issue #6 closed, and it hid a real defect behind a familiar warning.** The line the parent had been
+reporting as "the pre-existing `SnapshotResult` warning" for several units was in fact a **broken public
+export**: the name was listed in `f1show.__all__`, the class existed at `src/f1show/snapshot.py:86`, and it
+was **never imported**, so `from f1show import SnapshotResult` raised `ImportError` and a wildcard import
+raised `AttributeError` — on published code. A warning repeated often enough stops being read, and
+boilerplate is where real findings hide. The fix is one additive import line; the three other findings
+were genuinely cosmetic and took narrow per-line annotations with reasons, none of which widened a
+signature or weakened an assertion. **A peer session independently reproduced the defect in a second
+worktree and measured its shape**: of all the names in `__all__`, this was the **only** unresolvable one,
+and no test walked the list, which is why it survived. That produced the durable half of the fix: a new
+`tests/test_public_api.py` reading the real `__all__`, refusing an empty or duplicated list, and resolving
+every listed name — so the **next** decorative name fails the suite instead of living for years.
+Independent verification PASS: the direct import and the wildcard both work and the object is the same
+class; **all 93 names resolve with zero unresolvable**; the guard is load-bearing, proved by removing the
+import in a `/tmp` copy and watching it fail while the pristine control passes; the suite is at **644**;
+and the verifier **reproduced the pre-change contrast** from `git archive HEAD` to show the four errors
+and the warning genuinely existed rather than reporting a clean result it could not contrast.
+**Two boundaries are declared rather than left to inference.** The guard asserts only the forward
+direction (`__all__` → module) and deliberately not the inverse, because `__all__` constrains only a
+wildcard import and a reverse check would need a hand-maintained exception list on a surface that grows.
+And the verifier found that its `getattr`-based resolution is in fact **stricter** than the language: a
+real `from f1show import name` additionally falls back to importing a submodule of that name, which
+`getattr` does not, so a name exported only as a submodule could false-positive fail. That is a gap in the
+strict direction, not a weak one; if it ever cries wolf the fix is an `importlib.import_module` fallback,
+and it is recorded here so nobody has to rediscover the asymmetry. Also worth keeping: the peer counted
+**101** entries in `__all__` against this branch's **93**, and the difference is simply that its tree
+carries eight booth exports — **the third time this session that two apparently conflicting numbers
+turned out to be two trees**, so a per-tree count must always travel with its tree.
