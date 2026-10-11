@@ -2465,6 +2465,77 @@ naming the project's **real** checks (`uv run --frozen pytest`, the committed li
 review under RDD); the pinned versions; and the rules deliberately left off. **Branch**: based on `main`, not on
 the peer's older unit branch, because the CI configuration belongs to the tree as it stands today.
 
+**Implementation, verification and native review (observed).**
+
+- **The decision, and why (a) rather than (b)**: shape 5 is declared as a **fifth shape described by its
+  mechanism**, not as an instance of the dotted-suffix boundary. The two do not coincide: the
+  space-separated form (`position[0].position [99].evil`) contains **no dot**, so calling the family a
+  dotted suffix would be false for one of the three measured cases and would relocate the ambiguity
+  instead of removing it. While registering the unit the parent also corrected its own first draft of
+  the enumeration, which named `U+314F` instead of `U+034F` — caught before the commit.
+- **Final declaration**: the module docstring now enumerates **six** shapes left airing, defines shape 5
+  as *anything that is not a word character* with the measured separators as **examples, not the
+  definition** and the family declared **open**, adds shape 6 (a bracket-leading token with no family
+  word, invisible because the scanner's derived grammar requires `word[`), and states that closing them
+  is a **product trade belonging to the user**. The normalization boundary declares the leak as **a
+  family** — any character that survives normalization and is neither a word character nor whitespace,
+  with `Mn`/`Mc`/`Me` as the common cases — and names `U+034F` as the pinned **representative**, with
+  `U+0301`, `U+0308` and `U+0903` behaving the same way and the representative-versus-original
+  distinction disclosed where a reader sees it.
+- **Four writer passes**, every one driven by a measurement: the unit's objective; the **open separator
+  family** (hyphen, comma, colon, slash, parenthesis, apostrophe all air — the verifier's sharp probe,
+  which also found shape 6); the **combination-mark family** (`Mc`/`Me` defeat the scanner exactly like
+  `Mn`); and one pass that only pinned the measured cost. Plus parent-made wording and one parameter
+  each. **No behavioural RED is claimed anywhere in this unit** — it declares and pins existing
+  behaviour, and that was said instead of manufacturing a red.
+- **Documentation-only in `booth.py`, proven by inspection**: one hunk, the module docstring spanning
+  `1–113`, and the bytes after the docstring identical between `da5cf79` and the delivered revision.
+- **Independent verification, three passes**: the first certified the six-shape declaration and found
+  the `Mc`/`Me` gap; the second certified the reworded sentence, the category table (`Mn`, `Mc`, `Me`
+  air; `Cf` refused; word characters refused), the count reconciliation and both pin-teeth mutants; and
+  the third certified the **final bytes** in a separate worktree holding byte-identical copies, because
+  the harness refused child launches pointed at this worktree. **Independence note, stated plainly**:
+  between the second and third independent passes the parent measured the delta itself (docstring-only
+  proof, category probe, both mutants), so the third pass is what certifies the delivered revision.
+- **The space-separator question, settled by measurement**: a plain space does **not** by itself defeat
+  the scanner; the discriminator is whether a **family word survives unconsumed** immediately before the
+  bracket. `position [99].invented` is a complete fabricated citation whose own family word starts a
+  match across the space joint, so it is refused; the shape-5 whitespace case airs because the earlier
+  clean-reference match consumed the word the fragment would need. The docstring states that mechanism
+  and its two statements are consistent; the parent's probe expectation was the thing that was wrong.
+- Native review `review-5ef4944728b40676`: tier **medium**, one lens, 2 files, **173** changed lines,
+  candidate tree `84d7c65bc073abbe31812ce701a844137a424117`; **approved on the first reviewer run with no
+  correction opened**; the exact acknowledgement **burned** authority (`consumed_revision
+  sha256:f19b026e…`, `gentle-ai.review-acknowledged/v1`). Two informational findings, no bodies, read by
+  the parent rather than reconstructed: `R3-doc-stale-leak-placement` (`booth.py:56-57`) — the clause
+  "no exact placement was recorded" uses *placement* for what was unrecorded about the **character**,
+  while the docstring itself defines the place (inside a structural joint), so the noun is stale; and
+  `R3-shape5-whitespace-tolerance-scope` (`tests/test_booth.py:1124-1127`) — the `space` parameter's id
+  and comment suggest the separator is the mechanism, while the measured discriminator is the consumed
+  family word, so the test's framing is narrower than the rule it exercises. Both are wording and
+  coverage observations, neither changes behaviour, and both are carried with owner and trigger: the
+  next unit touching the scanner or the declaration.
+- **Committed** as `fe5894734daa6e86cb285246e69e397d464bd4d8`, Conventional Commit
+  `docs(booth): declare every airing shape and pin each one`. Pre-commit `HEAD` tree equals the
+  controller's `base_tree` (`090012fb…`), the **staged tree equals the reviewed candidate tree**
+  `84d7c65b…`, and the committed tree equals both. Blobs: `booth.py` `a6984018…` (795 lines),
+  `test_booth.py` `1c629d19…` (1810), `__init__.py` untouched at `458afd4c…`. Suite **753 passed**
+  (the F09b tip was 736).
+- **The ten structural mutants, listed here so a later verifier does not have to ask** (a verifier had
+  to ask, because the F09b record named the result without the set): (1) the priority band emptied in
+  `_speaker_for`; (2) alternation derived from the event index instead of the turns that aired;
+  (3) the character budget dropped in `_bounded_context`; (4) the always-include-the-previous-turn rule
+  dropped; (5) an uncited answer accepted in `_parse_answer`; (6) a never-supplied reference accepted;
+  (7) repetition suppression removed in `run`; (8) the stale comparison `>` narrowed to `>=`;
+  (9) degradation emitting a turn instead of a typed outcome; (10) the no-overtake prompt rule removed.
+  All ten were killed on these bytes, none required tuning, and the hash was restored after each.
+- **Carried, with owner and trigger**: the two review findings above; **`Me` is named in the docstring
+  but has no dedicated pin** (its behaviour was probed, not pinned — the docstring claims only that
+  `Mn`/`Mc`/`Me` are common cases, so nothing is overstated, but a future unit could pin one); and the
+  certification's sharp probe found `position]99[.invented` (reversed brackets) airing, covered only by
+  the general out-of-scope sentence rather than the numbered enumeration — enumerating it would be a
+  **seventh shape** and therefore a decision, not a tidy-up.
+
 ### F10 — Wire bounded end-to-end orchestration
 
 - [ ] Correlate enrichment by event/session/version, apply bounded join deadlines,
