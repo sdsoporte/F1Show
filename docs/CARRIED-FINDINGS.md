@@ -32,14 +32,18 @@ enough to name a subject, the entry says so instead of inventing one.
   read from the old blob and found again in the current file. This rule was added after the F09b unit, when
   two rows in this file were found pointing at the wrong code and one of them had been *described in a note as
   re-measured* when it never was.
-- **Staleness has a mechanical trigger: the line-count delta from the revision a location was recorded
-  against.** A file whose length changed has **every** row in it flagged until re-derived by subject, and the
-  table says so in one line instead of carrying numbers that read as verified. Measured at the F09b closure:
-  `gemini.py` and `run.py` unchanged (rows current), `booth.py` +148, `auth.py` +70 and `collector.py` +42 —
-  the last two never re-derived until then. **The mechanism is named here so that the re-derivation is done for
-  a reason and not by rote**: the error that created this rule was a `sed -n '286,295p'` window printed and then
-  read as if it were the cited range `288-294` — a real measurement of a **different object** than the row
-  asserts, which is why it survived every check that only asked whether the number looked right.
+- **Staleness has a mechanical trigger, and it is a HASH, not a line count.** The key is the file's **blob
+  OID** at the revision its rows were recorded against: any change of bytes flips it, so it cannot give a
+  false green. A line-count delta is only a cheaper first pass and it is **necessary but not sufficient** — a
+  refactor that adds and removes the same number of lines, a reorder or a rename leaves the length untouched,
+  and every row in that file would read as current without ever having been re-derived. The per-file keys are
+  recorded in **Staleness keys** below, so this is an operation (`git rev-parse HEAD:<path>`) rather than a
+  reading. Measured when the rule was upgraded: the false green it exists to prevent **had not occurred** here —
+  no file changed bytes with an unchanged length — but the hash did find two files the line audit had missed,
+  `tests/test_auth.py` and `tests/test_collector.py`. **The mechanism is named so that the re-derivation is
+  done for a reason and not by rote**: the error that created this rule was a `sed -n '286,295p'` window printed
+  and then read as if it were the cited range `288-294` — a real measurement of a **different object** than the
+  row asserts, which is why it survived every check that only asked whether the number looked right.
 - **A closure has a TYPE, and "closed" alone is not evidence.** Four kinds appear here and they are not
   interchangeable: closed by **change** (bytes moved and a test went red first), closed by **pin** (a test was
   added that also passes on the unaffected code, so behaviour did not change and there was **no RED**), closed
@@ -54,6 +58,31 @@ enough to name a subject, the entry says so instead of inventing one.
 - **"Carried as informational" is not a resting place.** It is how a broken public export survived five
   units in this repository, registered in every static report with a name and a line number and with
   nothing forcing anyone to look again.
+
+## Staleness keys
+
+The blob OID of each file **at the revision its rows were recorded against**, next to the current one. A
+difference means every row in that table must be re-derived by subject before its numbers are used; identity
+means the coordinates are still the ones the reviewer saw. One command per row: `git rev-parse HEAD:<path>`.
+
+| File | Blob at the recorded revision | Blob now | Verdict |
+| --- | --- | --- | --- |
+| `src/f1show/gemini.py` | `466db02b1977788c0faf3e6ffbd019a219c767fa` | same | **current** |
+| `src/f1show/run.py` | `ee44616f94838abfd2e2d44ab83b7241b0c0c801` | same | **current** |
+| `tests/test_run.py` | `e4fd5317baf868bf0a6cfa76de238ff9dd2203b3` | same | **current** |
+| `src/f1show/auth.py` | `b1ab34d8f1b3cfff856ec7a4cbf2633cbbb2d8cc` | `51918e432e3b8ae617fb3a1f566b72a9a6193099` | **STALE — re-derive** |
+| `src/f1show/collector.py` | `a8a81ee93795b7934b32c715bfc47111770155c2` | `3973eb134e797bda1d7062cee357eb70bf69de9f` | **STALE — re-derive** |
+| `tests/test_auth.py` | `66e7e41e39640744de2670a7371c6226ce98258b` | `d9cda83a99a94e8b13da03c814baf1df54c7846e` | **STALE** — found by the hash, missed by the line audit |
+| `tests/test_collector.py` | `1b3123c684aab95ebf3ae1b9bfcc12b0941da7a7` | `7b4891758e49c00aded53413c85603e87ca169f6` | **STALE** — same |
+| `src/f1show/booth.py` | `681f70c38becdbb10bf6587549bee64210f2965f` (pre-F09b) | `0d1191c626fca1b9f559a6a5ea89e10f2c621c28` | **re-derived**; its rows carry measured anchors and subjects |
+| `tests/test_booth.py` | `1a2a5efc192f80fd92f32a5e47b7e073079a2a42` (pre-F09b) | `8704aeeda5f7623f8b8875c61af7e0fe2d4e35a3` | **re-derived** |
+
+**A stronger key, not yet adopted, and offered as its author's reasoning rather than as a measurement here**:
+the blob is file-level, so it **over-flags** — a row in `booth.py` does not age because `run.py` grew, and the
+blob cannot tell a stale row from one that merely moved along with everything else. The **hash of the symbol
+that contains the subject** would make staleness per-row and stop the re-derivation from being wider than the
+change that caused it. Until that exists, a stale file means every row in it is re-derived, which is a
+declared cost rather than a silent one.
 
 ## Register trigger
 
