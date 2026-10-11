@@ -2076,6 +2076,67 @@ independent verification of the pins C2 added.**
 - **Non-regression**: focused stays green, the full suite stays green, and the two mutations above
   must now fail in `/tmp` copies while nothing else changes.
 
+**Implementation, verification and native review (observed). Status: implemented, independently
+verified in three rounds and natively reviewed on the fake-provider path.** The behavioural half of
+the two F04 rules and every live-provider property remain F13's, and no live call was made here.
+
+- Writer `mv318z31-3-4aat` delivered `src/f1show/booth.py` (**581** lines before corrections, **615**
+  after), `tests/test_booth.py` (**746** → **1066**) and `src/f1show/__init__.py` **+13** additive —
+  about **1694** changed lines against the 500–900 forecast, disclosed and not trimmed.
+- **RED was observed at the writer's hand**: collection-stage `ModuleNotFoundError: No module named
+  'f1show.booth'` with zero tests collected, then a signatures-only stub giving **42 failed / 1
+  passed**, with the single pass **named as trivial** instead of presented as behavioural.
+- **Independent verification ran three rounds**, every one of them on copies with an import proof
+  (`inspect.getsourcefile`) pointing inside the copy — a copied `.venv` bakes the original worktree's
+  paths into its launcher, and one round lost its first mutant runs to exactly that trap:
+  1. `mv31qhn0-6-ru5j`: **10/10 structural mutants killed** — and it found the **citation-protocol
+     defect** the review had not: a second `EVIDENCE:` line citing a never-supplied reference aired
+     with that reference verbatim in `turn.text`.
+  2. `mv34kzb6-9-usms`: after C1, **10/10 mutants still killed**; the corrected defect is refused
+     with `MULTIPLE_CITATION_LINES` and **zero** turns; it measured the residual commentary channel
+     and demonstrated the **silent prompt↔parser drift** (prompt literals changed alone → suite still
+     green at 58 passed).
+  3. `mv354vr0-b-v0nw`: on the final bytes, 10/10 mutants killed, the drift and export mutations
+     reproduced **independently**, the **rendered** prompt inspected (exactly two marker occurrences,
+     both from the constant), hygiene confirmed, and it found the two partial pins that C3 closed.
+- **Three corrections, each from a measurement rather than a hunch**: C1 the citation protocol — a
+  real defect against the unit's central claim; C2 the prompt interpolating the parser's constant —
+  a silent drift path; C3 hardening the two partial pins, so the prompt pin now **counts**
+  occurrences and the export list asserts non-empty and duplicate-free. The parent reproduced all four
+  C3 mutations itself in a fresh `/tmp` copy with **its own** venv, where the import proof pointed at
+  the copy and the four mutations failed in both directions.
+- Native review of the **first** candidate `review-e102f9481318fa6f` (medium, one lens, 1340 lines)
+  approved and was then **superseded and deliberately never acknowledged**: an approval covers exactly
+  the bytes it covered, and those bytes changed. The final candidate was reviewed fresh as
+  `review-25573bd84c132770` — tier **medium**, one lens `review-reliability`, **1694** changed lines,
+  candidate tree `6b35c7067b138bc8564c13ba02f7ae74d71f111a`. One host-relay run, its forecast relayed
+  **before** the acknowledgement (the order F08 got backwards), **approved on the first reviewer run
+  with no correction opened**; the exact acknowledgement **burned** authority
+  (`consumed_revision sha256:087bc92c…`, `gentle-ai.review-acknowledged/v1`), and no STATUS was issued
+  after the burn.
+- **Four informational findings, no bodies returned**, carried as later work and not reconstructed:
+  `R3-bound-guards-uncovered` (`tests/test_booth.py:1039-1050`), `R3-persona-validator-uncovered`
+  (`src/f1show/booth.py:116-122`), `R3-positive-seconds-overflow` (`src/f1show/booth.py:337`),
+  `R3-render-repr-determinism` (`src/f1show/booth.py:318-321`).
+- **Committed** as `52ab80f209aeceae153e3fae37df9a71e5517ba6`, Conventional Commit
+  `feat(booth): add the two-person commentary booth with evidence-only sourcing`. The check that makes
+  that sentence meaningful: the pre-commit `HEAD` tree equals the controller's `base_tree`
+  (`b0f5e6b4…`), the **staged tree equals the reviewed candidate tree** `6b35c706…`, and the committed
+  tree equals both — so the reviewed bytes **are** the committed bytes, established by tree identity
+  rather than by reading a diff. Clean worktree afterwards, **705 passed**.
+- **Honest limits carried into the record**: the semantic half of the two F04 rules stays unprovable
+  offline (F13's trial); the residual commentary channel still airs a bullet-prefixed marker,
+  `EVIDENCE :`, a mid-line mention and a bare never-supplied reference **while the evidence tuple
+  stays validated in every aired turn**; duplicate-citation collapsing is behaviourally correct but
+  untested; the prompt pin counts exactly two sites, so a legitimate third site fails until the count
+  is updated; and the export pin encodes intent rather than completeness, since shrinking the list
+  still passes.
+- **Integration handoff**: five documentation commits (`718ff96`, `5b67fb6`, `9b01d88`, `bb5a6a9`,
+  `7c01797`) plus this evidence commit, all touching only `odd/tasks/f1show.md`, and **one** source
+  commit `52ab80f` with the three paths. The other session's version of this document wins at
+  integration and its author re-applies these blocks at their anchors in order;
+  `src/f1show/__init__.py` is the only shared file and both changes are additive.
+
 ### F10 — Wire bounded end-to-end orchestration
 
 - [ ] Correlate enrichment by event/session/version, apply bounded join deadlines,
