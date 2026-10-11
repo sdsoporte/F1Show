@@ -2108,8 +2108,14 @@ wildcard import and a reverse check would need a hand-maintained exception list 
 And the verifier found that its `getattr`-based resolution is in fact **stricter** than the language: a
 real `from f1show import name` additionally falls back to importing a submodule of that name, which
 `getattr` does not, so a name exported only as a submodule could false-positive fail. That is a gap in the
-strict direction, not a weak one; if it ever cries wolf the fix is an `importlib.import_module` fallback,
-and it is recorded here so nobody has to rediscover the asymmetry. Also worth keeping: the peer counted
+strict direction, not a weak one. **Both the verifier and the reviewer flagged it independently**, which
+upgraded it from one agent's pedantry to something worth fixing, and it was fixed rather than carried —
+because "carried as informational" is precisely how the broken export survived five units. The guard now
+resolves through `getattr`, and on `AttributeError` falls back to `importlib.import_module`, which is what
+the language itself does. **Proved in both directions**: in a copy whose `__all__` lists a submodule-only
+name that nothing imports, the previous `getattr`-only logic **failed** (a false failure on a name that
+imports fine) while the corrected guard **passes**, with an import proof that the copy was the module
+under test. Committed as `test(api): mirror the import-system submodule fallback in the surface guard`. Also worth keeping: the peer counted
 **101** entries in `__all__` against this branch's **93**, and the difference is simply that its tree
 carries eight booth exports — **the third time this session that two apparently conflicting numbers
 turned out to be two trees**, so a per-tree count must always travel with its tree.
