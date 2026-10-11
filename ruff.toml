@@ -45,14 +45,14 @@ select = [
 # Only rules that report in **both** trees are silenced globally, because a global exception
 # cannot be scoped afterwards.
 ignore = [
-    "E501",   # 809 findings (279 src, 530 tests). Owner: the carried-findings register. The
+    "E501",   # 809 findings (279 src, 530 tests). Owner: docs/CARRIED-FINDINGS.md. The
               # bundled reason is that the formatter owns line length, but this repository
               # configures no formatter, so the trigger is *adopting one*, or an explicit
               # line-length policy. Trigger: adopting a formatter or an explicit line-length
               # policy; until then the count stays visible here rather than turning a fresh clone
               # red.
     "UP017",  # 24 findings (5 src, 19 tests): `datetime.timezone.utc` where `datetime.UTC` is
-              # meant. Owner: the carried-findings register. Trigger: the next unit touching an
+              # meant. Owner: docs/CARRIED-FINDINGS.md. Trigger: the next unit touching an
               # affected module, where the rename is mechanical and behaviour-identical (`UTC`
               # aliases `timezone.utc`).
 ]
@@ -63,19 +63,20 @@ ignore = [
 # under `-O`.
 [lint.per-file-ignores]
 "tests/**" = [
-    "S101", # 1552 findings, all in tests, where `assert` is the pytest idiom. Owner: the
-            # carried-findings register. Not silenced in
-            # `src/`: a bare assert compiled out under `-O` is a hole in production code, which is
-            # exactly what this repository hunts. Trigger: a unit that introduces a
-            # security-relevant assert under `src/` (none exists today).
+    "S101", # 1552 findings, all in tests, where `assert` is the pytest idiom.
+            # Owner: docs/CARRIED-FINDINGS.md. Not silenced in `src/`: a bare assert compiled out
+            # under `-O` is a hole in production code, which is exactly what this repository
+            # hunts. Trigger: a unit that introduces a security-relevant assert under `src/`
+            # (none exists today).
     "I001", # 2 findings, both in tests, in files this repository did not write in one pass.
-            # Owner: the register. Trigger: the next commit that touches an affected file, where
-            # ordering rides along in the same diff.
+            # Owner: docs/CARRIED-FINDINGS.md. Trigger: the next commit that touches an affected
+            # file, where ordering rides along in the same diff.
 ]
 "src/**" = [
-    "UP042", # 9 findings, all in `src/`: a `str`-mixin Enum that could be `StrEnum`. Owner: the
-             # register. Trigger: a unit that changes an enum's input or serialisation surface,
-             # where the swap must be shown not to change `str()`, formatting or `isinstance`.
+    "UP042", # 9 findings, all in `src/`: a `str`-mixin Enum that could be `StrEnum`.
+             # Owner: docs/CARRIED-FINDINGS.md. Trigger: a unit that changes an enum's input or
+             # serialisation surface, where the swap must be shown not to change `str()`,
+             # formatting or `isinstance`.
 ]
 
 # Deliberately NOT ignored anywhere:

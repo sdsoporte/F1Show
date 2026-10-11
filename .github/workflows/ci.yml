@@ -1,10 +1,13 @@
-# The repository's own CI. Two properties are the reason this file exists: the declared Python
-# floor (>= 3.12) is a claim nothing enforced, and the lint standard lived outside the
-# repository. Both are checked here, and the Ruff version is pinned because version drift was
-# the observed failure mode.
+# The repository's own CI. Three properties are the reason this file exists: the declared Python
+# floor (>= 3.12) is a claim nothing enforced, the lint standard lived outside the repository,
+# and a silenced lint rule had no owner. All three are checked here, and the Ruff version is
+# pinned because version drift was the observed failure mode.
 #
 # The suite is offline by design: it uses recorded fixtures, fake providers and an injected
 # clock. No step needs a credential, a live endpoint or a paid provider.
+#
+# Every job carries a `timeout-minutes`: without one a hung step can occupy a runner for hours,
+# which is the one failure mode that is invisible in a green badge.
 
 name: CI
 
@@ -20,6 +23,7 @@ jobs:
   tests:
     name: pytest on Python ${{ matrix.python }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -42,6 +46,7 @@ jobs:
   lint:
     name: ruff on the committed selection
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -59,3 +64,59 @@ jobs:
 
       - name: Enforce the committed selection
         run: uvx ruff@0.17.0 check --no-cache src tests
+
+  register:
+    name: every ignored rule has a register row
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      # No `setup-uv` here, deliberately: this job installs nothing, fetches nothing and uses
+      # only the runner's own `python3`. Adding a toolchain step it never calls would make the
+      # job's stated property true of the step and false of the job.
+      #
+      # This guard exists because `ruff.toml` states an obligation -- every exception carries a
+      # row in `docs/CARRIED-FINDINGS.md` with its count, the revision and version it was measured
+      # on, an owner and the removal trigger -- and an obligation nothing checks is a promise.
+      #
+      # It is deliberately as dumb as it can be: it reads the ignored rules out of `ruff.toml`,
+      # then checks that each rule code appears *somewhere* in the register. It does NOT parse the
+      # register, and it does not check that the row is well-formed, because the register is prose
+      # written by a human and a parser there would be a second thing to keep correct. A missing
+      # code fails the job and names the rule, which is the whole contract.
+      #
+      # It runs on the runner's own `python3` for two reasons: it needs no project environment and
+      # no network, and `tomllib` is standard library. The version it needs is stated out loud
+      # rather than assumed.
+      - name: Every ignored rule has a row
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys
+
+          try:
+              import tomllib
+          except ModuleNotFoundError:
+              sys.exit("register guard: this step needs Python 3.11+ for tomllib and the runner does not provide it")
+
+          config = tomllib.loads(pathlib.Path("ruff.toml").read_text())
+          ignored = set(config["lint"].get("ignore", []))
+          for rules in config["lint"].get("per-file-ignores", {}).values():
+              ignored.update(rules)
+
+          register_path = pathlib.Path("docs/CARRIED-FINDINGS.md")
+          if not register_path.exists():
+              sys.exit(f"register guard: {register_path} does not exist, so no ignored rule can have a row")
+
+          register = register_path.read_text()
+          missing = sorted(rule for rule in ignored if rule not in register)
+          if missing:
+              sys.exit(
+                  "register guard: these ignored rules have no row in docs/CARRIED-FINDINGS.md: "
+                  + ", ".join(missing)
+                  + ". Every exception in ruff.toml must carry a row with its count, the revision "
+                  "and version it was measured on, an owner, and the condition that removes it."
+              )
+          print(f"register guard: all {len(ignored)} ignored rules have a row: {', '.join(sorted(ignored))}")
+          PY
