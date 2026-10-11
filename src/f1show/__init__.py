@@ -116,6 +116,15 @@ from f1show.request_policy import (
     RetryingHttpClient,
     RetryPolicy,
 )
+from f1show.run import (
+    RecordedSessionNotFoundError,
+    RecordedSourceError,
+    RecordedSourceMissingError,
+    load_recorded_session,
+    main,
+    native_base_url,
+    run_session,
+)
 from f1show.session import (
     RunNotActiveError,
     RunState,
@@ -155,4 +164,8 @@ __all__ = [
     "GoogleGenAIClient", "SafeguardedModelClient", "ModelUsage", "ModelError",
     "ModelTimeoutError", "ModelRateLimitedError", "ModelServerError", "ModelTransportError",
     "ModelResponseError",
+    # F10: the thin single-process orchestration that composes replay, events and booth.
+    "run_session", "native_base_url", "main",
+    "load_recorded_session", "RecordedSourceError", "RecordedSourceMissingError",
+    "RecordedSessionNotFoundError",
 ]
