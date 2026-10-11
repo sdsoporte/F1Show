@@ -2055,6 +2055,27 @@ parent, after the review had already approved the first candidate.**
 - **Surfaces**: `src/f1show/booth.py` and `tests/test_booth.py`. Non-regression: the full suite stays
   green and the ten mutants still die on the final bytes.
 
+**Correction C3, registered before the edit. Test-only, and both items come from the final
+independent verification of the pins C2 added.**
+
+- **(a) The prompt-agreement pin is partial, and that is the same silent-drift class C2 existed to
+  close.** It asserts that the marker appears somewhere in the rendered prompt, so **one**
+  interpolated occurrence satisfies it. The verifier changed only the rule line back to a literal
+  while the section header still interpolated the constant, and the suite stayed at **62 passed**: the
+  prompt would teach two different markers while the parser accepts only one, which is exactly the
+  mass-refusal mode at runtime. The pin must **count** the marker occurrences in the rendered prompt
+  rather than find one, so a partial drift fails. Required evidence: after the change, the
+  rule-line-only drift must fail a named test.
+- **(b) `F09_EXPORTED_NAMES` asserts nothing about itself.** Setting it to `()` made the export test
+  pass with **zero checks** (verified live). The list must be asserted non-empty and free of
+  duplicates before it is used, the same standard the step-1/F04 session applied to its own `__all__`
+  sweep.
+- **Surfaces**: `tests/test_booth.py` **only**. If a production change turns out to be needed, stop
+  and report it rather than making it: the production bytes are already verified and a change there
+  invalidates everything above.
+- **Non-regression**: focused stays green, the full suite stays green, and the two mutations above
+  must now fail in `/tmp` copies while nothing else changes.
+
 ### F10 — Wire bounded end-to-end orchestration
 
 - [ ] Correlate enrichment by event/session/version, apply bounded join deadlines,
