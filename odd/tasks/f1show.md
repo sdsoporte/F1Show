@@ -2048,11 +2048,21 @@ and `{GOOGLE_GEMINI_BASE_URL}/models`, which is `/v1/models`, returns **200**. S
 value to satisfy the Gemini SDK would break the OpenAI-compatible route that is already proven. What
 exists is **one declared value facing two consumers with different conventions**: the OpenAI-compatible
 surface wants the version in the base URL, while `google-genai` appends its own `v1beta` and needs a base
-without one. Therefore: **derive the base per dialect, in memory, and leave the declared value to the
-operator** — normalising it in F10 works under either declaration and costs nothing. General form worth
-keeping: **when one configured value serves two consumers with different conventions, that is a
-composition problem, not a configuration defect.** The dialect question remains settled in favour of the
-native route, so **F10 can use the already-published adapter** instead of needing a new one.
+without one. Therefore: **derive the base per
+dialect, in memory, and leave the declared value to the operator.** An earlier version of this record
+asserted that normalising in F10 "works under either declaration and costs nothing" — the peer session
+correctly flagged that as an **unproven property**, and this project does not record unproven properties
+as facts. **F10's requirement, not yet met:** the derivation must be exercised against **both** base forms
+— one carrying `/v1` and one carrying no version segment — as two parameterised cases, each with the
+composed URL **captured from the wire**. The reason is the failure mode: a normalisation written only for
+today's `/v1` shape, such as one that always strips the last path segment, would **fail silently** the
+moment an operator changes the declared value and land back on the same 404 that took three rounds to
+diagnose. General form worth keeping: **when one configured value serves two consumers with different
+conventions, that is a composition problem, not a configuration defect** — and the sharper version, since
+the same pattern bit this project three times in one round (a `/v1` appended by hand, a `models/` prefix
+reconstructed, a declared base assumed self-contained), is that **each one was a value whose context was
+assumed instead of measured.** The dialect question remains settled in favour of the native route, so
+**F10 can use the already-published adapter** instead of needing a new one.
 
 **A blocker that was carried, questioned, and then cleared on the user's instruction.** The automated
 lens check reported `src/f1show/__init__.py:13 I001` as a blocker every time that file was touched.

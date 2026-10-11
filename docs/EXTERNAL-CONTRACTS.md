@@ -459,12 +459,21 @@ and rate limits, thinking-configuration passthrough, latency or stability under 
 for the other eleven aliases. One alias with one trivial prompt proves the route, not the surface.
 
 **Action for the project: derive the base per dialect, in memory, and leave the declared value alone.**
-Editing it is the operator's call and carries a real risk of breaking a working route; an F10 that
-normalises the base before handing it to the SDK works with either declaration and costs nothing. This
-correction came from the peer session, which spotted that the value was load-bearing before the wrong
-recommendation had settled into the record — and the general form is worth keeping: **when one configured
-value serves two consumers with different conventions, treat it as a composition problem, not a
-configuration defect.**
+Editing it is the operator's call and carries a real risk of breaking a working route. An earlier version
+of this note asserted that normalising the base in F10 "works with either declaration and costs
+nothing" — that was an **unproven property**, and this file does not record unproven properties as facts.
+What F10 must therefore do is **prove it**: the derivation is written so that it is exercised against
+**both** base forms — one carrying `/v1` and one carrying no version segment — as two parameterised cases,
+with the composed URL **captured from the wire** in each. The reason is the failure mode, not tidiness: a
+normalisation written only for today's `/v1` shape, such as one that always strips the last path segment,
+would **fail silently** the moment an operator changes the declared value, and land back on the same 404
+that took three rounds to diagnose. Two captured cases turn the claim into a measurable fact.
+
+The general form is worth keeping: **when one configured value serves two consumers with different
+conventions, treat it as a composition problem, not a configuration defect.** And the sharper version,
+because the same pattern has now bitten this project three times in one round — a `/v1` appended by hand,
+a `models/` prefix reconstructed, a declared base assumed to be self-contained — is that **every one of
+those was a value whose context was assumed instead of measured.**
 
 ### Authentication paths
 
