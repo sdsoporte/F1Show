@@ -2314,6 +2314,18 @@ from the revision a location was recorded against. Applying that trigger at this
 (+70 lines since its review) and `collector.py` (+42) as never re-derived, and found a second wrong booth row
 — the persona validator sits at `:143-150`, not `:117-123` — inside a section whose own note had claimed that
 every anchor was re-measured.
+**And the trigger itself was upgraded on the peer's reasoning, which arrived labelled as reasoning and not as
+a measurement.** A line-count delta is **necessary but not sufficient**: a refactor that adds and removes the
+same number of lines, a reorder or a rename leaves the length untouched, and every row in that file would read
+as current without ever having been re-derived — **a false green, which is the worst class of result because it
+looks measured**. The key is now the file's **blob OID** at the recorded revision, compared against
+`git rev-parse HEAD:<path>`, recorded per file in the register's **Staleness keys** section. Measured when the
+rule was upgraded: the false green it prevents **had not occurred** in this repository — no file changed bytes
+with an unchanged length — and the hash still found two files the line audit had missed,
+`tests/test_auth.py` (+172 lines) and `tests/test_collector.py` (+120) — because the audit had been run over
+the source files only, while the register also carries rows in the test files. That is a gap in how the audit
+was applied rather than in the rule, and it is the second time in this round that applying a rule found more
+than the case that motivated it.
 
 ### F10 — Wire bounded end-to-end orchestration
 
