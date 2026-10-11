@@ -1989,14 +1989,23 @@ documentation. The full record lives in `docs/EXTERNAL-CONTRACTS.md`. A hygiene 
 a generated summary of that enumeration listed eleven entries while the raw artifact held twelve,
 the missing one being `gemini-3.6-flash-high` — **read the artifact, not the summary.**
 
-**A blocker I am deliberately not clearing, and the loop it creates.** The automated lens check reports
-`src/f1show/__init__.py:13 I001` as a blocker every time that file is touched. It is **pre-existing**:
-the same finding appears on `origin/main` (13:1) and on `0b1f0c7` (9:1), a commit from before this
-session introduced anything, and the line only moved because the integration added four docstring
-lines. Its fix is not clean: part of the preview reformats the `ports` import block and the
-`from f1show.ingest import ...` line, both authored by earlier natively approved and burned units
-(F02 and F03c), and the line-length half of the rule comes from a configuration that **lives outside
-this repository** — exactly the problem issue #7 exists to solve. So it is carried with the reasoning
-recorded on issue #6 and a pointer to #7, and the check will keep firing until either that
-configuration decision lands or the user authorizes the cosmetic change. Clearing it by conforming
-the repo to an invisible config would settle the symptom and leave the cause.
+**A blocker that was carried, questioned, and then cleared on the user's instruction.** The automated
+lens check reported `src/f1show/__init__.py:13 I001` as a blocker every time that file was touched.
+It was **pre-existing**: the same finding appeared on `origin/main` (13:1) and on `0b1f0c7` (9:1), a
+commit from before this session introduced anything, and the line had only moved because the
+integration added four docstring lines. The parent carried it with the reasoning recorded on issue #6
+and a pointer to #7 — the line-length half of that rule comes from a configuration that **lives
+outside this repository**, and conforming the repo to an invisible config would settle the symptom and
+leave the cause — and the check kept firing, which made the standoff itself a cost. The parent then
+put the choice to the user rather than either ignoring the tool or fixing silently, and the user
+chose to fix it and close the loop.
+**Done as a formatting-only unit**, `59f3ad0508355f963e1c615c95c3f3bcca064579`,
+`style(init): sort the package import block`, one path **+8/−3**: it wrapped the over-length
+`from f1show.ingest import ...` line and reordered `HttpClient` ahead of `HttpDecodeError`/`HttpError`
+and `RetryingHttpClient` ahead of `RetryPolicy`. Verified rather than assumed: the **imported name set
+is identical** before and after (93 names, none added or removed, proved by an AST comparison against
+the published version), the full suite stayed at **643 passed**, both the `--select I` rule and the
+whole harness config report *All checks passed!*, and the module still exports 93 names with spot
+checks on both parties' symbols. ASSESS returned **`reviewDue: false`, `under_budget`** at 11 changed
+lines, so no native review was run for it — a decision on the record, not an omission. It is
+**unpublished** work awaiting its own delivery decision.
