@@ -23,6 +23,7 @@ a harness guard rather than a race assertion.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import datetime as dt
 import inspect
@@ -704,6 +705,566 @@ async def test_a_supplied_reference_that_is_not_cited_is_never_attributed() -> N
     assert turn.evidence == ("position[0].position",)
 
 
+# --- The residual citation channels (F09b) --------------------------------------
+
+#: A never-supplied reference in the collector's own ``<family>[<index>].<field>`` form.
+#: It is the exact token every channel below tries to smuggle into the aired text.
+NEVER_SUPPLIED = "position[99].invented"
+
+#: Unicode format characters (category Cf) a fabricated reference can hide behind. The
+#: scanner's normalized view drops them, so the token is read as if it were not obfuscated.
+ZERO_WIDTH_SPACE = "\u200b"
+
+#: A whitespace character that is not the ASCII space. The scanner's view makes it a space.
+NON_BREAKING_SPACE = "\u00a0"
+
+
+@pytest.mark.anyio
+async def test_a_bullet_prefixed_citation_line_carrying_a_never_supplied_reference_is_a_violation() -> None:
+    """Channel 1: a bullet-prefixed marker line is a citation attempt, not commentary.
+
+    Before F09b these bytes aired a turn whose commentary carried the never-supplied
+    ``position[99].invented`` verbatim, because the violation check matched the marker only
+    at the very start of the stripped line.
+    """
+    event = detected(index=0)
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text=(
+                    "EVIDENCE: position[0].position\n"
+                    f"- EVIDENCE: {NEVER_SUPPLIED}\n"
+                    "Verstappen is P3 on track."
+                ),
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the bullet-prefixed citation-line run")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.MULTIPLE_CITATION_LINES
+
+
+@pytest.mark.anyio
+async def test_a_citation_line_with_a_space_before_the_colon_and_a_never_supplied_reference_is_a_violation() -> None:
+    """Channel 2: ``EVIDENCE :`` with a space before the colon is still a citation attempt.
+
+    Before F09b the space made the line invisible to both checks, so it aired as
+    commentary and carried the never-supplied reference through.
+    """
+    event = detected(index=0)
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text=(
+                    "EVIDENCE: position[0].position\n"
+                    f"EVIDENCE : {NEVER_SUPPLIED}\n"
+                    "Verstappen is P3 on track."
+                ),
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the spaced-colon citation-line run")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.MULTIPLE_CITATION_LINES
+
+
+@pytest.mark.anyio
+async def test_a_never_supplied_reference_inside_the_commentary_refuses_the_turn() -> None:
+    """Channel 3: a reference-shaped token mid-line, with no citation line of its own.
+
+    Before F09b this aired: the token was neither a second citation line nor a
+    citation-line entry, so no check ever saw it.
+    """
+    event = detected(index=0)
+    text = f"Verstappen is P3 on track, per {NEVER_SUPPLIED}."
+    model = ScriptedModelClient([spoken(ref(event), text)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the mid-line reference escape run")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT
+
+
+@pytest.mark.anyio
+async def test_a_bare_never_supplied_reference_with_no_marker_refuses_the_turn() -> None:
+    """Channel 4: a bare reference token with no marker at all, as the whole commentary.
+
+    Before F09b this aired with the never-supplied reference as the entire turn text.
+    """
+    event = detected(index=0)
+    model = ScriptedModelClient([spoken(ref(event), NEVER_SUPPLIED)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the bare-reference escape run")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT
+
+
+@pytest.mark.anyio
+async def test_a_supplied_reference_named_in_the_commentary_is_never_flagged() -> None:
+    """The other side of the content rule: a token that *was* supplied still airs."""
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    text = "Verstappen is P3 on track; position[0].status reads TRACK."
+    model = ScriptedModelClient([spoken("position[0].position", text)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the supplied-reference-in-commentary run")
+
+    (turn,) = result.transcript.turns
+    assert turn.text == text
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.TURN
+    assert outcome.reason is None
+
+
+@pytest.mark.anyio
+async def test_the_scanned_reference_shape_is_derived_from_the_supplied_references() -> None:
+    """The scanner is structural, not keyed to one family or to the supplied fields.
+
+    The event supplies only ``laps[4].lap_number``, so a rule built from the supplied
+    names would miss ``pit[9].duration``; the derived shape catches it.
+    """
+    event = detected(
+        index=4,
+        event_type=EventType.LAP_COMPLETED,
+        family="laps",
+        evidence={"lap_number": 12},
+    )
+    assert evidence_references(event) == ("laps[4].lap_number",)
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text=(
+                    "EVIDENCE: laps[4].lap_number\n"
+                    "Lap 12 done; pit[9].duration was 2.4s."
+                ),
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the derived-reference-shape run")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT
+
+
+@pytest.mark.parametrize("continuation", ["[99].evil", "[99]", "[99"])
+@pytest.mark.anyio
+async def test_a_fragment_glued_to_a_supplied_reference_refuses_the_turn(
+    continuation: str,
+) -> None:
+    """Adjacency: a bracket glued directly onto a matched reference is a fragment.
+
+    A ``.`` no longer counts here: a dotted suffix is prose, not a fabricated citation, so
+    only the bracket continuation refuses. These are the bytes where ``finditer`` consumed
+    ``position[0].position`` and left ``[99]...`` unable to start a new match, so the
+    fragment rode into the transcript glued to a supplied reference.
+    """
+    event = detected(index=0)
+    text = f"Verstappen is P3, per {ref(event)}{continuation}."
+    model = ScriptedModelClient([spoken(ref(event), text)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard=f"the adjacency-fragment run for {continuation!r}")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT
+
+
+@pytest.mark.anyio
+async def test_a_fabricated_non_numeric_index_refuses_the_turn() -> None:
+    """The index window: any non-empty bracket content is read as the index.
+
+    Before this follow-up the scanner required digits between the brackets, so
+    ``position[x].invented`` -- a citation attempt a reader cannot tell from a real one --
+    aired inside the turn text.
+    """
+    event = detected(index=0)
+    text = "Verstappen is P3, per position[x].invented"
+    model = ScriptedModelClient([spoken(ref(event), text)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the non-numeric-index run")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT
+
+
+@pytest.mark.anyio
+async def test_the_unbracketed_residual_still_airs_as_a_declared_boundary() -> None:
+    """The kept boundary: ``position99.invented`` is not refused, and that is deliberate.
+
+    The scanner derives its shape from the supplied references, which always carry a
+    bracketed index, so an unbracketed ``word<digits>.word`` is not read as a citation.
+    Matching it would widen refusal with unmeasured false positives in ordinary prose. If
+    the collector's reference grammar ever changes to that shape, this pin fails and the
+    boundary has to be revisited -- which is the trigger, not an accident.
+    """
+    event = detected(index=0)
+    text = "Verstappen is P3, per position99.invented."
+    model = ScriptedModelClient([spoken(ref(event), text)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the declared-boundary run")
+
+    (turn,) = result.transcript.turns
+    assert turn.text == text
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.TURN
+    assert outcome.reason is None
+
+
+@pytest.mark.anyio
+async def test_a_sentence_final_period_after_a_supplied_reference_still_airs() -> None:
+    """Narrowing the dot continuation: a sentence-final period is ordinary prose.
+
+    A ``.`` immediately after a matched reference counts as a malformed fragment only when
+    it begins more dotted text. Under the earlier literal rule this exact case -- a correct
+    answer, since sentences end with periods -- was refused, which is most answers.
+    """
+    event = detected(index=0)
+    text = f"Verstappen is P3, per {ref(event)}."
+    model = ScriptedModelClient([spoken(ref(event), text)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the sentence-final-period run")
+
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.TURN
+    assert outcome.reason is None
+    (turn,) = result.transcript.turns
+    assert turn.text == text
+
+
+@pytest.mark.parametrize("token", ["position[]", "position[].invented"])
+@pytest.mark.anyio
+async def test_an_empty_bracket_index_refuses_the_turn(token: str) -> None:
+    """The empty-bracket shape is reference-shaped prose and is refused.
+
+    The collector always writes an index and a field, so ``position[]`` on its own and
+    ``position[].invented`` are fabricated forms. The index window is zero-width so both
+    are scanned; this is the same declared fail-closed cost, not a new kind of cost.
+    """
+    event = detected(index=0)
+    text = f"Verstappen is P3, per {token}."
+    model = ScriptedModelClient([spoken(ref(event), text)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard=f"the empty-bracket run for {token!r}")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT
+
+
+@pytest.mark.anyio
+async def test_the_hyphenated_suffix_still_airs_as_a_declared_boundary() -> None:
+    """The second recorded boundary: a hyphenated suffix leaves the supplied reference intact.
+
+    ``position[0].position-evil`` is not refused: the supplied reference is whole and the
+    suffix is neither an attached bracket nor a fabricated token. Recorded here and in the
+    module docstring so the next reader does not have to rediscover the boundary.
+    """
+    event = detected(index=0)
+    text = f"Verstappen is P3, per {ref(event)}-evil."
+    model = ScriptedModelClient([spoken(ref(event), text)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the hyphenated-suffix boundary run")
+
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.TURN
+    (turn,) = result.transcript.turns
+    assert turn.text == text
+
+
+@pytest.mark.parametrize(
+    "commentary",
+    [
+        "The gap was table [4] . The value stands.",
+        "See item [12] . Next sentence follows.",
+        "The array a [ i ] . length is three.",
+    ],
+)
+@pytest.mark.anyio
+async def test_spaced_bracket_prose_is_refused_as_the_declared_cost_of_joint_tolerance(
+    commentary: str,
+) -> None:
+    """The declared cost of the joint-whitespace tolerance: spaced-bracket prose refuses.
+
+    Whitespace is tolerated at the token's structural joints so that a fabricated citation
+    separated by a plain space -- ``position [1].invented`` -- cannot air. The price, stated
+    plainly as the trade it is: ordinary prose which happens to contain
+    ``word [digits] . word`` is read as a spaced reference and refused. Refusing a spaced
+    fabricated citation a model can plausibly emit is worth more than accepting this prose,
+    which this project does not expect in commentary; the cost is pinned here rather than
+    left as a sentence, and the good direction is pinned by
+    ``test_a_supplied_reference_spaced_at_the_joints_still_airs``. The other declared
+    boundaries -- a dotted suffix is prose, the unbracketed ``position99.invented`` shape is
+    not produced by the collector's grammar, and a hyphenated suffix leaves the reference
+    intact -- stay declared in the module docstring and their own pins.
+    """
+    event = detected(index=0)
+    model = ScriptedModelClient([spoken(ref(event), commentary)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard=f"the declared-joint-cost run for {commentary!r}")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT
+
+
+@pytest.mark.anyio
+async def test_a_supplied_reference_spaced_at_the_joints_still_airs() -> None:
+    """The good direction of the tolerance: a real reference spaced at the joints airs.
+
+    ``position [0] . position`` canonicalizes to the supplied ``position[0].position`` and
+    the turn airs, so nobody can widen the scanner into refusing a legitimately spaced
+    supplied reference without failing this pin.
+    """
+    event = detected(index=0)
+    text = "Verstappen is P3, per position [0] . position."
+    model = ScriptedModelClient([spoken(ref(event), text)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the spaced-supplied-reference run")
+
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.TURN
+    (turn,) = result.transcript.turns
+    assert turn.text == text
+
+
+@pytest.mark.parametrize("suffix", [".evil", ".The tyres are gone."])
+@pytest.mark.anyio
+async def test_a_dotted_suffix_after_a_supplied_reference_is_prose_and_airs(
+    suffix: str,
+) -> None:
+    """A ``.`` after a clean reference is a sentence boundary, not a fabricated citation.
+
+    Protecting against a dotted suffix is not worth refusing ``position[0].position.The``,
+    which is exactly what a model writes under token pressure when it omits the space after
+    a full stop. The supplied reference is intact, so the turn airs.
+    """
+    event = detected(index=0)
+    text = f"Verstappen is P3, per {ref(event)}{suffix}"
+    model = ScriptedModelClient([spoken(ref(event), text)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard=f"the dotted-suffix run for {suffix!r}")
+
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.TURN
+    (turn,) = result.transcript.turns
+    assert turn.text == text
+
+
+@pytest.mark.anyio
+async def test_a_fabricated_reference_split_by_a_zero_width_space_refuses_the_turn() -> None:
+    """A zero-width space must not hide a fabricated reference behind invisible bytes.
+
+    ``position[0]`` + ZWSP + ``.invented`` airs with text visually identical to
+    ``position[0].invented``; the scanner's normalized view drops the format character, so
+    the fabricated token is seen and refused.
+    """
+    event = detected(index=0)
+    text = f"Verstappen is P3, per position[0]{ZERO_WIDTH_SPACE}.invented."
+    model = ScriptedModelClient([spoken(ref(event), text)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the zero-width-space run")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT
+
+
+@pytest.mark.anyio
+async def test_a_fabricated_reference_split_by_a_non_breaking_space_refuses_the_turn() -> None:
+    """A NBSP between the family and the bracket must not hide a fabricated reference.
+
+    The scanner's view makes every whitespace character a plain space, and the token's
+    structural joints tolerate it, so the split reference is recognised and refused.
+    """
+    event = detected(index=0)
+    text = f"Verstappen is P3, per position{NON_BREAKING_SPACE}[1].invented."
+    model = ScriptedModelClient([spoken(ref(event), text)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the non-breaking-space run")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT
+
+
+@pytest.mark.anyio
+async def test_a_fabricated_reference_split_by_a_newline_refuses_the_turn() -> None:
+    """A newline between the family and the bracket must not hide a fabricated reference."""
+    event = detected(index=0)
+    text = "Verstappen is P3, per position\n[1].invented."
+    model = ScriptedModelClient([spoken(ref(event), text)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the newline-split run")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT
+
+
+@pytest.mark.parametrize(
+    "first_line",
+    [
+        "EVIDENCE : position[0].position",
+        "- EVIDENCE: position[0].position",
+        "* evidence: position[0].position",
+    ],
+)
+@pytest.mark.anyio
+async def test_the_tolerant_violation_predicate_never_widens_acceptance(first_line: str) -> None:
+    """Widening what is *refused* must not widen what is *accepted* as the citation line.
+
+    The first line is accepted only in the exact shape the prompt teaches, so a tolerant
+    spelling that is not that exact marker leaves the answer uncited, exactly as before.
+    """
+    event = detected(index=0)
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text=f"{first_line}\nVerstappen is P3.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard=f"the acceptance-not-widened run for {first_line!r}")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.UNCITED
+
+
+@pytest.mark.anyio
+async def test_duplicate_citations_are_collapsed_and_their_order_is_preserved() -> None:
+    """A pin on the collapse ``dict.fromkeys`` already performs: order kept, repeats dropped."""
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK", "driver": "VER"})
+    assert evidence_references(event) == (
+        "position[0].position",
+        "position[0].status",
+        "position[0].driver",
+    )
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text=(
+                    "EVIDENCE: position[0].driver, position[0].position, "
+                    "position[0].status, position[0].position\n"
+                    "Verstappen is P3 on track."
+                ),
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the duplicate-citation collapse run")
+
+    (turn,) = result.transcript.turns
+    assert turn.evidence == (
+        "position[0].driver",
+        "position[0].position",
+        "position[0].status",
+    )
+
+
+@pytest.mark.anyio
+async def test_an_empty_citation_item_is_dropped_and_the_turn_still_airs() -> None:
+    """An empty item between commas is dropped, and the turn still airs.
+
+    Dropping an empty string is tolerance, never an injection: an empty item carries no
+    reference, so nothing unsupplied can ride in through it. The documented behaviour is
+    that the comma-heavy line is still the one citation line the protocol asks for and the
+    evidence tuple is exactly the non-empty references.
+    """
+    event = detected(index=0)
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text="EVIDENCE: position[0].position,,\nVerstappen is P3 on track.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the empty-citation-item run")
+
+    (turn,) = result.transcript.turns
+    assert turn.text == "Verstappen is P3 on track."
+    assert turn.evidence == ("position[0].position",)
+
+
+def test_the_unsupplied_reference_reason_is_typed_and_distinguishable() -> None:
+    """The content rule's reason stands apart from the citation-line reasons."""
+    assert BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT.value == "unsupplied_reference_in_text"
+    assert BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT not in {
+        BoothReason.UNCITED,
+        BoothReason.INVENTED_REFERENCE,
+        BoothReason.MULTIPLE_CITATION_LINES,
+        BoothReason.BLANK_TEXT,
+        BoothReason.NO_CITABLE_EVIDENCE,
+        BoothReason.OUTSIDE_CONTEXT_WINDOW,
+        BoothReason.REPEATS_PREVIOUS_TURN,
+    }
+
+
 # --- Repetition suppression and stale-context exclusion ------------------------
 
 
@@ -984,6 +1545,52 @@ def test_the_booth_module_names_no_real_model_id_literal() -> None:
         assert marker not in source, f"booth.py must not name a real model ID like {marker!r}"
 
 
+def test_booth_source_names_the_marker_only_through_the_constant() -> None:
+    """The marker may appear in code only as the constant's own value.
+
+    The runtime prompt pin counts two interpolated sites, but a marker spelled as a fresh
+    string literal *inside* a code path is invisible to every runtime check that reads the
+    constant. This scans the module's string literals, excluding the constant's own value
+    and docstrings -- documentation, which the docstring test separately pins to name the
+    marker -- so reintroducing a literal in the prompt or the parser fails here.
+    """
+    marker = f1show.booth._CITATION_MARKER
+    stem = marker.removesuffix(":")
+    literal = re.compile(rf"{re.escape(stem)}\s*:", re.IGNORECASE)
+    tree = ast.parse(BOOTH_SOURCE.read_text(encoding="utf-8"))
+
+    docstrings: set[int] = set()
+    constant_values: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            body = getattr(node, "body", [])
+            if (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                docstrings.add(id(body[0].value))
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "_CITATION_MARKER":
+                    constant_values.add(id(node.value))
+
+    offenders = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in docstrings
+        and id(node) not in constant_values
+        and literal.search(node.value)
+    ]
+    assert offenders == [], (
+        "booth.py may name the citation marker only through _CITATION_MARKER; these "
+        f"literals reintroduce it: {offenders!r}"
+    )
+
+
 #: The names this unit contributes to the package root. The list is deliberately narrow:
 #: a sweep over every ``f1show.__all__`` entry would fail today on ``SnapshotResult``,
 #: which is another unit's surface and its own tracked defect, not F09's.
@@ -1008,6 +1615,12 @@ def test_every_f09_name_is_exported_and_resolvable_from_the_package_root() -> No
     is exactly this unit's eight names on purpose: a sweep over all of ``f1show.__all__``
     would fail today on ``SnapshotResult``, which belongs to another unit and is that
     unit's own tracked defect, not F09's surface to fix.
+
+    The expected set is *derived* rather than trusted: every name ``f1show.booth``
+    declares public under its own ``__all__`` and the package root also exports is exactly
+    this unit's surface. A loop over ``F09_EXPORTED_NAMES`` alone stays green when a name
+    is deleted from the list, so the equality against that derived set is what makes the
+    pin fail on a shrink.
     """
     if not F09_EXPORTED_NAMES:
         pytest.fail(
@@ -1016,6 +1629,12 @@ def test_every_f09_name_is_exported_and_resolvable_from_the_package_root() -> No
         )
     if len(set(F09_EXPORTED_NAMES)) != len(F09_EXPORTED_NAMES):
         pytest.fail(f"F09_EXPORTED_NAMES carries duplicates: {F09_EXPORTED_NAMES}")
+    derived = set(f1show.booth.__all__) & set(f1show.__all__)
+    assert set(F09_EXPORTED_NAMES) == derived, (
+        "F09_EXPORTED_NAMES must be exactly every booth public name the package root "
+        f"exports; missing {sorted(derived - set(F09_EXPORTED_NAMES))}, extra "
+        f"{sorted(set(F09_EXPORTED_NAMES) - derived)}"
+    )
     for name in F09_EXPORTED_NAMES:
         assert name in f1show.__all__, f"{name} is missing from f1show.__all__"
         assert getattr(f1show, name) is not None, f"{name} is not resolvable from f1show"

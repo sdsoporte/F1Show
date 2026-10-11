@@ -34,11 +34,36 @@ interpolates it from the same definition the parser accepts, so the format the m
 taught and the format that is checked come from one source and cannot drift apart. An
 answer that cites nothing, cites a reference that was
 never supplied, leaves no commentary after the citation, or carries a further
-citation-marked line - a protocol violation, refused with its own
-``BoothReason.MULTIPLE_CITATION_LINES`` rather than aired with just its first citation
-validated - is **refused** with a typed outcome instead of becoming a turn with a guessed
-or partially checked source. Every emitted ``Turn`` therefore carries a non-empty
-``evidence`` tuple drawn from that one event's own references.
+citation-marked line - a later line that is citation-shaped under a tolerant reading (an
+optional leading bullet, optional whitespace before the colon, any case), refused with its
+own ``BoothReason.MULTIPLE_CITATION_LINES`` rather than aired with just its first
+citation validated - is **refused** with a typed outcome instead of becoming a turn with
+a guessed or partially checked source. The guarantee is about *tokens*, not lines: a
+reference-shaped token anywhere in the aired commentary that is not one of the supplied
+references -- or a matched reference with a bracket glued directly onto it
+(``position[0].position[99]``) -- is refused as
+``BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT``, which is the one rule that reaches a bare or
+mid-line mention. Every emitted ``Turn`` therefore carries a non-empty ``evidence`` tuple
+drawn from that one event's own references.
+
+**The boundary of that guarantee, stated plainly.** The rule holds over reference-shaped
+tokens *as they appear after normalization* -- Unicode format characters removed and every
+whitespace character made a plain space -- and not over arbitrary obfuscation: an
+obfuscation this normalization does not undo is out of scope, and one is known to leak
+(``U+034F`` is neither a format character nor whitespace). Four shapes are deliberately
+left airing, recorded here so the next reader does not have to discover them. A dotted
+suffix after a clean reference is prose, not a fabricated citation, so
+``position[0].position.The tyres are gone.`` airs. The unbracketed ``position99.invented``
+shape is not one the collector's grammar produces. A hyphenated suffix such as
+``position[0].position-evil`` leaves the supplied reference itself intact. And a bare
+non-empty bracket with no field (``position[0]``) is not a complete reference token either.
+The cost of the tolerance is stated as the trade it is rather than left implicit:
+whitespace is tolerated at the token's structural joints so that a fabricated citation
+separated by a plain space -- ``position [1].invented`` -- cannot air, and the price is
+that ordinary prose containing ``word [digits] . word`` is read as a spaced reference and
+refused, as is an empty bracket such as ``word [ ]``, which needs neither a digit nor a dot
+to be refused. A *supplied* reference spaced at the joints still airs, and that direction
+is pinned so the tolerance cannot be widened into refusing it.
 
 **Neutral degradation.** Any ``ModelError`` - timeout, rate limit, server, transport, a
 malformed or refused answer - emits no turn and records a typed degradation outcome. There
@@ -60,6 +85,8 @@ from __future__ import annotations
 import datetime as dt
 import json
 import math
+import re
+import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -167,6 +194,11 @@ class BoothReason(str, Enum):
     ``MULTIPLE_CITATION_LINES`` names the protocol violation itself, not its symptom: the
     answer opened more than one line with the citation marker, so the whole answer is
     refused and is never aired with only its first citation validated.
+
+    ``UNSUPPLIED_REFERENCE_IN_TEXT`` names the content rule: the aired commentary carried
+    a reference-shaped token that was never supplied. It stands apart from
+    ``INVENTED_REFERENCE``, which is about the citation line itself, and from
+    ``MULTIPLE_CITATION_LINES``, which is about a further citation-shaped line.
     """
 
     OUTSIDE_CONTEXT_WINDOW = "outside_context_window"
@@ -174,6 +206,7 @@ class BoothReason(str, Enum):
     UNCITED = "uncited"
     INVENTED_REFERENCE = "invented_reference"
     MULTIPLE_CITATION_LINES = "multiple_citation_lines"
+    UNSUPPLIED_REFERENCE_IN_TEXT = "unsupplied_reference_in_text"
     BLANK_TEXT = "blank_text"
     REPEATS_PREVIOUS_TURN = "repeats_previous_turn"
 
@@ -254,27 +287,134 @@ class _RefusedAnswer:
 #: marker the model is taught and the marker the parser accepts cannot drift apart.
 _CITATION_MARKER = "EVIDENCE:"
 
+#: The marker's own word: the tolerant predicate below spells the marker through the
+#: constant too, so the citation format is still defined in exactly one place.
+_CITATION_MARKER_WORD = _CITATION_MARKER.removesuffix(":")
+
+#: The citation-shaped reading used **only** by the violation check: an optional leading
+#: bullet, optional whitespace before the colon and any case. It is deliberately wider
+#: than what acceptance reads, so a later line that is a citation attempt under any
+#: spelling is refused as ``MULTIPLE_CITATION_LINES``; it is never applied to the first
+#: line, because widening what is refused must not widen what is accepted.
+_CITATION_SHAPED = re.compile(
+    rf"^\s*[-*+\u2022]?\s*{re.escape(_CITATION_MARKER_WORD)}\s*:",
+    re.IGNORECASE,
+)
+
 
 def _opens_with_citation_marker(line: str) -> bool:
     """Whether ``line`` opens the citation line, read exactly as the acceptance path reads it.
 
     The marker is matched at the start of the stripped line and case-insensitively, so a
     commentary line that merely mentions the marker mid-sentence is not a citation line.
+    This exact reading is what *accepts* the first line; the tolerant
+    ``_is_citation_shaped`` below is what *refuses* a later one.
     """
     return line.strip().upper().startswith(_CITATION_MARKER)
+
+
+def _is_citation_shaped(line: str) -> bool:
+    """Whether ``line`` is a citation attempt under the tolerant reading, for refusal only."""
+    return _CITATION_SHAPED.match(line) is not None
+
+
+#: The scanned index: any bracket content, including none, deliberately wider than the
+#: record index of digits the collector writes. A fabricated ``position[x].invented`` or
+#: ``position[].invented`` is a citation attempt a reader cannot tell from a real one, so
+#: this keeps the already-declared fail-closed cost instead of adding a new one.
+_ANY_INDEX = r"[^\]]*"
+
+#: The bare empty-bracket form, with no field. The collector always writes an index and a
+#: field, so ``position[]`` on its own is a fabricated reference and is scanned even though
+#: a non-empty bare ``position[0]`` would be ordinary prose and is left alone. Its joints
+#: tolerate whitespace like the full form's, so ``position [ ]`` is the same token.
+_EMPTY_BRACKET = r"\w+\s*\[\s*\]"
+
+
+def _scan_view(text: str) -> str:
+    """The view the reference scanner matches on: format characters gone, whitespace plain.
+
+    Every Unicode format character (category ``Cf``: zero-width space, ZWJ/ZWNJ, BOM) is
+    dropped, so a fabricated ``position[0]`` + zero-width space + ``.invented`` cannot hide
+    behind invisible bytes whose aired text reads exactly like ``position[0].invented``.
+    Every whitespace character -- NBSP included -- becomes a plain space, so the scanner's
+    ``\\s*`` joints can recognise a reference split by a newline or a NBSP. Whitespace is
+    *not* removed globally: that would merge unrelated words into invented tokens. The aired
+    text is never changed by this view; it is only what the content rule matches on.
+    """
+    return "".join(
+        " " if character.isspace() else character
+        for character in text
+        if unicodedata.category(character) != "Cf"
+    )
+
+
+def _reference_scanner(references: Sequence[str]) -> re.Pattern[str] | None:
+    """Compile the scanner for one reference token out of the supplied references.
+
+    The collector writes every reference as ``<family>[<record_index>].<field>`` and
+    ``_citable_evidence`` reproduces that form, so the shape is *read off* a supplied
+    reference rather than pasted in as a second pattern that could drift from it: each
+    reference is split on the two separators the form itself carries -- the bracketed
+    index and the dot before the field -- and the family and the field are read as word
+    runs. The index window is wider than the digits the collector writes and reaches zero
+    (``_ANY_INDEX``), the bare empty-bracket form is scanned without a field
+    (``_EMPTY_BRACKET``), and every structural joint tolerates whitespace so a reference
+    split by a newline or a NBSP is still one token. A reference that does not carry that
+    structure yields no scanner, and the content rule then has nothing to flag rather than
+    falling back to an invented pattern.
+    """
+    for reference in references:
+        family, _, remainder = reference.partition("[")
+        index, _, remainder = remainder.partition("]")
+        if not (family and index and remainder.startswith(".")):
+            continue
+        field = remainder[1:]
+        if not field:
+            continue
+        return re.compile(
+            rf"(?<!\w)(?:\w+\s*\[{_ANY_INDEX}\]\s*\.\s*\w+|{_EMPTY_BRACKET})(?!\w)"
+        )
+    return None
+
+
+def _canonical_reference(token: str) -> str:
+    """A matched token with its joint whitespace removed, comparable to a supplied reference."""
+    return "".join(token.split())
+
+
+def _has_attached_bracket(text: str, end: int) -> bool:
+    """Whether a bracket is glued directly onto the matched token, making it a fragment.
+
+    Only the bracket continuation is a fragment. A ``.`` after a clean reference is prose --
+    ``position[0].position.The tyres are gone.`` is a sentence boundary, not a fabricated
+    citation -- so a dotted suffix is deliberately left airing.
+    """
+    return text[end : end + 1] == "["
 
 
 def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _RefusedAnswer:
     """Parse the citation-first protocol, refusing anything not backed by ``allowed``.
 
     The first non-empty line must be the citation line, and it must be the only one: a
-    further line that opens with the citation marker is a protocol violation, refused as
-    ``MULTIPLE_CITATION_LINES`` because the answer's commentary boundary is undefined and
-    the rest of it arrives unvalidated. The shape is decided before the content, so a
+    further line that is citation-shaped under the tolerant reading -- an optional leading
+    bullet, optional whitespace before the colon, any case -- is a protocol violation,
+    refused as ``MULTIPLE_CITATION_LINES`` because the answer's commentary boundary is
+    undefined and the rest of it arrives unvalidated. What *accepts* the first line stays
+    the exact marker the prompt teaches. The shape is decided before the content, so a
     missing or empty citation is ``UNCITED`` only once no later line opens with the
     marker; any cited reference absent from ``allowed`` is ``INVENTED_REFERENCE``; and
-    commentary that is blank after the citation is ``BLANK_TEXT``. Order is preserved and
-    duplicates are collapsed, so the evidence tuple is exactly what was cited.
+    commentary that is blank after the citation is ``BLANK_TEXT``. Finally the content
+    rule matches on a normalized view of the aired commentary -- Unicode format characters
+    removed, every whitespace character made a plain space -- and refuses
+    ``UNSUPPLIED_REFERENCE_IN_TEXT`` when any reference-shaped token is not one of
+    ``allowed``, so a never-supplied reference cannot ride in on a bare or mid-line mention.
+    A bracket glued directly onto a matched token -- ``position[0].position[99]`` or
+    ``position[0].position[99].evil`` -- is an attached fragment and is refused for the same
+    reason; a dotted suffix is prose and airs. Order is
+    preserved, duplicates are collapsed, and an empty item between commas is dropped --
+    tolerance, never an injection, because an empty item carries no reference -- so the
+    evidence tuple is exactly what was cited.
     """
     lines = raw.splitlines()
     start = next((index for index, line in enumerate(lines) if line.strip()), None)
@@ -283,7 +423,7 @@ def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _Refu
     header = lines[start].strip()
     if not _opens_with_citation_marker(header):
         return _RefusedAnswer(BoothReason.UNCITED)
-    if any(_opens_with_citation_marker(line) for line in lines[start + 1:]):
+    if any(_is_citation_shaped(line) for line in lines[start + 1:]):
         return _RefusedAnswer(BoothReason.MULTIPLE_CITATION_LINES)
     cited = tuple(
         dict.fromkeys(
@@ -300,6 +440,14 @@ def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _Refu
     text = "\n".join(lines[start + 1:]).strip()
     if not text:
         return _RefusedAnswer(BoothReason.BLANK_TEXT)
+    scanned = _scan_view(text)
+    scanner = _reference_scanner(allowed)
+    if scanner is not None:
+        for match in scanner.finditer(scanned):
+            supplied = _canonical_reference(match.group(0)) in permitted
+            if supplied and not _has_attached_bracket(scanned, match.end()):
+                continue
+            return _RefusedAnswer(BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT)
     return _AcceptedAnswer(text=text, evidence=cited)
 
 
