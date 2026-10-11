@@ -2284,16 +2284,36 @@ baseline (705 → 736), two independently produced numbers agreeing. The range's
 too: the review's **789** changed lines are 778 insertions plus 11 deletions, and `170` in the peer's
 diffstat is that file's *changed* lines, not its insertions.
 **The peer's two findings were re-measured by the parent on the integrated bytes, and one came back
-sharper.** Both are registered in `docs/CARRIED-FINDINGS.md` with owner and trigger. The row that was
-waiting on this unit, `R3-004`, was retired as **superseded by measurement**: the pre-F09b `booth.py:288-294`
-held the `MULTIPLE_CITATION_LINES` predicate itself, so the unit rewrote the very code that row pointed at,
-and its own review then placed a measured finding on the successor. The sharper half: of the three
-false-refusal cases, the unbulleted one was **already** refused by the exact reading that shipped before,
-and only the **bullet and case forms are newly** refused — because the unit closed those escape channels by
-widening the violation predicate. That is a failure mode the hardening introduced, and its own review caught
-it. Also re-anchored by measurement, since this unit grew `booth.py` by 148 lines: the register's line
-locations for that file were re-derived from the old blobs rather than by adding a diff, because a location
-that is not re-derived becomes silently wrong and reads as verified.
+sharper.** Both are registered in `docs/CARRIED-FINDINGS.md` with owner and trigger. The sharper half: of the
+three false-refusal cases, the unbulleted one was **already** refused by the exact reading that shipped
+before, and only the **bullet and case forms are newly** refused — because the unit closed those escape
+channels by widening the violation predicate. That is a failure mode the hardening introduced, and its own
+review caught it; the integration review then **re-surfaced it independently under a fresh id**, one line from
+the unit's own location, which is the size-based gate re-reviewing approved bytes — now observed rather than
+predicted.
+**`R3-004` was closed by two PINS, and this record asserted the opposite for a while.** The pre-F09b
+`booth.py:288-294` holds `cited = tuple(dict.fromkeys(item.strip() for item in ... if item.strip()))` — the
+**duplicate collapse** and the **silent drop of empty items**, a **coverage** subject — and the unit closed it
+with `test_duplicate_citations_are_collapsed_and_their_order_is_preserved` plus an empty-item tolerance pin.
+Both pass, and both **passed before the change**: pins, with **no RED**, a weaker evidence class than closed by
+change. **The mechanism of the error is the lesson worth keeping: a `sed -n '286,295p'` window was printed and
+read as if it were the cited range `288-294`** — a real measurement of a **different object** than the row
+asserts; the predicate is at `:286-287`, one line above.
+**The correction took two rounds because agreement is not corroboration.** The peer first corrected this
+record properly, then accepted the parent's wrong version as better than its own **without measuring it**,
+when it had the bytes at hand. The rule that came out of it is mutual and blunt: **a claim about bytes is
+measured before it is conceded, whoever asserts it** — conceding quickly is not humility, it is the same
+unmeasured claim pointing the other way.
+**A fourth closure class came out of this, and it is the dangerous one.** Closures are by **change** (bytes
+moved, a test went red first), by **pin** (a test added that also passes before the change: no RED), as a
+**dead record** (no future condition), and now as **superseded by a rewrite**, where the location no longer
+holds the subject at all. The last one is special because it **depends on coordinates and can therefore be
+asserted without measuring** — which is exactly how the error above was born. That is why the register now
+requires a **subject descriptor** on every row and a **mechanical staleness trigger**, the line-count delta
+from the revision a location was recorded against. Applying that trigger at this closure flagged `auth.py`
+(+70 lines since its review) and `collector.py` (+42) as never re-derived, and found a second wrong booth row
+— the persona validator sits at `:143-150`, not `:117-123` — inside a section whose own note had claimed that
+every anchor was re-measured.
 
 ### F10 — Wire bounded end-to-end orchestration
 
