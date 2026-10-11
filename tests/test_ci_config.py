@@ -1,10 +1,11 @@
 """The repository's own CI claims, checked by the repository's own suite.
 
-**Why this file exists.** Until now nothing in ``tests/`` read ``ruff.toml``, the carried-findings
-register or the workflow. The register guard in CI was the *only* thing asserting that an ignored
-lint rule carries a row, and a guard whose own neutralisation passes the whole suite is one step
-away from not existing. The measured evidence for that: replacing the guard's ``if missing:`` with
-``if False:`` left every test green, and so did deleting a job's ``timeout-minutes``.
+**Why this file exists.** Nothing else in ``tests/`` reads ``ruff.toml``, the carried-findings
+register or the workflow, so without this file the register guard in CI would be the *only* thing
+asserting that an ignored lint rule carries a row — and a guard whose own neutralisation passes the
+whole suite is one step away from not existing. The measured evidence for that: replacing the
+guard's ``if missing:`` with ``if False:`` left every test green, and so did deleting a job's
+``timeout-minutes``.
 
 **The mirror rule.** This file **derives** the ignored rule set from ``ruff.toml`` and the rows from
 the register, and asserts the guard agrees with that derivation. It must not simply run the guard:
@@ -87,23 +88,33 @@ def missing_register_rows(config_text: str, register_text: str) -> list[str]:
     return sorted(code for code in ignored_rules_from(config_text) if code not in register_text)
 
 
-def guard_script() -> str:
+def guard_script(workflow_text: str | None = None) -> str:
     """The guard's own text, extracted from the workflow's heredoc block.
 
     Deliberately dumb: it takes the lines between the marker and its terminator, dedented by the
-    marker's indentation. Anything cleverer would be a second YAML parser to keep correct.
+    marker's indentation. Anything cleverer would be a second YAML parser to keep correct. What it
+    does *not* do is guess: the terminator must sit at the marker's own indentation and every body
+    line must be at least that deep. A block of any other shape fails here, rather than being
+    dedented into a script that is silently not the one the workflow runs.
     """
-    lines = WORKFLOW.read_text().splitlines()
+    lines = (WORKFLOW.read_text() if workflow_text is None else workflow_text).splitlines()
     openings = [index for index, line in enumerate(lines) if line.strip() == _HEREDOC_OPEN]
     assert len(openings) == 1, f"expected exactly one guard heredoc, found {len(openings)}"
     start = openings[0]
     indent = len(lines[start]) - len(lines[start].lstrip())
+    prefix = lines[start][:indent]
     for end in range(start + 1, len(lines)):
-        if lines[end].strip() == _HEREDOC_CLOSE:
+        if lines[end] == prefix + _HEREDOC_CLOSE:
             break
-    else:  # pragma: no cover - a missing terminator is a broken workflow, not a test case
-        raise AssertionError("the guard heredoc is not terminated")
-    body = [lines[index][indent:] if lines[index].strip() else "" for index in range(start + 1, end)]
+    else:
+        raise AssertionError("the guard heredoc is not terminated at its marker's indentation")
+    body_lines = lines[start + 1 : end]
+    shallower = [line for line in body_lines if line.strip() and not line.startswith(prefix)]
+    assert not shallower, (
+        "the guard heredoc's body must be indented at least as deep as its marker, or dedenting "
+        f"by the marker would not reproduce the script the workflow runs: {shallower[:1]}"
+    )
+    body = [line[indent:] if line.strip() else "" for line in body_lines]
     return "\n".join(body) + "\n"
 
 
@@ -161,6 +172,26 @@ def _workflow_with_extra_job(key: str, timeout: int | None = None) -> str:
         "        run: echo noop\n\n"
     )
     return WORKFLOW.read_text().replace("\njobs:\n", "\njobs:\n" + job, 1)
+
+
+def _planted_heredoc(body: list[str], *, terminator_indent: str | None = None) -> str:
+    """A minimal workflow text wrapping a guard heredoc of the given shape.
+
+    ``body`` holds the script's own lines, indented here by the marker's own indentation, so the
+    text is a faithful block unless ``terminator_indent`` says otherwise.
+    """
+    marker_indent = "      "
+    close_indent = marker_indent if terminator_indent is None else terminator_indent
+    lines = [
+        "jobs:",
+        "  tests:",
+        "    steps:",
+        "      - run: |",
+        f"{marker_indent}{_HEREDOC_OPEN}",
+        *[f"{marker_indent}{line}" for line in body],
+        f"{close_indent}{_HEREDOC_CLOSE}",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def _jobs_section(workflow_text: str) -> str:
@@ -280,17 +311,18 @@ def test_the_guard_fails_when_an_ignored_rule_has_no_row(tmp_path: pathlib.Path)
     result = run_guard(tmp_path, guard_script())
     assert result.returncode != 0, "the guard accepted an ignored rule with no row"
     assert "B904" in result.stdout + result.stderr
-    # A readable refusal, not a traceback: the assignment this unit answers asked for the failure
-    # to name the rule, and a KeyError that happens to exit non-zero would not.
+    # The refusal has to name the rule, not merely exit non-zero: a KeyError raised on the way to
+    # this branch would also exit non-zero, so the exit code alone cannot tell a refusal from a
+    # crash and an assertion on a code alone would pass for the wrong reason.
     assert "register guard:" in result.stdout + result.stderr
     assert "Traceback" not in result.stderr
 
 
 def test_the_guard_refuses_a_config_without_an_ignore_key(tmp_path: pathlib.Path) -> None:
-    """The two-line fix, pinned by behaviour: no ``[lint].ignore`` means the guard must refuse.
+    """A configuration with no ``[lint].ignore`` must be refused in the guard's own words.
 
-    Without this refusal the guard checks only the per-file rules and reports success, which is the
-    false green measured before this unit.
+    Without that refusal the guard reads the per-file table alone and reports success over a set of
+    rules that silently excludes the global ignores, so a green run says less than it appears to.
     """
     write_sandbox(
         tmp_path,
@@ -300,18 +332,25 @@ def test_the_guard_refuses_a_config_without_an_ignore_key(tmp_path: pathlib.Path
     result = run_guard(tmp_path, guard_script())
     assert result.returncode != 0, "the guard accepted a configuration with no [lint].ignore"
     assert "ignore" in result.stdout + result.stderr
-    # The two-line fix must refuse in its own words: without the explicit check this sandbox
-    # fails through a KeyError instead, which is a non-zero exit for the wrong reason.
+    # The refusal must be the guard's own: without the explicit ``[lint].ignore`` check this
+    # sandbox fails through a KeyError instead, a non-zero exit for the wrong reason.
     assert "register guard:" in result.stdout + result.stderr
     assert "Traceback" not in result.stderr
 
 
 def test_the_guard_refuses_a_missing_register(tmp_path: pathlib.Path) -> None:
-    """A register that does not exist is a failure, never an empty one."""
+    """A register that does not exist is a failure, never an empty one, and the refusal says which.
+
+    The message has to name the register: a guard that failed for a different reason while printing
+    its prefix would satisfy a check that read only the exit code and the prefix, and would leave
+    this condition — the one the test is named after — untested.
+    """
     (tmp_path / "ruff.toml").write_text(_config_with(["E501"]))
     result = run_guard(tmp_path, guard_script())
     assert result.returncode != 0, "the guard accepted a missing register"
     assert "register guard:" in result.stdout + result.stderr
+    assert "CARRIED-FINDINGS.md" in result.stdout + result.stderr
+    assert "Traceback" not in result.stderr
 
 
 # --- the workflow's own structure, in the part that does not need GitHub ------------------------------------
@@ -405,11 +444,11 @@ def test_no_key_line_in_the_jobs_section_is_invisible_to_the_scans() -> None:
 
 
 def test_a_workflow_without_a_jobs_section_is_not_read_as_an_empty_one() -> None:
-    """The slice both scans share asserts its own success, so neither can pass over nothing.
+    """A workflow with no ``jobs:`` section must not read as one whose jobs all carry a timeout.
 
-    Guarded because ``jobs_without_timeout`` used to slice its own copy of the section and would
-    have returned an empty list, and therefore claimed every job carries a timeout, if the section
-    had gone missing.
+    The slice is shared and asserts its own success, because a scan that sliced its own copy would
+    answer "no job is missing a timeout" over a section it never read: measured on ``7ec9ae84``,
+    where ``jobs_without_timeout()`` returned an empty list for a workflow with no ``jobs:``.
     """
     without_jobs = WORKFLOW.read_text().replace("\njobs:\n", "\non:\n", 1)
     with pytest.raises(AssertionError, match="no jobs: section"):
@@ -421,6 +460,33 @@ def test_the_guard_heredoc_is_locatable_exactly_once() -> None:
     while testing nothing."""
     script = guard_script()
     assert "tomllib" in script and "CARRIED-FINDINGS" in script
+
+
+def test_the_heredoc_locator_returns_the_script_its_marker_wraps() -> None:
+    """The happy direction, on a planted block: the body comes back dedented by the marker."""
+    assert guard_script(_planted_heredoc(["first", "", "second"])) == "first\n\nsecond\n"
+
+
+def test_the_heredoc_locator_refuses_a_terminator_at_another_indentation() -> None:
+    """A ``PY`` line that is not at the marker's indentation is not this block's terminator.
+
+    Matched by stripped text instead, any such line anywhere in the file would cut the block short
+    and the tests below would run whatever text happened to precede it, in silence. Requiring the
+    marker's own indentation makes a block that is not terminated fail where it is read.
+    """
+    with pytest.raises(AssertionError, match="not terminated at its marker's indentation"):
+        guard_script(_planted_heredoc(["body"], terminator_indent=""))
+
+
+def test_the_heredoc_locator_refuses_a_body_shallower_than_the_marker() -> None:
+    """Dedenting by the marker is faithful only while the body is at least that deep.
+
+    A shallower body line would lose characters to the prefix and the suite would execute a script
+    that is not the one the workflow runs, which is the failure a check on its own text cannot see.
+    """
+    shallower = "\n".join([f"      {_HEREDOC_OPEN}", "   too shallow", f"      {_HEREDOC_CLOSE}"])
+    with pytest.raises(AssertionError, match="at least as deep as its marker"):
+        guard_script(shallower)
 
 
 def test_no_ignored_rule_is_duplicated_or_blank() -> None:
