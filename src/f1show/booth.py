@@ -49,14 +49,46 @@ drawn from that one event's own references.
 **The boundary of that guarantee, stated plainly.** The rule holds over reference-shaped
 tokens *as they appear after normalization* -- Unicode format characters removed and every
 whitespace character made a plain space -- and not over arbitrary obfuscation: an
-obfuscation this normalization does not undo is out of scope, and one is known to leak
-(``U+034F`` is neither a format character nor whitespace). Four shapes are deliberately
-left airing, recorded here so the next reader does not have to discover them. A dotted
-suffix after a clean reference is prose, not a fabricated citation, so
-``position[0].position.The tyres are gone.`` airs. The unbracketed ``position99.invented``
-shape is not one the collector's grammar produces. A hyphenated suffix such as
-``position[0].position-evil`` leaves the supplied reference itself intact. And a bare
-non-empty bracket with no field (``position[0]``) is not a complete reference token either.
+obfuscation this normalization does not undo is out of scope, and **a family is known to
+leak**. Any character that **survives normalization** and is neither a word character nor
+whitespace -- the combining marks ``Mn``, ``Mc`` and ``Me`` are the common cases -- placed
+inside a structural joint defeats the scanner, so ``U+034F`` is the pinned
+**representative** rather than the whole leak: ``U+0301``, ``U+0308`` and the spacing mark
+``U+0903`` behave the same way, and no exact placement was recorded for any of them.
+**Six shapes are deliberately left
+airing**, recorded here as an explicit enumeration so the count and the items cannot
+disagree, so the next reader does not have to discover them:
+
+1. A dotted suffix after a clean reference is prose, not a fabricated citation, so
+   ``position[0].position.The tyres are gone.`` airs.
+2. The unbracketed ``position99.invented`` shape is not one the collector's grammar
+   produces.
+3. A hyphenated suffix such as ``position[0].position-evil`` leaves the supplied reference
+   itself intact.
+4. A bare non-empty bracket with no field (``position[0]``) is not a complete reference
+   token either.
+5. A bracketed fragment separated from a clean reference by anything that is **not a word
+   character** is never seen at all: the attached-bracket rule requires the bracket
+   *immediately* after the matched token, and ``finditer`` consumes the word a later
+   fragment would need, so any such separator defeats both rules and airs. The measured
+   separators are dot (``position[0].position.[99].evil``), whitespace
+   (``position[0].position [99].evil``), hyphen (``position[0].position-[99].evil``),
+   comma (``position[0].position,[99].evil``), colon (``position[0].position:[99].evil``),
+   slash (``position[0].position/[99].evil``), parenthesis
+   (``position[0].position([99].evil``) and apostrophe
+   (``position[0].position'[99].evil``); the list is **examples, not the definition** --
+   the family is open, because every non-word separator behaves the same way. That is
+   measured *after normalization*, so a **format** character does not separate: it is removed
+   first, which leaves the bracket attached and the fragment refused.
+6. A bracket-led token with no family word (``[99].invented``) is invisible to the scanner:
+   its grammar is derived from the supplied references, which always carry a family word, so
+   the pattern requires ``\\w+`` before the bracket and a family-less token never matches. It
+   airs when nothing word-shaped immediately precedes the bracket, as in
+   ``P3, [99].invented for Verstappen.``.
+
+Shapes 5 and 6 are deliberately left airing, not overlooked: closing them is a **product
+trade** -- more false refusals against the leak -- that belongs to the user rather than to
+this module, so this unit declares and pins them here instead of silently narrowing them.
 The cost of the tolerance is stated as the trade it is rather than left implicit:
 whitespace is tolerated at the token's structural joints so that a fabricated citation
 separated by a plain space -- ``position [1].invented`` -- cannot air, and the price is

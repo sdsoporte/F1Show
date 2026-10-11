@@ -1094,6 +1094,131 @@ async def test_a_dotted_suffix_after_a_supplied_reference_is_prose_and_airs(
     assert turn.text == text
 
 
+#: One case per shape the module docstring declares as deliberately left airing, plus the
+#: known ``U+034F`` normalization leak. The ids name the shapes so each case can be matched
+#: to the docstring's enumeration; a declared shape with no case exercising it is an
+#: unsupported claim, not a boundary. The fifth shape has one case per separator the
+#: docstring lists -- dot (with and without a trailing field), whitespace, hyphen, comma,
+#: colon, slash, parenthesis and apostrophe -- because the separator list is documentation
+#: too, and an example no case exercises is the same defect as an undeclared shape. The sixth
+#: shape is the family-less bracket-led token. The ``U+034F`` case is a **representative** of
+#: the declared normalization leak, not necessarily the originally measured placement, which
+#: is not recorded in this repository.
+DECLARED_AIRING_SHAPES = (
+    pytest.param(
+        "Verstappen is P3, per position[0].position.The tyres are gone.",
+        id="shape-1-dotted-suffix-is-prose",
+    ),
+    pytest.param(
+        "Verstappen is P3, per position99.invented.",
+        id="shape-2-unbracketed-residual",
+    ),
+    pytest.param(
+        "Verstappen is P3, per position[0].position-evil.",
+        id="shape-3-hyphenated-suffix",
+    ),
+    pytest.param(
+        "Verstappen is P3, per position[0].",
+        id="shape-4-bare-non-empty-bracket",
+    ),
+    pytest.param(
+        "Verstappen is P3, per position[0].position [99].evil.",
+        id="shape-5-separated-fragment-space",
+    ),
+    pytest.param(
+        "Verstappen is P3, per position[0].position.[99].evil.",
+        id="shape-5-separated-fragment-dot-evil",
+    ),
+    pytest.param(
+        "Verstappen is P3, per position[0].position.[99].",
+        id="shape-5-separated-fragment-dot-bare",
+    ),
+    pytest.param(
+        "Verstappen is P3, per position[0].position-[99].evil.",
+        id="shape-5-separated-fragment-hyphen",
+    ),
+    pytest.param(
+        "Verstappen is P3, per position[0].position,[99].evil.",
+        id="shape-5-separated-fragment-comma",
+    ),
+    pytest.param(
+        "Verstappen is P3, per position[0].position:[99].evil.",
+        id="shape-5-separated-fragment-colon",
+    ),
+    pytest.param(
+        "Verstappen is P3, per position[0].position/[99].evil.",
+        id="shape-5-separated-fragment-slash",
+    ),
+    pytest.param(
+        "Verstappen is P3, per position[0].position([99].evil.",
+        id="shape-5-separated-fragment-paren",
+    ),
+    pytest.param(
+        "Verstappen is P3, per position[0].position'[99].evil.",
+        id="shape-5-separated-fragment-apostrophe",
+    ),
+    pytest.param(
+        "P3, [99].invented for Verstappen.",
+        id="shape-6-familyless-bracket-token",
+    ),
+    #: The declared ``U+034F`` leak is pinned through this representative placement only: the
+    #: originally measured placement is not recorded in this repository, so the leak is
+    #: exercised generically rather than reproduced exactly.
+    pytest.param(
+        "Verstappen is P3, per position\u034f[99].invented.",
+        id="known-leak-u034f-normalization",
+    ),
+    #: The leak is declared as a *family* of surviving combining marks, so a second member is
+    #: pinned too: one representative would leave the family claim exercised by a single
+    #: sample, which is the defect this unit exists to remove.
+    pytest.param(
+        "Verstappen is P3, per position\u0301[99].invented.",
+        id="known-leak-combining-mark-u0301",
+    ),
+    #: The family is declared over *any* character that survives normalization and is neither
+    #: a word character nor whitespace -- not over one category -- so a spacing combining mark
+    #: (``Mc``) is pinned as well: otherwise the claim would be exercised within ``Mn`` only
+    #: and a reader could wrongly conclude the sibling categories do not leak.
+    pytest.param(
+        "Verstappen is P3, per position\u0903[99].invented.",
+        id="known-leak-spacing-combining-mark-u0903",
+    ),
+)
+
+
+@pytest.mark.parametrize("commentary", DECLARED_AIRING_SHAPES)
+@pytest.mark.anyio
+async def test_every_declared_airing_shape_airs_with_its_supplied_evidence_intact(
+    commentary: str,
+) -> None:
+    """Every shape the module docstring leaves airing airs, this unit's fifth included.
+
+    The docstring enumerates the shapes it deliberately leaves airing; a declared shape with
+    no case exercising it is an unsupported claim rather than a boundary, so each one has
+    its own case and its id names the docstring line. The fifth shape -- a bracketed
+    fragment separated from a clean reference by anything that is not a word character -- has
+    one case per separator the docstring lists: dot (with and without a trailing field),
+    whitespace, hyphen, comma, colon, slash, parenthesis and apostrophe. The sixth shape is
+    the family-less bracket-led token. The ``U+034F`` case is a **representative** of the
+    declared normalization leak, not necessarily the originally measured placement (which the
+    repository does not record), asserted here so the leak is recorded rather than discovered
+    as an omission. Each case airs, and the supplied reference from the citation line survives
+    as the turn's evidence.
+    """
+    event = detected(index=0)
+    model = ScriptedModelClient([spoken(ref(event), commentary)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard=f"the declared-airing-shape run for {commentary!r}")
+
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.TURN
+    assert outcome.reason is None
+    (turn,) = result.transcript.turns
+    assert turn.text == commentary
+    assert turn.evidence == (ref(event),)
+
+
 @pytest.mark.anyio
 async def test_a_fabricated_reference_split_by_a_zero_width_space_refuses_the_turn() -> None:
     """A zero-width space must not hide a fabricated reference behind invisible bytes.
