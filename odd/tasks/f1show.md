@@ -2269,6 +2269,32 @@ a pass that only pinned the measured cost. Plus two parent-made docstring edits.
   it but to re-run START for a fresh envelope, which is what happened; the lineage was created only on the
   fresh binding, and `lineage_created` was `false` for the expired one.
 
+**Integration by the step-1/F04 session (parent), measured rather than accepted.** Three cherry-picks in
+order: `f535350` (design), `7dc3f8b` (source), `4122c85` (evidence). **All three applied with no
+conflict**, including the evidence block whose anchor line does not exist verbatim in this copy — git found
+a fuzzy match, so the placement was **verified by structure** instead of assumed, and the section sits
+between the F09 material and `### F10`, with exactly one `### F09b` heading and no conflict markers. The
+document delta is exactly 102 insertions and 0 deletions, the 52 + 50 the two commits claimed.
+**Identity verified by measurement, not by report**: `src/f1show/booth.py` and `tests/test_booth.py` are
+**blob-identical** to the reviewed tree `102ee9047af110350fcc06f8ed4f06de38829b34`, and
+`src/f1show/__init__.py` is **untouched** (`4f6669c4…`) because this source commit does not modify it at all
+— so the additive-export conflict surface that F08 and F09 both presented **does not exist here**. Suite
+**761 passed** on the integrated tree, which is 730 + 31: **exactly** the delta this unit added to its own
+baseline (705 → 736), two independently produced numbers agreeing. The range's own arithmetic reconciles
+too: the review's **789** changed lines are 778 insertions plus 11 deletions, and `170` in the peer's
+diffstat is that file's *changed* lines, not its insertions.
+**The peer's two findings were re-measured by the parent on the integrated bytes, and one came back
+sharper.** Both are registered in `docs/CARRIED-FINDINGS.md` with owner and trigger. The row that was
+waiting on this unit, `R3-004`, was retired as **superseded by measurement**: the pre-F09b `booth.py:288-294`
+held the `MULTIPLE_CITATION_LINES` predicate itself, so the unit rewrote the very code that row pointed at,
+and its own review then placed a measured finding on the successor. The sharper half: of the three
+false-refusal cases, the unbulleted one was **already** refused by the exact reading that shipped before,
+and only the **bullet and case forms are newly** refused — because the unit closed those escape channels by
+widening the violation predicate. That is a failure mode the hardening introduced, and its own review caught
+it. Also re-anchored by measurement, since this unit grew `booth.py` by 148 lines: the register's line
+locations for that file were re-derived from the old blobs rather than by adding a diff, because a location
+that is not re-derived becomes silently wrong and reads as verified.
+
 ### F10 — Wire bounded end-to-end orchestration
 
 - [ ] Correlate enrichment by event/session/version, apply bounded join deadlines,

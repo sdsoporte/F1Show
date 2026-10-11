@@ -80,21 +80,60 @@ natural trigger is the **first live call of F13**, where a rate limit is exactly
 
 ## booth.py and its tests — the peer's, deduped by location
 
+**Every anchor below was re-measured after the F09b unit**, which grew `booth.py` from 615 to 763 lines and
+`tests/test_booth.py` by 619. The re-anchoring was done by **reading the old blob and finding the same
+subject in the new file**, never by trusting a diff's arithmetic: the repr fallbacks moved from `:317-322`
+to `:466-470`, the positive-seconds bound from `:336-340` to `:482-489`, and the bound guards in the test
+file from `1039-1050` to `1658-1670`. This is the standing cost of the location-as-identity rule: when a file
+grows, a location that is not re-derived by subject becomes silently wrong, and a wrong location is worse
+than no location because it reads as verified.
+
 | Location | Ids observed there | Severity | Owner | Trigger | Status |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | `:117-123` | R3-005 (integration) = R3-persona-validator-uncovered (unit) | SUGGESTION | issue #8 | promoting probe-only coverage, or any change to the personas | OPEN |
-| `:317-322` | R3-001 and R3-003 (integration) = R3-render-repr-determinism (unit) | SUGGESTION | F13 | **an evidence value that cannot be serialized reaches the prompt** — a data event, or a change in F04's contract | OPEN, with the fix already decided below |
-| `:336-340` | R3-002 (integration) = R3-positive-seconds-overflow (unit) | SUGGESTION | whoever sources a bound from configuration | **the F10 trigger did NOT fire**: `main` calls `run_session` without the bound parameters, so they keep their signature defaults. The composition wiring shipped without promoting a single bound into configuration | OPEN |
-| `tests/test_booth.py:1039-1050` | R3-006 (integration) = R3-bound-guards-uncovered (unit) | SUGGESTION | issue #8 | any change to the bounds list | OPEN |
-| `:288-294` | R3-004 (integration) | SUGGESTION | the peer's citation-channel unit | **inside the unit currently in flight**, so it closes there or is re-registered here | OPEN |
+| `:466-470` | R3-001 and R3-003 (integration) = R3-render-repr-determinism (unit) | SUGGESTION | F13 | **an evidence value that cannot be serialized reaches the prompt** — a data event, or a change in F04's contract | OPEN, with the fix already decided below |
+| `:482-489` | R3-002 (integration) = R3-positive-seconds-overflow (unit) | SUGGESTION | whoever sources a bound from configuration | **the F10 trigger did NOT fire**: `main` calls `run_session` without the bound parameters, so they keep their signature defaults. The composition wiring shipped without promoting a single bound into configuration | OPEN |
+| `tests/test_booth.py:1658-1670` | R3-006 (integration) = R3-bound-guards-uncovered (unit) | SUGGESTION | issue #8 | any change to the bounds list | OPEN |
+| `:299-302` | R3-bullet-commentary-false-refusal (F09b unit) | SUGGESTION | F13 | the first live trial that observes the model's output style, or any unit touching `_CITATION_SHAPED` | OPEN, **re-measured by the parent** below |
+| `:375-377` | R3-bracket-continuation-leak (F09b unit) | **WARNING** | the next unit touching the scanner, or a live transcript showing a fragment | a fragment of a never-supplied reference airing in an aired turn | OPEN, **re-measured by the parent** below |
+| `:288-294` (pre-F09b) | R3-004 (integration) | SUGGESTION | — | — | **SUPERSEDED by measurement**, see below |
 | — | R3-positive-seconds-overflow | SUGGESTION | — | — | **promoted, not dead**: F10 shipped and the bound is still a constant, so the entry above stays OPEN under its original condition |
+
+**The two F09b findings, re-measured by the parent on the integrated bytes** rather than taken from the
+report. Both reproduced exactly, and the second came back **sharper than the report**:
+
+- **The attached-bracket continuation leaks.** `position[0].position.[99].evil`, `position[0].position.[99]`
+  and `position[0].position [99].evil` all **air**, while `position[0].position[99]`,
+  `position[0].position[99].evil`, `position[9].position.invented` and `position[0].position[0].evil` are all
+  refused. So the rule catches a bracket only when it is glued directly onto the matched token, and a dot or
+  a space defeats both the scanner's token boundary and the attached-bracket check. The guarantee holds
+  because what airs is a **fragment**, never a complete never-supplied token.
+- **The over-refusal is new for the bullet and case forms, and the measurement says which.** `- Evidence: the
+  gap closed by four tenths.` and `* evidence: tyres are gone` are refused as `MULTIPLE_CITATION_LINES`, and
+  so is the unbulleted `Evidence: the gap closed by four tenths.` — but the **exact** reading that shipped
+  before this unit, still present and still used for acceptance, returns `False` for the two bullet forms and
+  `True` for the unbulleted one. So one of the three was already refused, and the other two are refused
+  **only because the unit widened the violation predicate to close the bullet and case escape channels**.
+  The declared fail-closed cost in the design is about *reference-shaped* prose; prose that merely opens with
+  the marker's own word is a separate case and is not declared, which is what makes this worth its own row,
+  and the peer reported it as undeclared. The deliberate pin survives the measurement: a mid-sentence mention
+  still airs, and a supplied reference still airs.
+
+**R3-004 retired as superseded, and a measurement is what retired it.** The pre-F09b `booth.py:288-294` held
+`if any(_opens_with_citation_marker(line) for line in lines[start + 1:]):` followed by
+`return _RefusedAnswer(BoothReason.MULTIPLE_CITATION_LINES)` — the citation-violation predicate itself. The
+F09b unit rewrote exactly that predicate, and its own review then placed a measured finding on the successor
+code. So the subject R3-004 pointed at was rewritten by the unit that owned it, and the surviving issue on
+that subject is registered above with a body and a trigger. Keeping R3-004 open beside it would be two rows
+for one subject, and with no recoverable body no fix could ever be verified. This is a scope retirement
+**proved by the location's content**, not a claim that something was fixed.
 
 The peer's reading, carried as its own, and it carries **two damages of different kinds**, which is why it
 matters more than a tidy-up. The `_render` path has two ways to fall back to `repr` —
 `json.dumps(..., default=repr)` for a nested value JSON cannot encode, and an
 `except (TypeError, ValueError)` branch that calls `repr` on the whole value — and either can print a
 **memory address**. Confirmed by the parent in the
-source at `booth.py:311-322`. So a non-serializable value would (a) **filter implementation detail outward**
+source at `booth.py:466-470` (re-measured after the F09b unit; it was `:311-322` before). So a non-serializable value would (a) **filter implementation detail outward**
 to the provider, and (b) **break reproducibility inward**, and that second one is not a wording problem:
 "a replay re-produces the transcript" is the MVP's acceptance criterion, so a prompt carrying an address is
 a non-deterministic run with a differently-shaped transcript every time.
