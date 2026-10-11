@@ -346,6 +346,35 @@ available or default.** The documented prerequisite is: authenticate, enumerate,
 then confirm GA status in the documentation, before any model ID is written into
 configuration or code.
 
+### Operator-configured gateway, observed 2026-10-10
+
+The endpoint this project actually talks to is a **local loopback gateway**, not Google directly: the
+configured base URL is `http://127.0.0.1:8317/v1` and the credential is a single API key. The
+observations below used only that key, with no automatic retries.
+
+- **The `/v1` is already part of the base URL.** Appending another `/v1` duplicates the path and
+  returns a 404, which has already cost one debugging cycle here. Treat the configured value as a
+  complete prefix rather than a bare host.
+- **Two surfaces answer on the same gateway.** The OpenAI-compatible surface returned
+  `GET /v1/models` → 200 in 0.02 s (twelve entries) and `POST /v1/chat/completions` → 200 in 0.82 s
+  with usage 8/1/9 and the text `ok`. The native surface returned `GET /v1beta/models` → 200 in
+  0.002 s with the native shape — `{"models": [{"name": "models/…"}]}` plus `displayName`,
+  `description`, `supportedGenerationMethods` and modality fields.
+- **Both surfaces advertise the same twelve entries**, so a native-dialect client does have a real
+  endpoint on this gateway. What remains **unexercised is a generation in the native dialect**;
+  matching listing shape is necessary but not sufficient, so that stays an open question for F10
+  and F13 rather than an established capability.
+- **The advertised ids are gateway aliases, not first-party model ids.** Suffixes such as `-high`
+  and `-low` are the gateway's own effort tiers. **No id from this enumeration may enter
+  configuration or code as though it were a provider contract** until it is reconciled against
+  Google's documentation — the same rule this file already applies to every model id.
+- The catalogue itself is recorded in the ODD task document; it is a measurement of one gateway on
+  one date, not a compatibility guarantee.
+
+**A hygiene note for any enumeration here.** A generated summary disagreed with its own raw
+artifact: the prose listed eleven entries while the file held twelve, the missing one being
+`gemini-3.6-flash-high`. Read the artifact, not the summary, before acting on a count.
+
 ### Authentication paths
 
 **VERIFIED (first-party)** — from <https://ai.google.dev/gemini-api/docs/api-key>

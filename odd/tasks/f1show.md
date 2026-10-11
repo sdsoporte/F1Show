@@ -1970,3 +1970,33 @@ labelled as the parent's own rather than the provider's intent.
 until account enumeration and current documentation verify it. **No live, model, purchase or
 deployment call is authorized**, and no subscription exists: the project runs in **free mode**, so
 real-service correctness remains an F13 question and the live gaps are tracked as issue #3.
+
+**Operator gateway, observed 2026-10-10, recorded for F10.** The endpoint the project actually talks
+to is a **local loopback gateway**, not Google: the configured base URL is
+`http://127.0.0.1:8317/v1` and the credential is a single API key. Details that change how F10 must
+be written: **the `/v1` is already part of the base URL**, so appending another one duplicates the
+path and returns a 404 — a trap that has already cost a debugging cycle. **Both surfaces answer on
+that gateway**: the OpenAI-compatible one returned `GET /v1/models` 200 in 0.02 s and
+`POST /v1/chat/completions` 200 in 0.82 s with usage 8/1/9, while the native one returned
+`GET /v1beta/models` 200 in 0.002 s in native shape and advertised **the same twelve entries**. So
+the native route **exists** and `GoogleGenAIClient` has a real endpoint there — which downgrades the
+risk raised when only the OpenAI-compatible surface had answered. What remains **unproven is a
+native-dialect generation**, and matching listing shape is necessary but not sufficient; that stays
+open for F10/F13 rather than being counted as a capability. And the advertised ids are **gateway
+aliases** whose `-high`/`-low` suffixes are the gateway's own effort tiers, so **no id from that
+enumeration may enter configuration as a provider contract** before reconciling with Google's
+documentation. The full record lives in `docs/EXTERNAL-CONTRACTS.md`. A hygiene note worth keeping:
+a generated summary of that enumeration listed eleven entries while the raw artifact held twelve,
+the missing one being `gemini-3.6-flash-high` — **read the artifact, not the summary.**
+
+**A blocker I am deliberately not clearing, and the loop it creates.** The automated lens check reports
+`src/f1show/__init__.py:13 I001` as a blocker every time that file is touched. It is **pre-existing**:
+the same finding appears on `origin/main` (13:1) and on `0b1f0c7` (9:1), a commit from before this
+session introduced anything, and the line only moved because the integration added four docstring
+lines. Its fix is not clean: part of the preview reformats the `ports` import block and the
+`from f1show.ingest import ...` line, both authored by earlier natively approved and burned units
+(F02 and F03c), and the line-length half of the rule comes from a configuration that **lives outside
+this repository** — exactly the problem issue #7 exists to solve. So it is carried with the reasoning
+recorded on issue #6 and a pointer to #7, and the check will keep firing until either that
+configuration decision lands or the user authorizes the cosmetic change. Clearing it by conforming
+the repo to an invisible config would settle the symptom and leave the cause.
