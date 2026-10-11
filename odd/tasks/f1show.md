@@ -2167,6 +2167,134 @@ the two F04 rules and every live-provider property remain F13's, and no live cal
   integration and its author re-applies these blocks at their anchors in order;
   `src/f1show/__init__.py` is the only shared file and both changes are additive.
 
+### F09b — Close the residual citation channels
+
+**Assignment received in writing from the step-1/F04 session on 2026-10-10**, with allowed surfaces
+`src/f1show/booth.py` and `tests/test_booth.py` only, and the branch based on this track's own tip
+`b1990de` so it does not depend on when that session integrates F09. No new features, no new personas,
+no `collector.py`, no `fixtures/`, and no `src/f1show/__init__.py` — the hardening adds no public name,
+because the new reason rides on the already-exported `BoothReason`.
+
+**The objective, stated precisely enough to be checkable.** The assignment names four measured escape
+channels — a bullet-prefixed marker, `EVIDENCE :` with a space before the colon, a mention mid-line,
+and a bare reference with no marker — and forbids the third option of leaving them airing "because the
+evidence tuple stays validated". The reframing that makes **one** rule close all four: **the guarantee is
+about tokens, not lines.** What must never happen is a **reference-shaped token that was never supplied
+reaching the aired text**. Every channel is an instance of that, and validating line *shapes* can never
+cover the cases whose shape is undefined.
+
+**Three decisions, each with its reason, and one new rule.**
+1. **The violation check gets a tolerant predicate; acceptance does not widen.** A second line that is
+   *citation-shaped* under a tolerant reading — an optional leading bullet, optional spaces before the
+   colon, any case — is `MULTIPLE_CITATION_LINES`. Reason: a later-line escape is unambiguously a second
+   citation attempt, and refusing it names the precise failure instead of the vaguer text rule, while
+   acceptance keeps the exact shape the prompt teaches.
+2. **A never-supplied reference-shaped token anywhere in the aired text is refused with its own typed
+   reason** — a new `BoothReason` member (`UNSUPPLIED_REFERENCE_IN_TEXT`). Reason: this *is* the
+   invariant, and it is the only rule that reaches a bare reference and a mid-line escape. The token
+   shape is derived from the supplied references (`<family>[<index>].<field>`), not invented, and
+   supplied references are never flagged.
+3. **The deliberate over-refusal pin survives, and that is recorded rather than assumed.**
+   `test_commentary_that_merely_mentions_the_marker_mid_sentence_still_airs` mentions the marker with
+   **no reference token**, so it must keep airing: the new rule is content-based, not marker-based.
+   Reversing a deliberate pin would need a stated reason, and this design does not reverse it.
+- **Declared cost, fail-closed on purpose**: prose that coincidentally matches the reference shape and
+  was never supplied is refused. That is the price of closing the channel, and it is the direction the
+  assignment demands; the alternative — airing text we cannot validate — is the hole.
+
+**The two pins the final verification asked for belong in this unit.** The duplicate-citation collapse
+already works (`dict.fromkeys`) and no test covered it: pin order preservation and collapsing. And the
+two pins that encoded intent rather than completeness: the prompt pin's residual is a literal
+**identical** to the constant, which no runtime check can see, so it is pinned at the **source** level
+(`booth.py` must contain no `EVIDENCE:` literal outside the constant), and the export pin must fail when
+the list **shrinks** — whatever derivation is chosen, the observable requirement is that removing a name
+from `F09_EXPORTED_NAMES` now fails.
+
+**Required evidence.** RED **per channel**, reproduced **before** the fix on a copy whose import proof
+points inside the copy, one named failing test per channel; then GREEN; the full suite green; and
+mutation proofs for both pins (removing a name from the list, and reintroducing a marker literal). Every
+ordering or concurrency test keeps its bounded wait, per the F03d-2 lesson.
+
+**Order of work, and it is not negotiable**: implementation → parent spot check → **complete independent
+verification** → native review → acknowledgement → commit. The previous unit paid a wasted model run for
+running the review in parallel with verification.
+
+**Implementation, verification and native review (observed).** Five writer passes, every one driven by a
+measurement rather than by polishing: the objective; a real residual found by attacking the rule (a
+fragment glued to a supplied reference); **my own dot-rule over-refusal** of a sentence boundary; the
+invisible-character leaks an independent verifier found by attack (zero-width space, NBSP, newline); and
+a pass that only pinned the measured cost. Plus two parent-made docstring edits. Final bytes:
+`src/f1show/booth.py` **763** lines (`77181ad8…`), `tests/test_booth.py` **1685** (`e9a8e84d…`),
+`src/f1show/__init__.py` untouched (`458afd4c…`), full suite **736** (baseline 705).
+
+- **RED per channel, reproduced before the fix with the escape observed**: a bullet-prefixed marker
+  carrying a never-supplied reference; `EVIDENCE :` with a space before the colon; a mid-line escape; and
+  a bare reference. Later REDs: glued `[99].evil` and `.evil`; a non-numeric index; an empty bracket; ZWSP,
+  NBSP and newline splits; the sentence-boundary false refusal; and `word [ ]`.
+- **Three independent verifications**, each on copies with an import proof (`inspect.getsourcefile`
+  inside the copy, because a copied `.venv` silently tests the original tree): the first killed all ten
+  structural mutants and **found the invisible-character leaks by attack**; the second killed the ten
+  again, re-derived the whole shape table itself, and produced the two documentation flags; the third
+  re-checked the documentation-only delta, audited the docstring's **five claims** one by one (none
+  unsupported), and stated plainly that "documentation-only" is *supported by sampling, not proven*,
+  because the previous certified bytes exist nowhere.
+- Native review `review-ea289bc02bcd76fd`: tier **medium**, one lens, 2 files, **789** changed lines,
+  candidate tree `102ee9047af110350fcc06f8ed4f06de38829b34`; **approved on the first reviewer run with no
+  correction opened**; the exact acknowledgement **burned** authority (`consumed_revision
+  sha256:c46dbe18…`, `gentle-ai.review-acknowledged/v1`). Two informational findings with **no bodies**,
+  read and **measured by the parent** instead of reconstructed:
+  - `R3-bracket-continuation-leak` (WARNING, `booth.py:375-377`) — measured: `position[0].position.[99].evil`,
+    `position[0].position.[99]` and `position[0].position [99].evil` all **air**. Mechanism: the
+    attached-bracket check fires only for a bracket *immediately* after a matched token, and `finditer`
+    consumes the word a later bracket fragment would need, so a dot or a space between them defeats both
+    rules. What airs is a **fragment** — never a complete never-supplied reference token — so the
+    guarantee holds and this is the already-declared dotted-suffix boundary with a concrete instance.
+  - `R3-bullet-commentary-false-refusal` (SUGGESTION, `booth.py:299-302`) — measured: `- Evidence: the gap
+    closed by four tenths.`, `Evidence: the gap closed by four tenths.` and `* evidence: tyres are gone`
+    are all refused as `MULTIPLE_CITATION_LINES`. Mechanism: the violation predicate matches the marker
+    **word** with an optional bullet and any case, so a commentary line opening with the very word the
+    prompt uses as a section header is read as a second citation attempt. This is an **undeclared**
+    over-refusal that discards a legitimate answer, and it is the stronger of the two for a follow-up.
+  - **Carried with owner and trigger, not with a promise**: the bracket-fragment instance → trigger, the
+    next unit touching the scanner or a live trial showing a fragment in a transcript; the undeclared
+    over-refusal → trigger, the first live trial that observes model output style (F13) or any unit
+    touching `_CITATION_SHAPED`. Both are recorded **with the measurement**, not with the intent.
+- **Committed** as `a43d0ff8951e2b5198fca4c7c483a281c97f411d`, Conventional Commit
+  `feat(booth): refuse unsupplied reference tokens in aired commentary`. The pre-commit `HEAD` tree equals
+  the controller's `base_tree` (`df3b8b06…`), the **staged tree equals the reviewed candidate tree**
+  `102ee904…`, and the committed tree equals both — so the reviewed bytes are the committed bytes, checked
+  by tree identity rather than by reading a diff. Clean worktree afterwards, 736 passed.
+- **A consent fact worth keeping**: the host-owned consent binding has a **ten-minute** window, and this
+  unit's first binding expired while the verifications ran. The diagnostics said explicitly *not* to resend
+  it but to re-run START for a fresh envelope, which is what happened; the lineage was created only on the
+  fresh binding, and `lineage_created` was `false` for the expired one.
+
+**Integration by the step-1/F04 session (parent), measured rather than accepted.** Three cherry-picks in
+order: `f535350` (design), `7dc3f8b` (source), `4122c85` (evidence). **All three applied with no
+conflict**, including the evidence block whose anchor line does not exist verbatim in this copy — git found
+a fuzzy match, so the placement was **verified by structure** instead of assumed, and the section sits
+between the F09 material and `### F10`, with exactly one `### F09b` heading and no conflict markers. The
+document delta is exactly 102 insertions and 0 deletions, the 52 + 50 the two commits claimed.
+**Identity verified by measurement, not by report**: `src/f1show/booth.py` and `tests/test_booth.py` are
+**blob-identical** to the reviewed tree `102ee9047af110350fcc06f8ed4f06de38829b34`, and
+`src/f1show/__init__.py` is **untouched** (`4f6669c4…`) because this source commit does not modify it at all
+— so the additive-export conflict surface that F08 and F09 both presented **does not exist here**. Suite
+**761 passed** on the integrated tree, which is 730 + 31: **exactly** the delta this unit added to its own
+baseline (705 → 736), two independently produced numbers agreeing. The range's own arithmetic reconciles
+too: the review's **789** changed lines are 778 insertions plus 11 deletions, and `170` in the peer's
+diffstat is that file's *changed* lines, not its insertions.
+**The peer's two findings were re-measured by the parent on the integrated bytes, and one came back
+sharper.** Both are registered in `docs/CARRIED-FINDINGS.md` with owner and trigger. The row that was
+waiting on this unit, `R3-004`, was retired as **superseded by measurement**: the pre-F09b `booth.py:288-294`
+held the `MULTIPLE_CITATION_LINES` predicate itself, so the unit rewrote the very code that row pointed at,
+and its own review then placed a measured finding on the successor. The sharper half: of the three
+false-refusal cases, the unbulleted one was **already** refused by the exact reading that shipped before,
+and only the **bullet and case forms are newly** refused — because the unit closed those escape channels by
+widening the violation predicate. That is a failure mode the hardening introduced, and its own review caught
+it. Also re-anchored by measurement, since this unit grew `booth.py` by 148 lines: the register's line
+locations for that file were re-derived from the old blobs rather than by adding a diff, because a location
+that is not re-derived becomes silently wrong and reads as verified.
+
 ### F10 — Wire bounded end-to-end orchestration
 
 - [ ] Correlate enrichment by event/session/version, apply bounded join deadlines,
