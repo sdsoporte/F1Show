@@ -2368,12 +2368,36 @@ does not own and turn a clean cherry-pick into a reconciliation.
    **not paired to its seven ids**, because the bodies are unrecoverable and that pairing cannot be measured.
    And the per-symbol hash remains the next refinement, unadopted, for the reason recorded in **Staleness
    keys**: the blob is file-level and therefore over-flags.
-**A decision deliberately NOT taken, and the reason.** The over-refusal
-`R3-marker-word-false-refusal` is left alone. It is a **trade, not a bug**: the unit closed four escape
-channels by **widening** its refusal predicate, so narrowing it re-opens the channel that was just shut. With
-no live trial there is no measurement of how often a model opens a line with the marker's own word, and
-without that number neither side of the trade can be weighed. Its registered trigger stands, and the unit that
-does pick it up inherits the two independent reviewers who found it.
+**The debt plan, decided by the user on 2026-10-11, and it supersedes the paragraph that stood here.** The
+over-refusal `R3-marker-word-false-refusal` is **no longer held**: the user authorized redesigning it, **with
+native review**, sequenced **after the peer's in-flight boundary unit** because both touch `booth.py` and there
+is one writer per file. **The parent had recommended waiting for the live trial, and that recommendation was
+too conservative** — the design does not need F13, because the scanner's own principle, stated in its module
+docstring and measured by the parent, settles it: *the guarantee is about **tokens**, not lines*. A later line
+that is marker-shaped but whose remainder carries **no reference-shaped token** is therefore not a citation
+attempt, and refusing it is the deviation. The candidate rule is that the violation predicate requires the
+**marker plus a reference-shaped remainder**; the four closed channels all carry a reference token and stay
+refused as regression pins, the content rule is untouched (it is what catches a bare reference), and the
+measured false-refusal cases become the RED. What F13 would have added is the empirical weight; the design is
+safe **by construction** instead.
+**The per-symbol hash is rejected with its measurement, not deferred.** The blob's over-flagging has cost exactly
+one row-check so far (`tests/test_auth.py`, whose row was UNMOVED, found by one grep), while adopting the symbol
+costs a stored field per row plus resolving the enclosing symbol at every re-derivation. It revives if a single
+change ever forces re-deriving **more than five rows in one file where only one or two moved**.
+**Tier 0 is complete with this record**: `R4-001` was re-anchored from the dead `:347` to **`:410-423`** — the old
+coordinate was a blank line inside the `AuthenticatedHttpClient` docstring, so its subject was always a
+**documented lifecycle contract** rather than a branch — with its F13 trigger intact, because a documented
+adoption/`close` promise is witnessed only by a real call. The register now has **zero rows in NOT FOUND** and
+**zero decisions left pending**.
+**Tier 2, authorized in this order.** (1) **F12 / issue #7** — offline CI, a committed lint configuration, a
+Python **3.12** matrix and a PR template — which retires the two standing caveats that the 3.12 floor is proven
+but unenforced and that every Ruff claim is scoped to a file outside this repository. (2) **The F13 pilot plan,
+drafted with no calls made**: about ten carried findings have "the first live call" as their trigger, and a
+written plan (model, spend report, prompt set, what to observe) is what turns them into checkable items the day
+a subscription exists. (3) **F05 + F11 as a pair**, transport before packaging, since F11 is empty before F05.
+(4) **F06 before F07**, because F06 consumes `classify_gap` — which this register already flags — while F07 is
+enrichment with its own network care. Each of those needs its own registered design and its own authorization
+before a first write; this paragraph authorizes the **order**, not the implementations.
 
 ### F10 — Wire bounded end-to-end orchestration
 

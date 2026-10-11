@@ -84,12 +84,18 @@ means the coordinates are still the ones the reviewer saw. One command per row: 
 | `src/f1show/booth.py` | `681f70c38becdbb10bf6587549bee64210f2965f` (pre-F09b) | `0d1191c626fca1b9f559a6a5ea89e10f2c621c28` | **re-derived**; its rows carry measured anchors and subjects |
 | `tests/test_booth.py` | `1a2a5efc192f80fd92f32a5e47b7e073079a2a42` (pre-F09b) | `8704aeeda5f7623f8b8875c61af7e0fe2d4e35a3` | **re-derived** |
 
-**A stronger key, not yet adopted, and offered as its author's reasoning rather than as a measurement here**:
-the blob is file-level, so it **over-flags** — a row in `booth.py` does not age because `run.py` grew, and the
-blob cannot tell a stale row from one that merely moved along with everything else. The **hash of the symbol
-that contains the subject** would make staleness per-row and stop the re-derivation from being wider than the
-change that caused it. Until that exists, a stale file means every row in it is re-derived, which is a
-declared cost rather than a silent one.
+**The per-symbol hash is REJECTED, and the rejection is a decision rather than a deferral.** The proposal — its
+author's, and offered as reasoning rather than as a measurement — was to key staleness on the hash of the symbol
+that contains the subject, since the blob is file-level and therefore **over-flags**: a row in `booth.py` does
+not age because `run.py` grew. Measured, that over-flagging has cost **exactly one row-check so far**:
+`tests/test_auth.py` is STALE by blob while its single row was UNMOVED, and the check that revealed it was one
+grep. Against that, adopting it costs a stored symbol per row plus resolving the enclosing symbol at every
+re-derivation, on a register whose rows are re-derived only when a file actually changes — a structural cost
+paid always, for a small benefit paid rarely.
+**The trigger that revives it is stated so this stays a decision with a condition rather than a closed door**: a
+single change that forces the re-derivation of **more than five rows in one file where only one or two actually
+moved**. That is the shape the blob key cannot handle cheaply, and it is a measurement anybody can take when it
+happens.
 
 ## Register trigger
 
@@ -114,7 +120,7 @@ this project's own reviewed units, and its rows were never re-anchored.
 | `:283-292` | R4-retry-amplification | WARNING | F13 | the first live call, where retry behaviour against a real quota matters | OPEN |
 | `:305-311` | R4-stale-token | WARNING | F13 | the first live call, since a revoked or rotated token is only observable against the real service | OPEN |
 | `:193-200` | R2-repr-secret-materialization | SUGGESTION | — | — | **CLOSED**: the hardening unit removed `get_secret_value` from `repr` entirely, so the reported shape no longer exists |
-| `:347` | R4-001 | WARNING | F13 | the first live call, same reasoning as R4-retry-amplification | OPEN |
+| `:410-423` | R4-001 | WARNING | F13 | the first live call: the docstring promises a lifecycle — adoption, exactly one `close`, refusal after closing — that only a real call can witness | OPEN |
 | `:375-383` | R3-001 (hardening review) | SUGGESTION | F03d follow-up | any change to the token exchange path | OPEN |
 | `tests/test_auth.py:558-559` | R2-magic-yield-count | SUGGESTION | — | — | **DEAD RECORD**: a test-local readability remark with no future condition that forces revisiting it |
 | `:272-295`, `:168-173`, `:279-291`, `:282-288`, `:405-415`, `:256-269`, `:325-335` | R2-exchange-lifecycle, R2-post-except-raise, R3-002, R3-003, R3-004, R3-005, R4-transport-taxonomy | SUGGESTION | F13 | the first live call, where the exchange taxonomy and lifecycle become observable | OPEN, bodies unknown |
@@ -133,9 +139,15 @@ grouped row, in the order the anchors are listed there: `:272-295` → **`:295`*
 `:256-269` → **`:280`** (the credentials message), `:325-335` → **`:374`** (`_post_credentials`). Their seven
 ids **are not paired to their seven anchors here**, because the bodies are unrecoverable and that pairing
 cannot be measured — the honest record is the set on both sides, not an invented marriage.
-**`:347` (R4-001) → NOT FOUND, and it is a different finding from staleness.** That line no longer exists in
-the file at all: the coordinate is not stale, it is **gone**. Arithmetic cannot re-point it, and deciding from
-the subject whether the row is closed is real work, so it stays NOT FOUND with its owner and trigger intact.
+**`:347` (R4-001), re-anchored to `:410-423`, and the coordinate was never the interesting part.** The row
+sat on a line that no longer exists, so it was recorded as NOT FOUND; measuring the old blob showed why
+arithmetic could not settle it and why it did not need a human either: **`:347` is a blank line inside the
+`AuthenticatedHttpClient` docstring** (`:346` opens it), so the subject was always **prose describing a
+contract**, not a branch of code. In the current file that docstring is `:410-423` — the caller-`Authorization`
+refusal, and the adoption/`close` lifecycle it promises — with the refusal implemented at `:457` and the header
+injection at `:463`. Re-anchored with its **F13 trigger intact**, because a documented lifecycle promise is
+witnessed only by a real call: that is a re-anchor, not a closure, and it leaves the table with **zero rows in
+NOT FOUND**.
 
 ## gemini.py — from the F08 integration review
 
