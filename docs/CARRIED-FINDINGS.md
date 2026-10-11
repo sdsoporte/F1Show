@@ -81,8 +81,8 @@ means the coordinates are still the ones the reviewer saw. One command per row: 
 | `src/f1show/collector.py` | `a8a81ee93795b7934b32c715bfc47111770155c2` | `3973eb134e797bda1d7062cee357eb70bf69de9f` | **STALE — rows re-derived** (three already current, two moved one line, one closed by change); the key stays different |
 | `tests/test_auth.py` | `66e7e41e39640744de2670a7371c6226ce98258b` | `d9cda83a99a94e8b13da03c814baf1df54c7846e` | **STALE — its row re-derived and UNMOVED** (`:558-559` is exact); the blob over-flagged |
 | `tests/test_collector.py` | `1b3123c684aab95ebf3ae1b9bfcc12b0941da7a7` | `7b4891758e49c00aded53413c85603e87ca169f6` | **STALE — row re-derived** (`:26-33` → `:27-34`) |
-| `src/f1show/booth.py` | `681f70c38becdbb10bf6587549bee64210f2965f` (pre-F09b) | `0d1191c626fca1b9f559a6a5ea89e10f2c621c28` | **re-derived**; its rows carry measured anchors and subjects |
-| `tests/test_booth.py` | `1a2a5efc192f80fd92f32a5e47b7e073079a2a42` (pre-F09b) | `8704aeeda5f7623f8b8875c61af7e0fe2d4e35a3` | **re-derived** |
+| `src/f1show/booth.py` | `0d1191c626fca1b9f559a6a5ea89e10f2c621c28` (post-F09b) | `a21d4d1d75e0a5c291b8bdf01183210127748bf5` | **STALE — rows re-derived by SUBJECT** for the F09c `+32` docstring shift (four of four tokens consistent), and the new key is the current one |
+| `tests/test_booth.py` | `8704aeeda5f7623f8b8875c61af7e0fe2d4e35a3` (post-F09b) | `cc65c60e8926df10112e6ac3e7834e1bc1a535ba` | **STALE — row re-derived** by subject: the bounds guards moved to `:1783-1795`, and the 17-case pin lives at `:1191` |
 
 **The per-symbol hash is REJECTED, and the rejection is a decision rather than a deferral.** The proposal — its
 author's, and offered as reasoning rather than as a measurement — was to key staleness on the hash of the symbol
@@ -232,18 +232,51 @@ re-derivation is per ROW, and a section-level claim is not a substitute for it.
 
 | Location | Ids observed there | Severity | Owner | Trigger | Status |
 | --- | --- | --- | --- | --- | --- |
-| `:143-150` | R3-005 (integration) = R3-persona-validator-uncovered (unit) | SUGGESTION | issue #8 | promoting probe-only coverage, or any change to the personas | OPEN |
-| `:466-470` | R3-001 and R3-003 (integration) = R3-render-repr-determinism (unit) | SUGGESTION | F13 | **an evidence value that cannot be serialized reaches the prompt** — a data event, or a change in F04's contract | OPEN, with the fix already decided below |
-| `:482-489` | R3-002 (integration) = R3-positive-seconds-overflow (unit) | SUGGESTION | whoever sources a bound from configuration | **the F10 trigger did NOT fire**: `main` calls `run_session` without the bound parameters, so they keep their signature defaults. The composition wiring shipped without promoting a single bound into configuration | OPEN |
-| `tests/test_booth.py:1658-1670` | R3-006 (integration) = R3-bound-guards-uncovered (unit) | SUGGESTION | issue #8 | any change to the bounds list | OPEN |
-| `:299-303` | R3-bullet-commentary-false-refusal (F09b unit) = R3-marker-word-false-refusal (integration review) | **WARNING** | F13 | the first live trial that observes the model's output style, or any unit touching `_CITATION_SHAPED` | OPEN, **re-measured by the parent** below, and **independently re-surfaced by the integration review under a fresh id** |
-| `:375-377` | R3-bracket-continuation-leak (F09b unit) | **WARNING** | the next unit touching the scanner, or a live transcript showing a fragment | a fragment of a never-supplied reference airing in an aired turn | OPEN, **re-measured by the parent** below |
-| `:53-54` | R3-docstring-omits-bracket-fragment-leak (integration review) | SUGGESTION | the next unit touching the scanner's docs | any change to the module docstring's list of boundaries | OPEN, body unknown |
+| `:175-182` | R3-005 (integration) = R3-persona-validator-uncovered (unit) | SUGGESTION | issue #8 | promoting probe-only coverage, or any change to the personas | OPEN |
+| `:498-502` | R3-001 and R3-003 (integration) = R3-render-repr-determinism (unit) | SUGGESTION | F13 | **an evidence value that cannot be serialized reaches the prompt** — a data event, or a change in F04's contract | OPEN, with the fix already decided below |
+| `:514-521` | R3-002 (integration) = R3-positive-seconds-overflow (unit) | SUGGESTION | whoever sources a bound from configuration | **the F10 trigger did NOT fire**: `main` calls `run_session` without the bound parameters, so they keep their signature defaults. The composition wiring shipped without promoting a single bound into configuration | OPEN |
+| `tests/test_booth.py:1783-1795` | R3-006 (integration) = R3-bound-guards-uncovered (unit) | SUGGESTION | issue #8 | any change to the bounds list | OPEN |
+| `:331-335` | R3-bullet-commentary-false-refusal (F09b unit) = R3-marker-word-false-refusal (integration review) | **WARNING** | F13 | the first live trial that observes the model's output style, or any unit touching `_CITATION_SHAPED` | OPEN, **re-measured by the parent**, and **independently re-surfaced by the integration review under a fresh id**. Now also the subject of the user's authorized redesign |
+| `:407-409` | R3-bracket-continuation-leak (F09b unit) | **WARNING** | the next unit touching the scanner, or a live transcript showing a fragment | a fragment of a never-supplied reference airing in an aired turn | OPEN, **now a DECLARED shape** rather than an undeclared one — see the closure below |
+| `:53-54` (pre-F09c) | R3-docstring-omits-bracket-fragment-leak (integration review) | SUGGESTION | — | — | **CLOSED by declaration and pin** (F09c, `bde8d5f`) — see below |
+| `:56-57` | R3-doc-stale-leak-placement (F09c review) | SUGGESTION | the next unit touching the scanner's docs | any change to the docstring's boundary sentence | OPEN — the noun is stale (see the notes) |
+| `tests/test_booth.py:1124-1127` | R3-shape5-whitespace-tolerance-scope (F09c review) | SUGGESTION | the next unit touching the scanner or its declaration | any change to the `space` parameter's id or comment | OPEN — the label and the measured discriminator disagree (see the notes) |
 | `:288-294` (pre-F09b) | R3-004 (integration) | SUGGESTION | — | — | **CLOSED inside the F09b unit by two pins** — no behaviour change and **no RED**, a weaker evidence class than closed by change; see below |
 | — | R3-positive-seconds-overflow | SUGGESTION | — | — | **promoted, not dead**: F10 shipped and the bound is still a constant, so the entry above stays OPEN under its original condition |
 
-**The two F09b findings, re-measured by the parent on the integrated bytes** rather than taken from the
-report. Both reproduced exactly, and the second came back **sharper than the report**:
+**The F09c unit moved every coordinate below the module docstring by exactly +32 lines, and the shift was verified by SUBJECT, not by arithmetic.** The source commit `bde8d5f` is one hunk, `@@ -49,14 +49,46 @@`, entirely inside the module docstring — so nothing below it changed behaviour, and everything below it moved. Each row's new coordinate was found by locating the token recorded as that row's subject: `_strip_non_blank` 146→178, `_CITATION_SHAPED` 299→331, the scanner's compile 375→407, `default=repr` 468→500, `def _positive_seconds` 482→514 — four of four consistent with +32, which is why +32 is stated rather than assumed. New keys: `booth.py` `a21d4d1d75e0a5c291b8bdf01183210127748bf5` (was `0d1191c626fca1b9f559a6a5ea89e10f2c621c28`, 795 lines), `tests/test_booth.py` `cc65c60e8926df10112e6ac3e7834e1bc1a535ba` (1810 lines).
+
+**A closure, and the first one here closed by DECLARATION rather than by change or pin alone.**
+`R3-docstring-omits-bracket-fragment-leak` is **closed** by `bde8d5f`: the module docstring now enumerates
+every airing shape — the four it already named, the **bracket fragment as a fifth declared shape**, and the
+known `U+034F` leak — and a parametrized pin covers **all 17 cases** (measured by collecting the test: 17
+parameters), one per declared shape plus three for the leak family. The fifth shape is declared **by
+mechanism**, and the peer's reason is measurable rather than stylistic: the space-separated form
+(`position[0].position [99].evil`) contains **no dot at all**, so calling the whole family a dotted suffix would
+be **false for one of the three measured cases** and would relocate the ambiguity instead of removing it. The
+correction cycle ended when the sentence stopped naming a category and named the mechanism instead — a
+category can always have a sister category, and `Mc`/`Me` turned out to leak exactly like `Mn`.
+
+**Two informational findings from that unit's review, recorded with its author's reading and not the
+provider's intent.** `R3-doc-stale-leak-placement` (`:56-57`): the sentence uses **placement** for what was
+unrecorded about the **character**, while the docstring does define the place (inside a structural joint), so the
+noun is stale. `R3-shape5-whitespace-tolerance-scope` (`tests/test_booth.py:1124-1127`): the id and the `space`
+parameter's comment suggest the mechanism is the **separator**, while the discriminator actually measured is the
+**family word consumed**. Neither changes behaviour, and both carry an owner and a trigger above.
+
+**Three more things this unit left in the record, and none of them is a fix.** (1) **The ten structural mutants
+are now LISTED** where they earlier were only named as a result — a verifier had to ask for the set, and that
+was a defect of the register rather than of the verifier. (2) **`Me` is named in the docstring but has no pin
+of its own**: its behaviour was probed, not fixed, and the docstring only claims the marks are common cases, so
+there is no over-claim — but a named case with no case exercising it is thin, and it is recorded as such.
+(3) **`position]99[.invented`, with the brackets inverted, airs**, covered only by the general out-of-scope
+sentence; enumerating it would be a **seventh declared shape**, which is a **decision rather than a fix** — and
+by this unit's own rule it belongs to the user, exactly like the shape it just declared.
+
+**The two F09b findings, re-measured by the parent on the integrated bytes** rather than taken from the report.
+Both reproduced exactly, and the second came back **sharper than the report**. The first of the two has since
+been **closed by declaration** in F09c — which is why its row above reads as a declared shape rather than as a
+hole — and the second is now the subject of a redesign the user authorized:
 
 - **The attached-bracket continuation leaks.** `position[0].position.[99].evil`, `position[0].position.[99]`
   and `position[0].position [99].evil` all **air**, while `position[0].position[99]`,
