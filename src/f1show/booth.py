@@ -34,13 +34,26 @@ interpolates it from the same definition the parser accepts, so the format the m
 taught and the format that is checked come from one source and cannot drift apart. An
 answer that cites nothing, cites a reference that was
 never supplied, leaves no commentary after the citation, or carries a further
-citation-marked line - a later line that is citation-shaped under a tolerant reading (an
-optional leading bullet, optional whitespace before the colon, any case), refused with its
+citation-marked line that also names a reference - a later line that is citation-shaped
+under a tolerant reading (an optional leading bullet, optional whitespace before the
+colon, any case) **and** carries a reference-shaped token, refused with its
 own ``BoothReason.MULTIPLE_CITATION_LINES`` rather than aired with just its first
 citation validated - is **refused** with a typed outcome instead of becoming a turn with
-a guessed or partially checked source. The guarantee is about *tokens*, not lines: a
-reference-shaped token anywhere in the aired commentary that is not one of the supplied
-references -- or a matched reference with a bracket glued directly onto it
+a guessed or partially checked source. The guarantee is about *tokens*, not lines: the
+refusal needs **both** conditions, because a marker-shaped later line whose remainder
+carries no reference token is **prose, not a citation attempt** -- an ordinary sentence
+such as ``EVIDENCE: the gap closed by four tenths.`` merely opens with the word the prompt
+uses as a section header, and refusing it was the deviation this unit corrects -- while a
+marker-shaped line that *does* carry a token is still a second citation attempt and is
+still refused. **One over-refusal is accepted as the price of that rule, and it is named
+here rather than left to be discovered**: a marker-shaped line whose remainder *names a
+supplied reference in prose* (``Evidence: position[0].position shows P3.``) is refused too,
+because it is byte-shaped exactly like a second citation and no structural test separates
+"prose that happens to mention evidence" from "another citation attempt". Closing it would
+mean trading away one of the four escape channels this rule closes, which is the wrong
+direction, and a model can rephrase trivially, so the cost is a retry rather than a lost
+claim. A reference-shaped token anywhere in the aired commentary that is not one
+of the supplied references -- or a matched reference with a bracket glued directly onto it
 (``position[0].position[99]``) -- is refused as
 ``BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT``, which is the one rule that reaches a bare or
 mid-line mention. Every emitted ``Turn`` therefore carries a non-empty ``evidence`` tuple
@@ -325,9 +338,11 @@ _CITATION_MARKER_WORD = _CITATION_MARKER.removesuffix(":")
 
 #: The citation-shaped reading used **only** by the violation check: an optional leading
 #: bullet, optional whitespace before the colon and any case. It is deliberately wider
-#: than what acceptance reads, so a later line that is a citation attempt under any
-#: spelling is refused as ``MULTIPLE_CITATION_LINES``; it is never applied to the first
-#: line, because widening what is refused must not widen what is accepted.
+#: than what acceptance reads, so a later line spelled as a citation attempt under any
+#: variant is recognised; it is never applied to the first line, because widening what is
+#: refused must not widen what is accepted. Since the token correction this shape is only
+#: one of the two conditions for a violation: the line must also carry a reference-shaped
+#: token, so a marker-shaped line of plain prose is not a citation attempt.
 _CITATION_SHAPED = re.compile(
     rf"^\s*[-*+\u2022]?\s*{re.escape(_CITATION_MARKER_WORD)}\s*:",
     re.IGNORECASE,
@@ -425,14 +440,45 @@ def _has_attached_bracket(text: str, end: int) -> bool:
     return text[end : end + 1] == "["
 
 
+def _is_citation_attempt(line: str, scanner: re.Pattern[str] | None) -> bool:
+    """Whether a later line is a citation attempt: citation-shaped **and** token-carrying.
+
+    The violation is about tokens, not lines. A later line that is citation-shaped under
+    the tolerant reading but whose remainder carries no reference-shaped token is prose
+    that happens to open with the word the prompt uses as a section header -- an ordinary
+    sentence such as ``EVIDENCE: the gap closed by four tenths.`` -- so it is commentary
+    and airs; refusing it was the deviation. Only a marker-shaped line that actually names
+    a reference-shaped token is a second citation attempt, refused as
+    ``MULTIPLE_CITATION_LINES``. The token is matched on the same normalized view the
+    content rule uses (``_scan_view``), so both rules read one shape.
+
+    ``scanner`` is the shape derived from the supplied references (``_reference_scanner``).
+    It is ``None`` only when those references carry no ``<family>[<index>].<field>``
+    structure, which the collector's grammar never produces; in that unreachable case the
+    shape cannot be built, so this stays **fail-closed** and refuses the citation-shaped
+    line as before rather than letting a second citation through unvalidated.
+    """
+    if not _is_citation_shaped(line):
+        return False
+    if scanner is None:
+        return True
+    return scanner.search(_scan_view(line)) is not None
+
+
 def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _RefusedAnswer:
     """Parse the citation-first protocol, refusing anything not backed by ``allowed``.
 
     The first non-empty line must be the citation line, and it must be the only one: a
     further line that is citation-shaped under the tolerant reading -- an optional leading
-    bullet, optional whitespace before the colon, any case -- is a protocol violation,
-    refused as ``MULTIPLE_CITATION_LINES`` because the answer's commentary boundary is
-    undefined and the rest of it arrives unvalidated. What *accepts* the first line stays
+    bullet, optional whitespace before the colon, any case -- **and** carries a
+    reference-shaped token is a protocol violation, refused as
+    ``MULTIPLE_CITATION_LINES`` because the answer's commentary boundary is undefined and
+    the rest of it arrives unvalidated. The token requirement is the correction: a
+    marker-shaped later line whose remainder carries no reference token is prose that
+    merely opens with the header word, not a citation attempt, so it airs as commentary
+    instead of being refused; refusing it was the deviation. The reference shape is derived
+    from ``allowed``, and if it cannot be built the check stays fail-closed and still
+    refuses a citation-shaped line. What *accepts* the first line stays
     the exact marker the prompt teaches. The shape is decided before the content, so a
     missing or empty citation is ``UNCITED`` only once no later line opens with the
     marker; any cited reference absent from ``allowed`` is ``INVENTED_REFERENCE``; and
@@ -455,7 +501,10 @@ def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _Refu
     header = lines[start].strip()
     if not _opens_with_citation_marker(header):
         return _RefusedAnswer(BoothReason.UNCITED)
-    if any(_is_citation_shaped(line) for line in lines[start + 1:]):
+    # The reference shape is derived once, here, because the violation check needs it too:
+    # a marker-shaped later line is only a citation attempt when it also names a token.
+    scanner = _reference_scanner(allowed)
+    if any(_is_citation_attempt(line, scanner) for line in lines[start + 1:]):
         return _RefusedAnswer(BoothReason.MULTIPLE_CITATION_LINES)
     cited = tuple(
         dict.fromkeys(
@@ -473,7 +522,6 @@ def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _Refu
     if not text:
         return _RefusedAnswer(BoothReason.BLANK_TEXT)
     scanned = _scan_view(text)
-    scanner = _reference_scanner(allowed)
     if scanner is not None:
         for match in scanner.finditer(scanned):
             supplied = _canonical_reference(match.group(0)) in permitted
