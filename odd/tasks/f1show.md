@@ -2631,6 +2631,28 @@ defect is in the **selection** — and the stints family's absent timestamp fiel
 than only against fixtures. Nothing was written into the repository: the live payloads and the summary live under
 `/tmp/f1show_live/`.
 
+**First live MODEL exercise, and the finding that blocks live commentary (2026-10-11, authorized by the user).**
+The recorded Austin 2024 race (9617) was driven through the project's own composition — `_model_client` over the
+operator's gateway with the **version-less base URL derived in memory**, and the credential parsed literally
+from the operator's file and **never printed** — for the window chosen: **`SESSION STARTED` (19:03:48) → the
+last lap-5 completion (19:12:17)**, 8.5 minutes of race, **206 events**. The model id was chosen **at runtime
+from the gateway's own native listing** (`gemini-3.5-flash-lite`, of 12 advertised).
+**The run completed: 206 model calls, 135,660 input and 16,374 output tokens, 203 s, mean latency 0.99 s,**
+producing the finding this round was waiting for: **the model copies what the prompt shows, at three levels of
+fidelity.** 58 citations used the **listed reference** and aired; 93 used the **event identity** (`laps[3]`) and
+aired only because the probe normalised them; and **55 copied the reference with its value**
+(`laps[6].lap_duration = 105.091`), exactly as the `EVIDENCE` block prints it, and were **refused as
+`invented_reference`**. **With the shipped protocol only 28% of the events can air**, and the cause is the
+prompt's own formatting: it teaches `- <reference> = <value>` while the instruction says *exactly*
+`EVIDENCE: <reference>`.
+**Two things this establishes.** The pipeline **does** support live-like generation — the feed is the
+collector's chronological order, one turn per event, the booth alternates lead and colour, and the commentary is
+evidence-grounded (sector times, trap speeds, lap times, all taken from the evidence). And the blocker is a
+**citation-format decision**, not the model, the gateway or the data. **And the over-refusal did not bite**: 206
+samples, **zero** `MULTIPLE_CITATION_LINES`.
+**No fix was applied**: the normaliser lived in the probe, the repository is untouched, and the two candidate
+fixes are registered as product decisions.
+
 **Implementation, verification and native review (observed).**
 
 - **The decision, and why (a) rather than (b)**: shape 5 is declared as a **fifth shape described by its
