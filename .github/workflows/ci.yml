@@ -101,8 +101,11 @@ jobs:
               sys.exit("register guard: this step needs Python 3.11+ for tomllib and the runner does not provide it")
 
           config = tomllib.loads(pathlib.Path("ruff.toml").read_text())
-          ignored = set(config["lint"].get("ignore", []))
-          for rules in config["lint"].get("per-file-ignores", {}).values():
+          lint = config.get("lint")
+          if lint is None or "ignore" not in lint:
+              sys.exit("register guard: ruff.toml must declare [lint].ignore; without it the silenced rules cannot be read and this guard would check a subset in silence")
+          ignored = set(lint["ignore"])
+          for rules in lint.get("per-file-ignores", {}).values():
               ignored.update(rules)
 
           register_path = pathlib.Path("docs/CARRIED-FINDINGS.md")
