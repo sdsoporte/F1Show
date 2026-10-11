@@ -383,8 +383,8 @@ because a reviewer of the register should be able to check the claim without tru
 in its header: **the configuration is reviewable only when a reader can follow every silence to an owner.**
 Counts measured on **`26dc06da` with ruff 0.17.0**, per rule **and per tree**, because the *shape* of an
 exception depends on **where** the rule fires: a rule that only fires in one tree is **scoped**, not silenced
-globally, so it still reports in the other. Two rules fire in both trees and are therefore global, and three
-the rules inherited from the agent harness (`B008`, `SIM108`, `S311`, `S603`, `S607`) report **zero** here and
+globally, so it still reports in the other. Two rules fire in both trees and are therefore global, and **five**
+rules inherited from the agent harness (`B008`, `SIM108`, `S311`, `S603`, `S607`) report **zero** here and
 were **removed** from the ignore rather than carried: their inherited reasons came from `requests`, `pip` and
 FastAPI, not from this repository.
 
@@ -406,10 +406,11 @@ Two findings from the F12 review, both flagged by **two independent lenses** and
 special weight, neither of them fixed here because either would change the `ci.yml` bytes that were just
 approved:
 
-| Location | Ids | Severity | Owner | Trigger | Status |
+| Location | Ids observed there | Severity | Owner | Trigger | Status |
 | --- | --- | --- | --- | --- | --- |
-| `.github/workflows/ci.yml` | R3-no-job-timeout = R4-CI-TIMEOUT | OPEN finding, no body | the next commit touching that file | **that commit** adds `timeout-minutes` | OPEN — a job with no wall-clock bound can hang until the runner's own limit |
-| the `ruff.toml` obligation sentence, and the enforcement step that does not exist yet | R2-register-obligation-unverifiable = R3-carried-register-unenforced | OPEN finding, no body | a small CI unit | **the five rows above existing — which this commit makes true** | OPEN, **trigger FIRED**: a step that fails when an ignored rule has no row cannot land before the rows, and it cannot ride this integration without changing the approved `ci.yml` |
+| `.github/workflows/ci.yml`, the whole job block | R3-no-job-timeout = R4-CI-TIMEOUT (unit review) = R3-no-job-timeout, R4-001, R4-002, R2-report-step-enforces (integration review) | **WARNING ×4** + SUGGESTION | the next commit touching that file | **that commit**: it adds `timeout-minutes` and takes the rest | OPEN — **every id is listed and none is paired to a range narrower than the file**, because the integration review's bodies are unrecoverable and a pairing cannot be measured |
+| `ruff.toml`, the obligation header | R2-register-obligation-unverifiable = R3-carried-register-unenforced (unit review) = R3-register-unenforced, R2-owner-label-drift (integration review) | **WARNING ×2** + SUGGESTION | a small CI unit, and the owner of the labels | **the five rows above existing — which this commit makes true** — plus that unit | OPEN, **trigger FIRED**: a step that fails when an ignored rule has no row cannot land before the rows, and it cannot ride the integration without changing the approved `ci.yml` |
+| `docs/CARRIED-FINDINGS.md:385-389`, this section's own prose | R2-harness-rule-count-mismatch = R3-docs-rule-count | **WARNING** + SUGGESTION | — | — | **CLOSED by correction in the same commit**: the sentence said "three" and then **listed five rule names**, and it was ungrammatical besides. The integration review caught a miscount **in the register's own text** — the same defect class this register exists to catch, caught by the gate that re-reviews everything, on itself |
 
 ## Cross-cutting, from verification rather than from reviews
 
