@@ -26,6 +26,13 @@ enough to name a subject, the entry says so instead of inventing one.
 - **A trigger names a concrete condition, never a person's attention.** Owner answers *who*; trigger
   answers *when*. An entry whose only possible trigger is "the next time someone touches that file" is a
   dead record by this rule, because that is attention wearing a costume.
+- **A closure has a TYPE, and "closed" alone is not evidence.** Three kinds appear here and they are not
+  interchangeable: closed by **change** (bytes moved and a test went red first), closed by **pin** (a test was
+  added that also passes on the unaffected code, so behaviour did not change and there was **no RED**), and
+  closed as a **dead record** (no future condition forces it). A pin proves that an intended behaviour is now
+  watched; it proves nothing about a defect having been fixed, so a row closed by pin must say so. Added after
+  the F09b unit, whose `R3-004` closed by pin while this register first recorded it as superseded by a
+  rewrite — see that row.
 - **"Carried as informational" is not a resting place.** It is how a broken public export survived five
   units in this repository, registered in every static report with a name and a line number and with
   nothing forcing anyone to look again.
@@ -97,7 +104,7 @@ than no location because it reads as verified.
 | `:299-303` | R3-bullet-commentary-false-refusal (F09b unit) = R3-marker-word-false-refusal (integration review) | **WARNING** | F13 | the first live trial that observes the model's output style, or any unit touching `_CITATION_SHAPED` | OPEN, **re-measured by the parent** below, and **independently re-surfaced by the integration review under a fresh id** |
 | `:375-377` | R3-bracket-continuation-leak (F09b unit) | **WARNING** | the next unit touching the scanner, or a live transcript showing a fragment | a fragment of a never-supplied reference airing in an aired turn | OPEN, **re-measured by the parent** below |
 | `:53-54` | R3-docstring-omits-bracket-fragment-leak (integration review) | SUGGESTION | the next unit touching the scanner's docs | any change to the module docstring's list of boundaries | OPEN, body unknown |
-| `:288-294` (pre-F09b) | R3-004 (integration) | SUGGESTION | — | — | **SUPERSEDED by measurement**, see below |
+| `:288-294` (pre-F09b) | R3-004 (integration) | SUGGESTION | — | — | **CLOSED inside the F09b unit by two pins** — no behaviour change and **no RED**, a weaker evidence class than closed by change; see below |
 | — | R3-positive-seconds-overflow | SUGGESTION | — | — | **promoted, not dead**: F10 shipped and the bound is still a constant, so the entry above stays OPEN under its original condition |
 
 **The two F09b findings, re-measured by the parent on the integrated bytes** rather than taken from the
@@ -129,14 +136,23 @@ the row it shares with the unit's id instead of on a parallel row. It also **rai
 finding**: what was one reviewer's reading plus the parent's re-measurement is now two independent reviewers
 on the same subject, and it was created by the very change that closed the escape channels.
 
-**R3-004 retired as superseded, and a measurement is what retired it.** The pre-F09b `booth.py:288-294` held
-`if any(_opens_with_citation_marker(line) for line in lines[start + 1:]):` followed by
-`return _RefusedAnswer(BoothReason.MULTIPLE_CITATION_LINES)` — the citation-violation predicate itself. The
-F09b unit rewrote exactly that predicate, and its own review then placed a measured finding on the successor
-code. So the subject R3-004 pointed at was rewritten by the unit that owned it, and the surviving issue on
-that subject is registered above with a body and a trigger. Keeping R3-004 open beside it would be two rows
-for one subject, and with no recoverable body no fix could ever be verified. This is a scope retirement
-**proved by the location's content**, not a claim that something was fixed.
+**R3-004: closed inside the F09b unit by PIN, and this register had it wrong until the peer measured it.**
+The row pointed at the pre-F09b `booth.py:288-294`, which held
+`cited = tuple(dict.fromkeys(item.strip() for item in header[...].split(",") if item.strip()))` — that is the
+**duplicate collapse** and the **silent drop of empty items**, a **coverage** subject, and the peer who owned
+the unit closed it as such: the collapse is pinned by
+`test_duplicate_citations_are_collapsed_and_their_order_is_preserved`, and the empty-item tolerance is pinned
+with the reason that a dropped empty item cannot carry a reference that was never supplied. Both pass, and
+both **passed before the change too** — they are pins, with **no RED**.
+**This entry was wrong in its first form**, and the correction is worth more than the tidied text. It claimed
+the location held the `MULTIPLE_CITATION_LINES` predicate, which in fact sits **one line above**, at
+`:286-287`. The mistake was mechanical: a `sed -n '286,295p'` window was read as if it were the cited range.
+That is the same class of error this register exists to catch — **a measurement that reads as verified
+without being about the thing it claims** — and it survived because the surrounding story was coherent. The
+unit's own review then placed a measured finding on the successor code, and the over-refusal the unit created
+by widening its predicate is a **different** finding, registered above under its own location as a WARNING.
+What the row needed was never a retirement narrative: it needed the closure **typed**, and a pin is not a
+change.
 
 The peer's reading, carried as its own, and it carries **two damages of different kinds**, which is why it
 matters more than a tidy-up. The `_render` path has two ways to fall back to `repr` —
