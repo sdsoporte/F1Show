@@ -94,8 +94,9 @@ than no location because it reads as verified.
 | `:466-470` | R3-001 and R3-003 (integration) = R3-render-repr-determinism (unit) | SUGGESTION | F13 | **an evidence value that cannot be serialized reaches the prompt** — a data event, or a change in F04's contract | OPEN, with the fix already decided below |
 | `:482-489` | R3-002 (integration) = R3-positive-seconds-overflow (unit) | SUGGESTION | whoever sources a bound from configuration | **the F10 trigger did NOT fire**: `main` calls `run_session` without the bound parameters, so they keep their signature defaults. The composition wiring shipped without promoting a single bound into configuration | OPEN |
 | `tests/test_booth.py:1658-1670` | R3-006 (integration) = R3-bound-guards-uncovered (unit) | SUGGESTION | issue #8 | any change to the bounds list | OPEN |
-| `:299-302` | R3-bullet-commentary-false-refusal (F09b unit) | SUGGESTION | F13 | the first live trial that observes the model's output style, or any unit touching `_CITATION_SHAPED` | OPEN, **re-measured by the parent** below |
+| `:299-303` | R3-bullet-commentary-false-refusal (F09b unit) = R3-marker-word-false-refusal (integration review) | **WARNING** | F13 | the first live trial that observes the model's output style, or any unit touching `_CITATION_SHAPED` | OPEN, **re-measured by the parent** below, and **independently re-surfaced by the integration review under a fresh id** |
 | `:375-377` | R3-bracket-continuation-leak (F09b unit) | **WARNING** | the next unit touching the scanner, or a live transcript showing a fragment | a fragment of a never-supplied reference airing in an aired turn | OPEN, **re-measured by the parent** below |
+| `:53-54` | R3-docstring-omits-bracket-fragment-leak (integration review) | SUGGESTION | the next unit touching the scanner's docs | any change to the module docstring's list of boundaries | OPEN, body unknown |
 | `:288-294` (pre-F09b) | R3-004 (integration) | SUGGESTION | — | — | **SUPERSEDED by measurement**, see below |
 | — | R3-positive-seconds-overflow | SUGGESTION | — | — | **promoted, not dead**: F10 shipped and the bound is still a constant, so the entry above stays OPEN under its original condition |
 
@@ -118,6 +119,15 @@ report. Both reproduced exactly, and the second came back **sharper than the rep
   the marker's own word is a separate case and is not declared, which is what makes this worth its own row,
   and the peer reported it as undeclared. The deliberate pin survives the measurement: a mid-sentence mention
   still airs, and a supplied reference still airs.
+
+**One defect, two independent reviewers, and the fresh id is the point.** The integration review of the F09b
+unit approved on its first run and re-surfaced the over-refusal at `booth.py:300-303` under a new id,
+`R3-marker-word-false-refusal`, one line off the location this unit's own review had used. That is the exact
+behaviour this register was built around — **the size-based gate re-reviews already-approved bytes and
+surfaces the same defect under a fresh id** — now observed rather than predicted, which is why the id sits in
+the row it shares with the unit's id instead of on a parallel row. It also **raises the weight of the
+finding**: what was one reviewer's reading plus the parent's re-measurement is now two independent reviewers
+on the same subject, and it was created by the very change that closed the escape channels.
 
 **R3-004 retired as superseded, and a measurement is what retired it.** The pre-F09b `booth.py:288-294` held
 `if any(_opens_with_citation_marker(line) for line in lines[start + 1:]):` followed by
