@@ -70,6 +70,19 @@ enough to name a subject, the entry says so instead of inventing one.
   lists what was fixed. So the check is **where** a phrase appears and **how** it is framed, never how many
   times — otherwise the honest record of a correction reads as a surviving defect, and the next reader either
   panics at it or, worse, "re-fixes" the quotation.
+- **A check's DISCRIMINATOR must be a marker that only the intended failure produces.** The exit status is
+  shared by **every** failure mode, including the ones nobody imagined, so a test that asserts only that
+  *something* failed accepts a different failure in place of the right one. Two instances, one from each
+  session: the F10 unit's provider-disagreement refusal went undetected because the test used a message-blind
+  `pytest.raises(ValueError)` and the removed refusal fell through to the credential guard, which raises a
+  **different** `ValueError` of the same type; and the CI guard's three failure tests assert the guard's **own
+  prefix** (`register guard:`) as the discriminating marker, plus **no traceback** in the two cases where a
+  `KeyError` could disguise itself — because a `KeyError` also exits non-zero. The general form, and it is the
+  same shape as the staleness rule above: a **shared** signal says *something happened*; a **distinguishing**
+  one says *what*. The line-count delta shares "something changed" and the subject token distinguishes what;
+  the exit code shares "something failed" and the prefix distinguishes what. Added from the peer's synthesis,
+  and it is the reason the F12b coverage unit exists at all: those three tests are the first ones in this
+  repository that assert a CI failure by the marker that only that failure can produce.
 
 ## Staleness keys
 
