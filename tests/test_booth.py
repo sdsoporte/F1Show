@@ -583,6 +583,90 @@ async def test_commentary_that_merely_mentions_the_marker_mid_sentence_still_air
     assert outcome.reason is None
 
 
+# --- F12: the marker word alone is not a citation attempt ----------------------
+
+
+async def _marker_shaped_prose_airs(*, case: str, line: str) -> None:
+    """Run one later line that opens with the marker word but carries no reference token.
+
+    Shared by the F12 pins so each case states its own bytes once. The first assertion
+    carries the observed refusal reason in its message, because the defect being pinned is
+    a refusal of prose, not an empty transcript.
+    """
+    event = detected(index=0)
+    text = f"Verstappen is P3 on track.\n{line}"
+    model = ScriptedModelClient([spoken(ref(event), text)])
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard=f"the F12 over-refusal run for case {case}")
+
+    assert result.transcript.turns, (
+        f"case {case}: {line!r} opens with the marker word but carries no reference token, "
+        "so it is prose and must air; observed reasons "
+        f"{[outcome.reason for outcome in result.outcomes]!r}"
+    )
+    (turn,) = result.transcript.turns
+    assert turn.text == text
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.TURN
+    assert outcome.reason is None
+
+
+@pytest.mark.anyio
+async def test_case_a_an_unbulleted_mixed_case_marker_line_without_a_token_is_prose() -> None:
+    """Case A: ``Evidence:`` with no bullet, mixed case and no reference token.
+
+    This exact marker shape was already refused *before* the tolerant predicate existed, so
+    it is a pre-existing false refusal rather than one F09b introduced; requiring the token
+    is what corrects it.
+    """
+    await _marker_shaped_prose_airs(case="A", line="Evidence: the gap closed by four tenths.")
+
+
+@pytest.mark.anyio
+async def test_case_b_a_bullet_prefixed_marker_line_without_a_token_is_prose() -> None:
+    """Case B: a bullet, ``Evidence:`` and no reference token, introduced by F09b's predicate."""
+    await _marker_shaped_prose_airs(case="B", line="- Evidence: the gap closed by four tenths.")
+
+
+@pytest.mark.anyio
+async def test_case_c_a_star_prefixed_lower_case_marker_line_without_a_token_is_prose() -> None:
+    """Case C: a star bullet, lower case and no reference token, introduced by F09b's predicate."""
+    await _marker_shaped_prose_airs(case="C", line="* evidence: tyres are gone")
+
+
+@pytest.mark.anyio
+async def test_case_d_an_exact_marker_line_without_a_token_is_prose() -> None:
+    """Case D: the exact taught marker with no reference token, still prose.
+
+    Like case A this was refused before the tolerant predicate; the missing reference token,
+    not the spelling, is why it is not a citation attempt.
+    """
+    await _marker_shaped_prose_airs(case="D", line="EVIDENCE: the gap closed by four tenths.")
+
+
+@pytest.mark.anyio
+async def test_case_e_a_bullet_prefixed_exact_marker_line_without_a_token_is_prose() -> None:
+    """Case E: a bullet plus the exact marker and no reference token, introduced by F09b."""
+    await _marker_shaped_prose_airs(case="E", line="- EVIDENCE: the tyres are gone.")
+
+
+@pytest.mark.anyio
+async def test_a_citation_shaped_line_stays_refused_when_the_reference_shape_cannot_be_built() -> None:
+    """The fail-closed branch: with no derived shape, a marker-shaped line is still a violation.
+
+    ``_reference_scanner`` returns ``None`` only for references without the collector's
+    ``<family>[<index>].<field>`` structure, which the collector never produces, so this
+    branch is unreachable through ``CommentaryBooth.run`` and is read directly here. The
+    docstring claims the check stays fail-closed in that case; dropping the ``None`` guard
+    would silently let a second citation line through, so the claim is pinned rather than
+    merely asserted.
+    """
+    assert f1show.booth._is_citation_attempt("EVIDENCE: position[99].invented", None)
+    # A line that is not citation-shaped is never a violation, fail-closed or not.
+    assert not f1show.booth._is_citation_attempt("Verstappen is P3 on track.", None)
+
+
 @pytest.mark.anyio
 async def test_the_prompt_teaches_the_same_marker_the_parser_accepts() -> None:
     """The prompt and the parser read one marker, so the taught format cannot drift.
