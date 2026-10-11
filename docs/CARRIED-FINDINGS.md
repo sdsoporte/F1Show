@@ -57,8 +57,8 @@ composition entries and **F13** for everything that needs the live service.
 |---|---|---|---|---|---|
 | `:484-488` | R3-001 | **WARNING** | F13 | the live spend report, where usage accounting becomes observable | OPEN |
 | `:477-480` | R3-002 | SUGGESTION | F13 | the live spend report | OPEN |
-| `:348-354` | R3-003 | SUGGESTION | F10 | the composition wiring, when a dialect and a base URL are chosen | OPEN |
-| `:258-259` | R3-004 | SUGGESTION | F10 | the composition wiring | OPEN |
+| `:348-354` | R3-003 | SUGGESTION | F13 | **the F10 trigger fired and the finding was not addressed**: F10 shipped without touching this call site, so no configured timeout reaches the SDK. The condition that matters is now the first live call, where an unbounded call becomes observable | OPEN |
+| `:258-259` | R3-004 | SUGGESTION | F13 | **the F10 trigger fired and the finding was not addressed**: the composition wiring does not touch the failure classifier. What matters is a real provider whose coded status is typed differently from what the classifier tests for, which only a live call produces | OPEN |
 | `:488` | R3-005 | SUGGESTION | F13 | the live spend report | OPEN |
 | `:559-566` | R3-006 | SUGGESTION | F13 | the live spend report | OPEN |
 
@@ -74,7 +74,7 @@ natural trigger is the **first live call of F13**, where a rate limit is exactly
 | `:197-200` | R3-recursion-escape | WARNING | — | — | **DEAD RECORD**: reproduced by the parent and it does **not** crash; a pathologically deep programmatic payload is not reachable from a JSON parse |
 | `:198-199` | R3-canonical-not-faithful | WARNING | F06 | F06 consuming `classify_gap`, or any change to the intervals normalization | OPEN |
 | `:199-200` | R3-valueerror-branch-untested | SUGGESTION | issue #8 | promoting probe-only coverage into the suite | OPEN |
-| `:170-175` | R3-fromisoformat-version-tail | SUGGESTION | F10 | the composition wiring, where a parse is first fed from configuration | OPEN |
+| `:170-175` | R3-fromisoformat-version-tail | SUGGESTION | F11, or F07 | **the F10 trigger did NOT fire**: F10 feeds no timestamp parse from configuration — the only configuration-fed values on the path are the integer `session_key` and the base-URL string. The condition is still a timestamp arriving from configuration, which is packaging/CLI work or F07 | OPEN |
 | `:121-131` | R3-gapreading-cross-kind | SUGGESTION | F06 | F06 consuming `classify_gap` | OPEN |
 | `tests/test_collector.py:26-33` | R3-fixtures-outside-candidate | SUGGESTION | — | — | **DEAD RECORD**: a note about the fixtures living outside the candidate; the fixtures are committed, so the condition it described has passed |
 
@@ -84,10 +84,10 @@ natural trigger is the **first live call of F13**, where a rate limit is exactly
 |---|---|---|---|---|---|
 | `:117-123` | R3-005 (integration) = R3-persona-validator-uncovered (unit) | SUGGESTION | issue #8 | promoting probe-only coverage, or any change to the personas | OPEN |
 | `:317-322` | R3-001 and R3-003 (integration) = R3-render-repr-determinism (unit) | SUGGESTION | F13 | **an evidence value that cannot be serialized reaches the prompt** — a data event, or a change in F04's contract | OPEN, with the fix already decided below |
-| `:336-340` | R3-002 (integration) = R3-positive-seconds-overflow (unit) | SUGGESTION | F10 | a bound that arrives from **configuration** instead of a constant, which is the composition wiring | OPEN |
+| `:336-340` | R3-002 (integration) = R3-positive-seconds-overflow (unit) | SUGGESTION | whoever sources a bound from configuration | **the F10 trigger did NOT fire**: `main` calls `run_session` without the bound parameters, so they keep their signature defaults. The composition wiring shipped without promoting a single bound into configuration | OPEN |
 | `tests/test_booth.py:1039-1050` | R3-006 (integration) = R3-bound-guards-uncovered (unit) | SUGGESTION | issue #8 | any change to the bounds list | OPEN |
 | `:288-294` | R3-004 (integration) | SUGGESTION | the peer's citation-channel unit | **inside the unit currently in flight**, so it closes there or is re-registered here | OPEN |
-| — | R3-positive-seconds-overflow | SUGGESTION | — | — | **DEAD RECORD only until F10 ships**: as soon as a bound can come from configuration the trigger above exists, so it is promoted rather than dead |
+| — | R3-positive-seconds-overflow | SUGGESTION | — | — | **promoted, not dead**: F10 shipped and the bound is still a constant, so the entry above stays OPEN under its original condition |
 
 The peer's reading, carried as its own, and it carries **two damages of different kinds**, which is why it
 matters more than a tidy-up. The `_render` path has two ways to fall back to `repr` —
@@ -107,6 +107,27 @@ rather than render it approximately** — a non-serializable value in the eviden
 contract, not a shape to be drawn as well as possible. Refusing deletes the `repr` fallback, and with it
 both damages. Recorded this way so that whoever picks it up does not have to design anything: the decision
 is already made, and the only work is the error type and its test.
+
+## run.py — from the F10 review
+
+F10 was reviewed and approved as `review-0114285928bfdd2d` (medium tier, one `review-reliability` lens),
+and all four findings are non-blocking: none opened a correction and none reopens the review. The reviewer's
+descriptions are **not recoverable** — the receipt carries ids, severities and locations only — so the
+**subject of each row is the parent's reading of the location, and the owner and trigger are the parent's
+inference, not the reviewer's words**. The location is the identity.
+
+| Location | Ids | Severity | Owner | Trigger | Status |
+| --- | --- | --- | --- | --- | --- |
+| `:123-128` | R3-001 | **WARNING** | the next corpus refresh (issue #3, or any re-recording) | a corpus file that does not parse: this is the branch that puts the decoder's own message into a `RecordedSourceError`, so its shape matters exactly when a truncated or half-written file exists | OPEN, body unknown |
+| `:243-255` | R3-002 | SUGGESTION | F13 | the first live call: `main` builds the model client **before** it reads the corpus, so the gemini branch constructs a real SDK client ahead of a load that may fail | OPEN, body unknown |
+| `:286-316` | R3-003 | SUGGESTION | F13 | the first live call: the gemini branch materializes the credential and builds the SDK client with a base URL and **no timeout**, so the same subject as the `gemini.py` row above sits on the F10 side too | OPEN, body unknown |
+| `:168-173` | R3-004 | SUGGESTION | the first live call, or any change to the declared base URL | the `native_base_url` derivation: the trailing-segment rule is proved for the two declarations in use, so a third declaration shape is what would revisit it | OPEN, body unknown |
+
+One honest note about this unit: **the four F10-owned triggers in the tables above were reached by the same
+commit**, and three of them did not fire, which is the reconciliation this register exists to force. F10
+chose a dialect and a base URL, and it promoted nothing else: no bound, no timestamp and no timeout travelled
+from configuration into the engine. That is recorded at the location of each entry rather than summarised,
+because a reviewer of the register should be able to check the claim without trusting this paragraph.
 
 ## Cross-cutting, from verification rather than from reviews
 

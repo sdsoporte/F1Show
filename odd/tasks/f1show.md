@@ -1620,7 +1620,8 @@ deletions** count, `events.py` and the `fixtures/` tree byte-identical, 18 focus
    generation to prove the wiring. One model call is a budget decision, not an assumption.
 4. **F09 — the two-person booth.** Lead and colour personas, explicit turn order, bounded context,
    evidence-only sourcing, degradation that is neutral rather than invented.
-5. **Thin F10 — in progress, design registered before the first write.** One command that runs
+5. **Thin F10 — CLOSED as `20af86f9139d28e6be4ea8b15890b10a8b9551b1`; the closure record with its
+   evidence is under "Current next step".** One command that runs
    replay → events → booth → a transcript, in one process. Not the multi-service shape: no Redis, no
    bus, no venue.
    - **New module `src/f1show/run.py`** plus `tests/test_run.py` and additive root exports. The
@@ -2213,20 +2214,60 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F10, the thin end-to-end orchestration**, with its design registered above before the first write
-and its dependency satisfied: F09's booth is integrated, verified by content and natively reviewed with its
-authority burned, and the suite sits at **706**. F10 composes replay, the event collector and the booth into
-one command that prints a transcript, with every dependency injected so the whole path is exercisable
-offline, and it carries the composition requirement as a proof rather than a claim — the base URL derived
-per dialect and exercised against both declared forms with the composed URL captured from the wire. With
-that, the MVP's product units are all present: F04's events, F08's gateway and F09's booth are done, and
+Active: **F10 is closed and committed, awaiting only the publication decision.** The thin end-to-end
+orchestration landed as `20af86f9139d28e6be4ea8b15890b10a8b9551b1`, and its committed tree is
+**byte-identical** to the reviewed candidate tree `6b39ac69ec835f75d936101f439304bd1463dc48` — the check
+that matters, since a review of different bytes is a review of something else. With F10, the MVP's product
+units are all present: F04's events, F08's gateway, F09's booth and one command that runs them together.
 F05, F06, F07, F11 and F13 stay deferred with their reasons. The peer session is working its assigned unit,
-the residual citation channels in `booth.py`, and the carried findings are being registered in a **new file**
-with owner and **trigger**, deduped by **location** rather than by finding id, because the size-based gate
-re-reviews already-approved bytes and surfaces the same defect under a fresh id. `main` sits at `f441c7f0`
-after three merged pull requests, this branch is eight commits ahead of the remote, and publishing the F09
-integration remains a separate human decision. Housekeeping: the ODD mirror is five records and the
-splitter handles any number of parts.
+the residual citation channels in `booth.py`, and the carried findings live in their own file with owner and
+**trigger**, deduped by **location** rather than by finding id, because the size-based gate re-reviews
+already-approved bytes and surfaces the same defect under a fresh id. `main` sits at `f441c7f0` after three
+merged pull requests, and publishing the F09 integration and F10 remains a separate human decision.
+Housekeeping: the ODD mirror is five records and the splitter handles any number of parts.
+
+**F10 closed: the command, the derivation and the two proofs.** `20af86f9`, three paths, **991 additions and
+0 deletions** — `run.py` 335 lines, `test_run.py` 643, and 13 additive lines in `__init__.py`. Suite
+**730** (706 + 24), Ruff 0.16.1 clean on the three paths under the harness config (isort included), Pyright
+0 errors. Native review `review-0114285928bfdd2d`, **medium tier, a single `review-reliability` lens**, 991
+lines frozen against a 200-line correction budget, approved on its first run and its authority **burned**
+with `consumed_revision sha256:4e76235a…`. Independent verification `mv37vvl9-1z-bker` PASS, six targeted
+mutants with five killed, and it **named the survivor instead of smoothing it**: removing the
+provider-disagreement refusal was undetected, because the test used a message-blind
+`pytest.raises(ValueError)` and the removed refusal falls through to the credential guard, which raises a
+*different* `ValueError` of the same type. The parent closed that hole rather than carrying it — the test
+now asserts the refusal's own message, and the kill was **re-proved in the verifier's shadow**, with the
+shadow confirmed as the module under test (`f1show.run.__file__` and sha256 `ab244f03d9fcad1d`). That is
+the pattern worth remembering from this unit: **an assertion that names a guarantee and is satisfied by a
+different failure is a guard that reads as coverage without being coverage** — the same shape as the
+`SnapshotResult` export that survived five units behind a familiar warning.
+**The two registered requirements were proved, not asserted.** The base-URL derivation was exercised
+against **both** declared forms — one carrying `/v1` and one carrying none — as two parameterised cases,
+each with the composed URL **captured from the wire** through a recording transport with zero network I/O;
+both captures are the identical string `http://127.0.0.1:8317/v1beta/models/<id>:generateContent`, with one
+`v1beta/` and one `models/`, which is exactly the requirement the operator-gateway record above set and the
+requirement the first failed probe taught. And a live call cannot happen by omission: `main`'s provider
+selection has **no default**, and a selection that disagrees with `settings.booth.provider` is refused in
+**both directions** before any client is built. The loader reads exactly the collector's five event-bearing
+families and refuses a missing directory, a missing family file or an absent session with a **typed** error
+rather than a silently empty payload list, and the parent reproduced the strong claim itself:
+`collect_session_events(9617, load_recorded_session(9617))` equals the same call over the raw fixtures event
+for event — **1,648 events, equal** — with every row carrying session 9617 and the counts matching the
+recorded provenance (position 403, laps 1059, pit 23, stints 43, race_control 120). The verifier added the
+MVP's own acceptance criterion in the strongest available form: two full offline runs produced transcripts
+and printed output **byte-identical** at 127,060 characters, and the `repr`-fallback damage registered for
+`booth.py` is **not reachable** from recorded evidence, since every evidence value comes from `json.loads`.
+**Four informational findings, and a register reconciliation that this unit forced.** The review left R3-001
+(WARNING) at `run.py:123-128` and three suggestions at `:243-255`, `:286-316` and `:168-173`; their bodies
+are unrecoverable, so the register records the **location as the identity**, the subject as the parent's
+reading of that location, and the owner and trigger as the parent's inference, labelled as such. More
+useful: **the same commit reached four previously registered triggers owned by F10, and three of them did
+not fire.** F10 chose a dialect and a base URL and promoted nothing else into the engine — `main` calls
+`run_session` without the bound parameters, so every bound keeps its signature default, and no timestamp
+parse is fed from configuration. Each of those entries now says so **at its own location** rather than in a
+summary, so a reader can check the claim without trusting this paragraph. One nuance the verifier reported
+honestly and worth keeping: the recorded corpus is single-session per family, so the loader's `session_key`
+filter is caught by the unknown-session refusal rather than by a count change.
 **Parallel track, coordinated 2026-10-10.** A second session implements **F08** (the Gemini gateway)
 in an isolated worktree `/home/s/dev/projects/work/F1Show-f08`, branch `feat/f08-gemini-gateway`,
 based on `0b1f0c7`, registering its own design in that branch's copy of the F08 section. Verified
