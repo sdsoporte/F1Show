@@ -2025,6 +2025,36 @@ parent, after the review had already approved the first candidate.**
   never acknowledged** — an approval for bytes that are about to change is not a licence to commit
   them. The corrected bytes are a **new candidate with its own review**.
 
+**Correction C2, registered before the edit. Found by the independent re-verification of C1.**
+
+- **C1 is verified**, not merely implemented: the registered defect is now `OutcomeKind.REFUSED` with
+  `BoothReason.MULTIPLE_CITATION_LINES` and **zero** turns, a second citation line carrying an
+  otherwise *supplied* reference is refused too rather than merged, a single citation line still airs,
+  the three refusal reasons are distinguishable, and **all ten mutants from the first verification
+  still die** against the corrected bytes, including the two that target the parse path.
+- **What C1 left unpinned, measured rather than argued.** C1 put the marker in one constant **for the
+  parser**, but the prompt — the one place the model learns the marker — still wrote `EVIDENCE:` as two
+  string literals. The re-verifier demonstrated the drift in both directions on copies: changing the
+  prompt literals alone left the suite at **58 passed, silently**, which is a mass-refusal waiting to
+  happen at runtime; changing the constant alone was caught only **accidentally**, because the test
+  fixtures hard-code the marker inside their scripted answers. **No test pinned prompt↔parser
+  agreement**, so the module's own "the two cannot drift" reading was too strong.
+- **Decision**: the prompt interpolates the parser's marker constant, so the format taught and the
+  format accepted have one source, and one test pins the agreement **in both directions** — the
+  captured prompt must contain the parser's marker, an answer built with that marker must be accepted,
+  and an answer built with a different marker must be refused. The drift experiment that previously
+  passed silently must now fail.
+- **Recorded, deliberately not corrected: the residual commentary channel.** A bullet-prefixed marker,
+  `EVIDENCE :` with a space, a mention mid-line and a bare reference with no marker at all all air
+  with the never-supplied string inside `turn.text` — while the **evidence tuple stays fully validated
+  in every aired turn**. That is the boundary, and it is a real trade: prose is not structurally
+  validatable, a stricter "any line containing the marker" rule would over-refuse, and one existing
+  test deliberately pins a mid-line mention as legitimate commentary. Tab-indented, lowercase and
+  CR/LF-joined variants *are* caught. The declarative remedy is already in the prompt's own rules, and
+  the semantic half remains F13's authorized trial.
+- **Surfaces**: `src/f1show/booth.py` and `tests/test_booth.py`. Non-regression: the full suite stays
+  green and the ten mutants still die on the final bytes.
+
 ### F10 — Wire bounded end-to-end orchestration
 
 - [ ] Correlate enrichment by event/session/version, apply bounded join deadlines,
