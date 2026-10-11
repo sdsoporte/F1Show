@@ -83,15 +83,30 @@ natural trigger is the **first live call of F13**, where a rate limit is exactly
 | Location | Ids observed there | Severity | Owner | Trigger | Status |
 |---|---|---|---|---|---|
 | `:117-123` | R3-005 (integration) = R3-persona-validator-uncovered (unit) | SUGGESTION | issue #8 | promoting probe-only coverage, or any change to the personas | OPEN |
-| `:317-322` | R3-001 and R3-003 (integration) = R3-render-repr-determinism (unit) | SUGGESTION | F13 | the first real prompt assembled for a live provider, or an evidence value that is not serializable (a change in F04's contract) | OPEN |
+| `:317-322` | R3-001 and R3-003 (integration) = R3-render-repr-determinism (unit) | SUGGESTION | F13 | **an evidence value that cannot be serialized reaches the prompt** — a data event, or a change in F04's contract | OPEN, with the fix already decided below |
 | `:336-340` | R3-002 (integration) = R3-positive-seconds-overflow (unit) | SUGGESTION | F10 | a bound that arrives from **configuration** instead of a constant, which is the composition wiring | OPEN |
 | `tests/test_booth.py:1039-1050` | R3-006 (integration) = R3-bound-guards-uncovered (unit) | SUGGESTION | issue #8 | any change to the bounds list | OPEN |
 | `:288-294` | R3-004 (integration) | SUGGESTION | the peer's citation-channel unit | **inside the unit currently in flight**, so it closes there or is re-registered here | OPEN |
 | — | R3-positive-seconds-overflow | SUGGESTION | — | — | **DEAD RECORD only until F10 ships**: as soon as a bound can come from configuration the trigger above exists, so it is promoted rather than dead |
 
-The peer's own reading, carried as its own: the `repr` fallback in `_render` is not deterministic because it
-can print **memory addresses**, so a real prompt could leak implementation detail to the provider. That is
-why its trigger is the first live prompt rather than a general tidy-up.
+The peer's reading, carried as its own, and it carries **two damages of different kinds**, which is why it
+matters more than a tidy-up. The `_render` path has two ways to fall back to `repr` —
+`json.dumps(..., default=repr)` for a nested value JSON cannot encode, and an
+`except (TypeError, ValueError)` branch that calls `repr` on the whole value — and either can print a
+**memory address**. Confirmed by the parent in the
+source at `booth.py:311-322`. So a non-serializable value would (a) **filter implementation detail outward**
+to the provider, and (b) **break reproducibility inward**, and that second one is not a wording problem:
+"a replay re-produces the transcript" is the MVP's acceptance criterion, so a prompt carrying an address is
+a non-deterministic run with a differently-shaped transcript every time.
+
+**The trigger is therefore not "F13" in the abstract, and the fix is a one-line policy decision.** The
+reference is unreachable for any JSON-serializable value, and the collector's evidence today comes from
+JSON fixtures, so the condition that matters is exactly: **an evidence value that cannot be serialized
+reaches the prompt.** When that happens the right response is **to refuse the value with a typed error
+rather than render it approximately** — a non-serializable value in the evidence is a violation of F04's
+contract, not a shape to be drawn as well as possible. Refusing deletes the `repr` fallback, and with it
+both damages. Recorded this way so that whoever picks it up does not have to design anything: the decision
+is already made, and the only work is the error type and its test.
 
 ## Cross-cutting, from verification rather than from reviews
 
