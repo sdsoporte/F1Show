@@ -1620,8 +1620,38 @@ deletions** count, `events.py` and the `fixtures/` tree byte-identical, 18 focus
    generation to prove the wiring. One model call is a budget decision, not an assumption.
 4. **F09 — the two-person booth.** Lead and colour personas, explicit turn order, bounded context,
    evidence-only sourcing, degradation that is neutral rather than invented.
-5. **Thin F10.** One command that runs replay → events → booth → a transcript. Not the
-   multi-service orchestration: the MVP runs in one process.
+5. **Thin F10 — CLOSED as `20af86f9139d28e6be4ea8b15890b10a8b9551b1`; the closure record with its
+   evidence is under "Current next step".** One command that runs
+   replay → events → booth → a transcript, in one process. Not the multi-service shape: no Redis, no
+   bus, no venue.
+   - **New module `src/f1show/run.py`** plus `tests/test_run.py` and additive root exports. The
+     composition entry point takes its dependencies **injected** — the replay source, the store, the
+     clock and a model client — so the whole path is exercisable offline with a fake provider and
+     stays deterministic. Nothing here builds its own HTTP client, opens a store or reads a clock of
+     its own.
+   - **`main()` must make a live call impossible by accident.** It takes an explicit, **required**
+     provider selection with no default, so the offline path is chosen rather than fallen into and a
+     real call cannot happen by omission. The fake path is exercised by tests end to end; the gateway
+     path is not, because a real generation needs its own grant.
+   - **The registered composition requirement is part of this unit, as a proof and not a claim**: the
+     base URL is derived **per dialect in memory** — stripping a trailing version segment before the
+     native SDK appends its own — and the derivation is exercised against **both** declared forms, one
+     carrying `/v1` and one carrying no version segment, as two parameterised cases whose composed URL
+     is **captured from the wire** rather than rebuilt. A normalisation written only for today's shape
+     would fail silently the day an operator changes the declared value and land back on the 404 that
+     took three rounds to diagnose. The declared value itself is **not** changed by this unit: its `/v1`
+     is load-bearing for the gateway's OpenAI-compatible surface.
+   - **No model id may appear in code or configuration.** It is supplied at runtime; the enumerated ids
+     are gateway aliases and not provider contracts.
+   - **The transcript is the deliverable**: the two personas' turns in order, with the evidence each
+     turn used, so a reader can see the product's claim rather than infer it. Degradation stays neutral
+     — a provider outage produces a stated absence, never invented commentary.
+   - Checks: offline end-to-end over the **recorded fixtures** through replay, events and booth, with a
+     fake provider, asserting turn order, evidence propagation and a stable transcript; the two base-URL
+     cases with wire-captured URLs; refusal of a missing provider selection; and that no live call is
+     reachable without the explicit selection. Forecast 250–500 lines, to be read as a lower bound.
+   - F10 does **not** carry the F09 review's carried findings into its diff: they are registered with
+     owner and trigger instead.
 
 **Deferred from the MVP, with the reason:** **F05** Redis fan-out is infrastructure for services
 that do not exist in a single-process MVP; **F06** tactical analysis is value added on top of
@@ -1868,6 +1898,61 @@ No live call, credential or purchase was made for this unit.
   rule set lives outside it, in whatever selection each caller's harness provides: the same tree
   either "passes all checks" or reports findings depending on that selection, and every
   `# noqa: S105` directive reads as unused without `S` selected. Tracked in issue #7.
+- **A second review pass over byte-identical content, and what it found.** The step-1/F04 session
+  reviewed the integrated range — their resolution plus these bytes — and it approved, producing
+  **six informational findings, all in `gemini.py`** and none in the resolution or the documentation:
+  `R3-001` (WARNING) `:484-488`, `R3-002` `:477-480`, `R3-003` `:348-354`, `R3-004` `:258-259`,
+  `R3-005` `:488`, `R3-006` `:559-566`. No bodies were returned and none are persisted, so the parent
+  read the regions rather than inventing provider intent; **the readings below are ours, not the
+  provider's**:
+  - `:477-480`, `:484-488` and `:488` (the WARNING): the retry loop catches the builtin `TimeoutError`
+    — which is also the OS and transport timeout, not only our deadline — and relabels it as
+    `ModelTimeoutError`; and it re-raises the captured failure with a bare `raise failure`, discarding
+    the original exception and its traceback. The taxonomy stays typed and sanitized, but a caller
+    debugging a live failure loses the cause. Carried, not fixed: these bytes are approved and burned,
+    so any change here is a new candidate with its own review.
+  - `:258-259`, and this one is **checkable rather than a guess**: `_classify_provider_failure` reads
+    `getattr(exc, "code", None)` and requires an `int`. The installed SDK's own source
+    (`google.genai.errors.APIError.__init__`) sets `self.code = code if code else
+    self._get_code(response_json)`, and `_get_code` passes through whatever the response JSON carries —
+    so a provider returning `"429"` as a **string** yields `code == "429"`, the classifier declines to
+    classify, and the failure is re-raised **without being retried**. Our offline tests cannot see it
+    because the scripted doubles construct the error with an integer. Recorded as the most
+    consequential of the six and as live-path work (F13), where a rate limit is exactly what must be
+    retried.
+  - `:348-354`: `_to_model_response` refuses blank text but stores the provider's text **unstripped**,
+    unlike `dialogue.Turn`, which strips. Cosmetic today and invisible until a provider pads.
+  - `:559-566`: the threshold warning latches once per wrapper while its message names a model, so a
+    second model crossing the same threshold inside one wrapper never warns. Consistent with the
+    documented "a crossed threshold is a state, not a repeated event", but the wording and the latch
+    disagree about scope.
+  - **Worth recording as a fact about our process**: our own verification (10/10 mutants) and this
+    review examined byte-identical content and the review still produced six findings the mutant
+    matrix did not. That is not a defect in either method — it is evidence that a mutant matrix tests
+    the invariants we already thought of.
+- **The granted real call, and what it did and did not prove (2026-10-10).** The remainder of this
+  task was granted as one metadata call plus one minimal generation, and it completed. The configured
+  endpoint is a **loopback gateway** (`http://127.0.0.1:8317/v1`, no credentials embedded in the URL).
+  Its **OpenAI-compatible** surface answered `GET /v1/models` with **200 in 0.02 s** and twelve model
+  ids (`claude-opus-4-6-thinking`, `claude-sonnet-4-6`, `gemini-3.7-flash-high`, `gemini-3.8-flash-high`,
+  `gemini-3.1-flash-image`, `gemini-3.1-flash-lite`, `gemini-3-flash`, `gemini-pro-agent`,
+  `gemini-3.1-pro-low`, `gpt-oss-120b-medium`, `gemini-3.5-flash-lite`), and
+  `POST /v1/chat/completions` with `gemini-3.5-flash-lite` returned **200 in 0.82 s**, the text `ok`,
+  usage 8/1/9 and a `model` field echoing the requested id. **Two** HTTP requests in total, no retries,
+  no other host; the credential was read by line-splitting in a subprocess and never printed, hashed
+  or logged. The failed first attempt is part of the record too: it requested
+  `{base}/v1beta/models`, but the configured base already carries `/v1`, so the path doubled and the
+  server answered 404 in 0.02 s **without any provider being contacted** — the ambiguity was the
+  parent's brief, not the gateway, and the same defect was found by measuring the base instead of
+  assuming it.
+  **What this does not prove, and it matters**: those ids are **gateway aliases** — the `-high`/`-low`
+  suffixes encode the gateway's own effort tiers — so they are not first-party model ids and none may
+  enter configuration until the first-party documentation and this list are reconciled; the `model`
+  field is gateway-reported, so the wiring works while the serving weights stay unverified; the list is
+  what the gateway reaches **today**, not a stable contract; and **our `GoogleGenAIClient` was never
+  exercised**, because it speaks the native Gemini dialect, whose correct path on this gateway remains
+  unprobed while the route that worked is the OpenAI-compatible one. That native-dialect compatibility
+  is the one remaining wiring unknown, and it belongs to F10's composition rather than to this unit.
 
 ### F09 — Implement the two-person commentary booth
 
@@ -1880,6 +1965,207 @@ on whatever event families F04 actually delivers, **not** on the deferred F06/F0
   repetition suppression, stale-context exclusion and neutral outage behavior.
   Generated text quality still needs a separately authorized real-model trial.
 - Depends on F06/F07/F08. Commit/checks: pending.
+
+**Assigned to this track on 2026-10-10 by the step-1/F04 session**, which reserves the integration of
+F08 into the shared branch and then thin F10. The F09 branch is therefore cut from **their integrated
+tip**, not from the F08 side track, so the booth lands on the same tree as the F04 events and the
+already-integrated gateway, and nothing (least of all `b56a2fe`) is cherry-picked twice. The design
+below is registered while that tip is pending, because it depends on no code.
+
+**Concrete design, registered before the first write.**
+
+- **One new module, `src/f1show/booth.py`**, plus `tests/test_booth.py` and additive root exports.
+  Allowed surfaces for the writer: those three paths and this document. **Not touched**:
+  `collector.py`, `test_collector.py` and `fixtures/` (the F04 track's), `gemini.py` and the other
+  F08 modules (frozen and already approved), and `dialogue.py`, whose `Speaker`, `Turn` and
+  `Transcript` contracts are consumed as they stand rather than reshaped.
+- **The booth composes, it does not transport.** Its inputs are injected: a `ModelClient` (the F08
+  gateway already satisfies that port, but nothing here imports it), an ordered sequence of
+  `DetectedEvent` from the F04 collector, `BoothSettings` for the model ID and the language — both
+  required with no default, and the language is exactly the F01 gate item that had to be settled
+  before F09 — and the bounds below. Wiring them together is F10's job, not this unit's.
+- **Two distinct personas as data, not as prose inside code paths.** A `Persona` record carries its
+  seat (`Speaker.lead` / `Speaker.color`), a display name and the register instruction that
+  differentiates it. The differentiation is asserted by test, not claimed in a docstring.
+- **Turn order is explicit and deterministic.** Lead first, then strict alternation, with a priority
+  band (flags and incidents) that lets the lead take the next slot instead of waiting its turn. No
+  randomness and no clock-driven choice, so one input always produces one order offline.
+- **Context is bounded, and the bound is a constructor argument**: the current event with its
+evidence, plus at most N prior turns and a character budget over their text. The immediately previous
+  turn is always included; anything older is dropped whole, never truncated mid-turn.
+- **Sourcing is evidence-only and structurally enforced.** Every emitted `Turn` carries a non-empty
+  `evidence` tuple taken from the event's own evidence references and from attributed enrichment. A
+  model answer that names no reference, or names one that was never supplied, is **refused** rather
+  than emitted with a guessed citation, and the prompt is assembled from the supplied references only.
+- **Repetition suppression and stale-context exclusion are acceptance behaviour, not polish.** A
+  candidate that repeats the immediately previous turn is dropped, and an event older than the
+  bounded window never reaches the model at all.
+- **Two F04 constraints are hard rules here.** There is **no overtake event**, so the booth must never
+  describe an on-track pass from a position change — it may report the position change itself and
+  nothing more. And **lap 1 is excluded from every time comparison**, so no fastest-lap or gap claim
+  may be anchored on it.
+- **Neutral degradation, never invented.** On any `ModelError` (timeout, rate limit, server,
+  transport, malformed or refused answer) the booth emits **no** turn for that event and records a
+  typed degradation outcome that stays observable. No filler, no apology, no fabricated attribution:
+  the transcript shows fewer turns, never a source that does not exist.
+- **Offline checks against a scripted model**: persona differentiation, the explicit and
+  priority-banded order, the bounded-window truncation rule, evidence propagation plus the refusal of
+  an uncited or invented citation, repetition suppression, stale-context exclusion, and one scripted
+  `ModelError` per family proving the neutral outcome. Every concurrency or ordering test bounds its
+  waits, per the F03d-2 lesson. A real generation to judge text quality needs its own grant, and
+  **no live call is authorized here**.
+- **Review-candidate rule learned the hard way, and it applies to this track too.** The controller
+  **refused** the F04 track's whole unpublished range with `lens_context_budget_exceeded` because the
+  candidate carried the 3.6 MB of fixtures. So **fixtures never enter a review candidate**, candidates
+  stay small, and an explicit `baseRef` is used instead of an accumulated range.
+- **Forecast**: F08 delivered 1758 lines for a smaller surface, so read any estimate here as a lower
+  bound — expect 500–900 authored lines, disclosed if exceeded rather than compressed.
+
+**Correction C1, registered before the edit. Found by independent verification, reproduced by the
+parent, after the review had already approved the first candidate.**
+
+- **The violation, with the exact input.** With a model answer of
+  `EVIDENCE: position[0].position\nEVIDENCE: position[99].invented\nVerstappen is P3 on track.` the
+  booth returns `OutcomeKind.TURN`: the aired turn's `evidence` is `('position[0].position',)` and its
+  **text contains the never-supplied reference verbatim**. Reproduced by the parent against the
+  shipped doubles, importing from the worktree and printing the imported module path.
+- **Why it is a defect and not a nit.** The module's own contract says an answer citing a reference
+  that was never supplied is refused. Only the first line is parsed and validated; every later line is
+  treated as commentary and airs unvalidated. A model that ignores the one-citation-line rule is
+  exactly the shape the refusal layer exists not to trust, so the unit's central structural
+  guarantee — evidence-only sourcing — is false for that input.
+- **Decision: the answer protocol requires exactly one citation line.** Any additional line whose
+  stripped form starts with the citation marker makes the answer a **protocol violation**, and the
+  turn is **refused with a typed, distinguishable reason** instead of airing partial validation.
+  Refusal is the fail-closed direction and matches the module's existing stance (blank, uncited and
+  invented references are all refused). The alternative — merging the extra citations — was rejected
+  because it would accept an answer whose commentary boundary is undefined, and validating
+  citations mid-prose would require inventing a parser this unit does not need.
+- **Required tests, genuine RED first**: the exact two-line case above; an invented reference in the
+  second line (must refuse, never air); a second line carrying an otherwise *supplied* reference (must
+  still refuse as a protocol violation, not be accepted as an extra citation); and — so the fix does
+  not over-refuse — a commentary line that merely *mentions* the marker mid-sentence after the first
+  citation line must still air as commentary. The marker check must use the same marker the
+  acceptance path uses, so the two cannot drift apart.
+- **Surfaces**: `src/f1show/booth.py`, `tests/test_booth.py`, and additive exports in
+  `src/f1show/__init__.py` only if a new public name is introduced.
+- **Non-regression**: the full suite (691) stays green, and the ten independent mutants that were
+  killed against the previous bytes must still be killed by the corrected bytes.
+- **Review status**: the approved review `review-e102f9481318fa6f` is **superseded and deliberately
+  never acknowledged** — an approval for bytes that are about to change is not a licence to commit
+  them. The corrected bytes are a **new candidate with its own review**.
+
+**Correction C2, registered before the edit. Found by the independent re-verification of C1.**
+
+- **C1 is verified**, not merely implemented: the registered defect is now `OutcomeKind.REFUSED` with
+  `BoothReason.MULTIPLE_CITATION_LINES` and **zero** turns, a second citation line carrying an
+  otherwise *supplied* reference is refused too rather than merged, a single citation line still airs,
+  the three refusal reasons are distinguishable, and **all ten mutants from the first verification
+  still die** against the corrected bytes, including the two that target the parse path.
+- **What C1 left unpinned, measured rather than argued.** C1 put the marker in one constant **for the
+  parser**, but the prompt — the one place the model learns the marker — still wrote `EVIDENCE:` as two
+  string literals. The re-verifier demonstrated the drift in both directions on copies: changing the
+  prompt literals alone left the suite at **58 passed, silently**, which is a mass-refusal waiting to
+  happen at runtime; changing the constant alone was caught only **accidentally**, because the test
+  fixtures hard-code the marker inside their scripted answers. **No test pinned prompt↔parser
+  agreement**, so the module's own "the two cannot drift" reading was too strong.
+- **Decision**: the prompt interpolates the parser's marker constant, so the format taught and the
+  format accepted have one source, and one test pins the agreement **in both directions** — the
+  captured prompt must contain the parser's marker, an answer built with that marker must be accepted,
+  and an answer built with a different marker must be refused. The drift experiment that previously
+  passed silently must now fail.
+- **Recorded, deliberately not corrected: the residual commentary channel.** A bullet-prefixed marker,
+  `EVIDENCE :` with a space, a mention mid-line and a bare reference with no marker at all all air
+  with the never-supplied string inside `turn.text` — while the **evidence tuple stays fully validated
+  in every aired turn**. That is the boundary, and it is a real trade: prose is not structurally
+  validatable, a stricter "any line containing the marker" rule would over-refuse, and one existing
+  test deliberately pins a mid-line mention as legitimate commentary. Tab-indented, lowercase and
+  CR/LF-joined variants *are* caught. The declarative remedy is already in the prompt's own rules, and
+  the semantic half remains F13's authorized trial.
+- **Surfaces**: `src/f1show/booth.py` and `tests/test_booth.py`. Non-regression: the full suite stays
+  green and the ten mutants still die on the final bytes.
+
+**Correction C3, registered before the edit. Test-only, and both items come from the final
+independent verification of the pins C2 added.**
+
+- **(a) The prompt-agreement pin is partial, and that is the same silent-drift class C2 existed to
+  close.** It asserts that the marker appears somewhere in the rendered prompt, so **one**
+  interpolated occurrence satisfies it. The verifier changed only the rule line back to a literal
+  while the section header still interpolated the constant, and the suite stayed at **62 passed**: the
+  prompt would teach two different markers while the parser accepts only one, which is exactly the
+  mass-refusal mode at runtime. The pin must **count** the marker occurrences in the rendered prompt
+  rather than find one, so a partial drift fails. Required evidence: after the change, the
+  rule-line-only drift must fail a named test.
+- **(b) `F09_EXPORTED_NAMES` asserts nothing about itself.** Setting it to `()` made the export test
+  pass with **zero checks** (verified live). The list must be asserted non-empty and free of
+  duplicates before it is used, the same standard the step-1/F04 session applied to its own `__all__`
+  sweep.
+- **Surfaces**: `tests/test_booth.py` **only**. If a production change turns out to be needed, stop
+  and report it rather than making it: the production bytes are already verified and a change there
+  invalidates everything above.
+- **Non-regression**: focused stays green, the full suite stays green, and the two mutations above
+  must now fail in `/tmp` copies while nothing else changes.
+
+**Implementation, verification and native review (observed). Status: implemented, independently
+verified in three rounds and natively reviewed on the fake-provider path.** The behavioural half of
+the two F04 rules and every live-provider property remain F13's, and no live call was made here.
+
+- Writer `mv318z31-3-4aat` delivered `src/f1show/booth.py` (**581** lines before corrections, **615**
+  after), `tests/test_booth.py` (**746** → **1066**) and `src/f1show/__init__.py` **+13** additive —
+  about **1694** changed lines against the 500–900 forecast, disclosed and not trimmed.
+- **RED was observed at the writer's hand**: collection-stage `ModuleNotFoundError: No module named
+  'f1show.booth'` with zero tests collected, then a signatures-only stub giving **42 failed / 1
+  passed**, with the single pass **named as trivial** instead of presented as behavioural.
+- **Independent verification ran three rounds**, every one of them on copies with an import proof
+  (`inspect.getsourcefile`) pointing inside the copy — a copied `.venv` bakes the original worktree's
+  paths into its launcher, and one round lost its first mutant runs to exactly that trap:
+  1. `mv31qhn0-6-ru5j`: **10/10 structural mutants killed** — and it found the **citation-protocol
+     defect** the review had not: a second `EVIDENCE:` line citing a never-supplied reference aired
+     with that reference verbatim in `turn.text`.
+  2. `mv34kzb6-9-usms`: after C1, **10/10 mutants still killed**; the corrected defect is refused
+     with `MULTIPLE_CITATION_LINES` and **zero** turns; it measured the residual commentary channel
+     and demonstrated the **silent prompt↔parser drift** (prompt literals changed alone → suite still
+     green at 58 passed).
+  3. `mv354vr0-b-v0nw`: on the final bytes, 10/10 mutants killed, the drift and export mutations
+     reproduced **independently**, the **rendered** prompt inspected (exactly two marker occurrences,
+     both from the constant), hygiene confirmed, and it found the two partial pins that C3 closed.
+- **Three corrections, each from a measurement rather than a hunch**: C1 the citation protocol — a
+  real defect against the unit's central claim; C2 the prompt interpolating the parser's constant —
+  a silent drift path; C3 hardening the two partial pins, so the prompt pin now **counts**
+  occurrences and the export list asserts non-empty and duplicate-free. The parent reproduced all four
+  C3 mutations itself in a fresh `/tmp` copy with **its own** venv, where the import proof pointed at
+  the copy and the four mutations failed in both directions.
+- Native review of the **first** candidate `review-e102f9481318fa6f` (medium, one lens, 1340 lines)
+  approved and was then **superseded and deliberately never acknowledged**: an approval covers exactly
+  the bytes it covered, and those bytes changed. The final candidate was reviewed fresh as
+  `review-25573bd84c132770` — tier **medium**, one lens `review-reliability`, **1694** changed lines,
+  candidate tree `6b35c7067b138bc8564c13ba02f7ae74d71f111a`. One host-relay run, its forecast relayed
+  **before** the acknowledgement (the order F08 got backwards), **approved on the first reviewer run
+  with no correction opened**; the exact acknowledgement **burned** authority
+  (`consumed_revision sha256:087bc92c…`, `gentle-ai.review-acknowledged/v1`), and no STATUS was issued
+  after the burn.
+- **Four informational findings, no bodies returned**, carried as later work and not reconstructed:
+  `R3-bound-guards-uncovered` (`tests/test_booth.py:1039-1050`), `R3-persona-validator-uncovered`
+  (`src/f1show/booth.py:116-122`), `R3-positive-seconds-overflow` (`src/f1show/booth.py:337`),
+  `R3-render-repr-determinism` (`src/f1show/booth.py:318-321`).
+- **Committed** as `52ab80f209aeceae153e3fae37df9a71e5517ba6`, Conventional Commit
+  `feat(booth): add the two-person commentary booth with evidence-only sourcing`. The check that makes
+  that sentence meaningful: the pre-commit `HEAD` tree equals the controller's `base_tree`
+  (`b0f5e6b4…`), the **staged tree equals the reviewed candidate tree** `6b35c706…`, and the committed
+  tree equals both — so the reviewed bytes **are** the committed bytes, established by tree identity
+  rather than by reading a diff. Clean worktree afterwards, **705 passed**.
+- **Honest limits carried into the record**: the semantic half of the two F04 rules stays unprovable
+  offline (F13's trial); the residual commentary channel still airs a bullet-prefixed marker,
+  `EVIDENCE :`, a mid-line mention and a bare never-supplied reference **while the evidence tuple
+  stays validated in every aired turn**; duplicate-citation collapsing is behaviourally correct but
+  untested; the prompt pin counts exactly two sites, so a legitimate third site fails until the count
+  is updated; and the export pin encodes intent rather than completeness, since shrinking the list
+  still passes.
+- **Integration handoff**: five documentation commits (`718ff96`, `5b67fb6`, `9b01d88`, `bb5a6a9`,
+  `7c01797`) plus this evidence commit, all touching only `odd/tasks/f1show.md`, and **one** source
+  commit `52ab80f` with the three paths. The other session's version of this document wins at
+  integration and its author re-applies these blocks at their anchors in order;
+  `src/f1show/__init__.py` is the only shared file and both changes are additive.
 
 ### F10 — Wire bounded end-to-end orchestration
 
@@ -1928,21 +2214,60 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F04 and its two corrections are closed; MVP step 3 is F08.** F04 stands as units
-`893fa5b` (the collector, +657), `cfbe614` (the hashable-identity correction, +164/−2) and, before
-it, the classifier guard folded into the same unit — with independent verification at **8/8 mutants
-killed**, a medium-tier review whose authority is **burned**, and one post-approval correction
-carried **without** a review because ASSESS returned `reviewDue: false` under budget. The parent
-proved the behaviour claim element-wise against a pre-fix shadow, so that omission rests on evidence
-rather than on trust. Next is F08, whose isolated track already closed on
-`feat/f08-gemini-gateway` as `b56a2fe` with a burned authority and 10/10 mutants killed, and whose
-integration is agreed: this branch's task document wins, the design and evidence arrive as
-`cherry-pick -n 11f78c8 f7e7412` (verified to apply cleanly in sequence), and the additive
-`__init__.py` conflict is resolved here. Then F09's two-person booth and a thin single-process F10
-that prints a transcript. Seven deferred items stay tracked as issues #3–#9, and issue #7 now also
-carries the measured fact that **no ruff configuration is committed**, so every lint claim in this
-project is config-scoped and must name its rule selection. The user chose **free mode**. `main` stays
-at `2c83a150`. Housekeeping: the ODD mirror is four records and the splitter handles any number.
+Active: **F10 is closed and committed, awaiting only the publication decision.** The thin end-to-end
+orchestration landed as `20af86f9139d28e6be4ea8b15890b10a8b9551b1`, and its committed tree is
+**byte-identical** to the reviewed candidate tree `6b39ac69ec835f75d936101f439304bd1463dc48` — the check
+that matters, since a review of different bytes is a review of something else. With F10, the MVP's product
+units are all present: F04's events, F08's gateway, F09's booth and one command that runs them together.
+F05, F06, F07, F11 and F13 stay deferred with their reasons. The peer session is working its assigned unit,
+the residual citation channels in `booth.py`, and the carried findings live in their own file with owner and
+**trigger**, deduped by **location** rather than by finding id, because the size-based gate re-reviews
+already-approved bytes and surfaces the same defect under a fresh id. `main` sits at `f441c7f0` after three
+merged pull requests, and publishing the F09 integration and F10 remains a separate human decision.
+Housekeeping: the ODD mirror is five records and the splitter handles any number of parts.
+
+**F10 closed: the command, the derivation and the two proofs.** `20af86f9`, three paths, **991 additions and
+0 deletions** — `run.py` 335 lines, `test_run.py` 643, and 13 additive lines in `__init__.py`. Suite
+**730** (706 + 24), Ruff 0.16.1 clean on the three paths under the harness config (isort included), Pyright
+0 errors. Native review `review-0114285928bfdd2d`, **medium tier, a single `review-reliability` lens**, 991
+lines frozen against a 200-line correction budget, approved on its first run and its authority **burned**
+with `consumed_revision sha256:4e76235a…`. Independent verification `mv37vvl9-1z-bker` PASS, six targeted
+mutants with five killed, and it **named the survivor instead of smoothing it**: removing the
+provider-disagreement refusal was undetected, because the test used a message-blind
+`pytest.raises(ValueError)` and the removed refusal falls through to the credential guard, which raises a
+*different* `ValueError` of the same type. The parent closed that hole rather than carrying it — the test
+now asserts the refusal's own message, and the kill was **re-proved in the verifier's shadow**, with the
+shadow confirmed as the module under test (`f1show.run.__file__` and sha256 `ab244f03d9fcad1d`). That is
+the pattern worth remembering from this unit: **an assertion that names a guarantee and is satisfied by a
+different failure is a guard that reads as coverage without being coverage** — the same shape as the
+`SnapshotResult` export that survived five units behind a familiar warning.
+**The two registered requirements were proved, not asserted.** The base-URL derivation was exercised
+against **both** declared forms — one carrying `/v1` and one carrying none — as two parameterised cases,
+each with the composed URL **captured from the wire** through a recording transport with zero network I/O;
+both captures are the identical string `http://127.0.0.1:8317/v1beta/models/<id>:generateContent`, with one
+`v1beta/` and one `models/`, which is exactly the requirement the operator-gateway record above set and the
+requirement the first failed probe taught. And a live call cannot happen by omission: `main`'s provider
+selection has **no default**, and a selection that disagrees with `settings.booth.provider` is refused in
+**both directions** before any client is built. The loader reads exactly the collector's five event-bearing
+families and refuses a missing directory, a missing family file or an absent session with a **typed** error
+rather than a silently empty payload list, and the parent reproduced the strong claim itself:
+`collect_session_events(9617, load_recorded_session(9617))` equals the same call over the raw fixtures event
+for event — **1,648 events, equal** — with every row carrying session 9617 and the counts matching the
+recorded provenance (position 403, laps 1059, pit 23, stints 43, race_control 120). The verifier added the
+MVP's own acceptance criterion in the strongest available form: two full offline runs produced transcripts
+and printed output **byte-identical** at 127,060 characters, and the `repr`-fallback damage registered for
+`booth.py` is **not reachable** from recorded evidence, since every evidence value comes from `json.loads`.
+**Four informational findings, and a register reconciliation that this unit forced.** The review left R3-001
+(WARNING) at `run.py:123-128` and three suggestions at `:243-255`, `:286-316` and `:168-173`; their bodies
+are unrecoverable, so the register records the **location as the identity**, the subject as the parent's
+reading of that location, and the owner and trigger as the parent's inference, labelled as such. More
+useful: **the same commit reached four previously registered triggers owned by F10, and three of them did
+not fire.** F10 chose a dialect and a base URL and promoted nothing else into the engine — `main` calls
+`run_session` without the bound parameters, so every bound keeps its signature default, and no timestamp
+parse is fed from configuration. Each of those entries now says so **at its own location** rather than in a
+summary, so a reader can check the claim without trusting this paragraph. One nuance the verifier reported
+honestly and worth keeping: the recorded corpus is single-session per family, so the loader's `session_key`
+filter is caught by the unknown-session refusal rather than by a count change.
 **Parallel track, coordinated 2026-10-10.** A second session implements **F08** (the Gemini gateway)
 in an isolated worktree `/home/s/dev/projects/work/F1Show-f08`, branch `feat/f08-gemini-gateway`,
 based on `0b1f0c7`, registering its own design in that branch's copy of the F08 section. Verified
@@ -1957,6 +2282,40 @@ is **never rewritten**: only fast-forward pushes (`3f52c33`→`ce7d113`→`7b56e
 ever landed on it, never a force-push, squash or rebase. At that moment the remote sat at `7b56e49`
 while the local tip was `e999a10`, six commits unpublished, and the F04 source was still uncommitted
 pending verification — both facts were disclosed to the other session rather than left implicit.
+
+**F09 integrated, and its closure was verified by identity rather than by report.** The peer's final data:
+tip `b1990deae61684ca3b2028e3788066ad4fa654d5`, seven commits over `ed41add` — five design and correction
+documents, the source commit `52ab80f209aeceae153e3fae37df9a71e5517ba6`, and the evidence commit. The
+parent measured the tip itself because the peer's message had left a literal placeholder in its place,
+and then verified the identity chain the peer claimed: the source commit's tree **is** the reviewed tree
+`6b35c7067b138bc8564c13ba02f7ae74d71f111a`, its parent's tree **is** the controller's frozen `base_tree`
+`b0f5e6b48757a161f6a5341d11ae4de0c46fb009`, the scope is exactly three paths, and every documentation
+commit touches only `odd/tasks/f1show.md`. File sha256 at that commit — `booth.py` `c8b18f4a…`,
+`test_booth.py` `1d5ee7d7…`, `__init__.py` `458afd4c…` — all match the peer's report.
+**A false alarm the parent caught by logic rather than by asking**: those three values were first compared
+against git **blob OIDs** and appeared not to match. A tree match is logically impossible with differing
+content, so the error had to be in the comparison — the peer quotes **sha256** while the parent was reading
+blob OIDs, two different functions over different byte streams. That confusion has now appeared three times
+in one round, and this was the first time the parent caught it unaided.
+**The integration itself**: seven cherry-picks in order, and the source commit applied with **no conflict
+at all** — git merged the additive export block by itself. A clean merge proves nothing, so the parent
+verified the result instead: `booth.py` and `test_booth.py` now hash **exactly** to the reviewed tree,
+`__init__.py` holds **101 exports** with **zero duplicates**, **both** export sets present, and **zero
+advertised names that fail to resolve** — which both explains the peer's earlier 101 measurement and shows
+the new public-surface guard covering the peer's eight names without a line of extra work. The suite is at
+**706 passed**: this branch's 644 plus the booth's 62.
+**What F09 declined to call capability**, and where it goes: the semantic half of F04's rules belongs to
+F13; the residual citation channels — a leading bullet, `EVIDENCE` with a space before the colon, a mid-line
+mention, and a bare reference, all of which escape while the evidence tuple stays validated — are the
+peer's next assigned unit; the duplicate-citation collapse works but has no test, so it is a pin rather
+than a change; and two pins encode intent more than completeness. The peer ran **three independent
+verification rounds**, each killing 10 of 10 mutants with copies guarded by import proofs, and the first
+round found the citation-protocol defect the native review had missed — the fourth time in this session
+that verification found what the author and the reviewer did not. Its first candidate's review
+(`review-e102f9481318fa6f`) stayed **superseded and unacknowledged**, because it approved bytes that were
+then corrected; the final review `review-25573bd84c132770` approved on its first run and its authority is
+**burned**. That ordering — complete verification before the native review, never in parallel — is the lesson
+that cost the peer a wasted model run, and it is recorded with its price attached.
 **Delivery state.** `main` sits at `2c83a150` and contains all nine F03 units, merged through PR #1
 and PR #2. The feature branch is ahead of it with the F03-cleanup work, the recorded fixtures and
 F04, all unpublished: the remote is at `7b56e49` while the local tip has moved past it, and F04's

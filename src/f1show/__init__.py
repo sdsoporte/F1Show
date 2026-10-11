@@ -26,6 +26,16 @@ from f1show.auth import (
     TokenTransportError,
     parse_token_payload,
 )
+from f1show.booth import (
+    COLOR_PERSONA,
+    LEAD_PERSONA,
+    BoothOutcome,
+    BoothReason,
+    BoothResult,
+    CommentaryBooth,
+    OutcomeKind,
+    Persona,
+)
 from f1show.collector import (
     DetectedEvent,
     GapKind,
@@ -106,6 +116,15 @@ from f1show.request_policy import (
     RetryingHttpClient,
     RetryPolicy,
 )
+from f1show.run import (
+    RecordedSessionNotFoundError,
+    RecordedSourceError,
+    RecordedSourceMissingError,
+    load_recorded_session,
+    main,
+    native_base_url,
+    run_session,
+)
 from f1show.session import (
     RunNotActiveError,
     RunState,
@@ -138,8 +157,15 @@ __all__ = [
     "AuthenticatedHttpClient", "OpenF1TokenProvider", "TokenDecodeError", "TokenExchangeError",
     "TokenPayload", "TokenPayloadError", "TokenTransportError", "parse_token_payload",
     "DetectedEvent", "GapKind", "GapReading", "classify_gap", "collect_session_events",
+    # F09: the two-person commentary booth, its personas, its typed outcomes.
+    "CommentaryBooth", "Persona", "LEAD_PERSONA", "COLOR_PERSONA", "BoothOutcome",
+    "BoothResult", "OutcomeKind", "BoothReason",
     # F08: the Gemini gateway, its safeguards, its usage record and its typed failures.
     "GoogleGenAIClient", "SafeguardedModelClient", "ModelUsage", "ModelError",
     "ModelTimeoutError", "ModelRateLimitedError", "ModelServerError", "ModelTransportError",
     "ModelResponseError",
+    # F10: the thin single-process orchestration that composes replay, events and booth.
+    "run_session", "native_base_url", "main",
+    "load_recorded_session", "RecordedSourceError", "RecordedSourceMissingError",
+    "RecordedSessionNotFoundError",
 ]
