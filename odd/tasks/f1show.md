@@ -2399,6 +2399,28 @@ a subscription exists. (3) **F05 + F11 as a pair**, transport before packaging, 
 enrichment with its own network care. Each of those needs its own registered design and its own authorization
 before a first write; this paragraph authorizes the **order**, not the implementations.
 
+**F12 / issue #7 — design registered before the peer's first write (2026-10-11).** Objective: make the repository
+able to sustain what it says about itself, retiring the two standing caveats that ride on **every** claim this
+project makes — that the declared `>=3.12` floor is proven runnable but **nothing enforces it**, and that **no
+lint configuration is committed**, so each "Ruff clean" claim is scoped to an artifact outside this repository
+whose version differed three ways between agents in a single session (`0.16.1`, `0.16.3`, `0.16.8`).
+**Surfaces**: `.github/workflows/ci.yml` (new), the committed lint configuration (`ruff.toml` new, or
+`[tool.ruff]` inside the existing `pyproject.toml` — the one shared file, to be declared if taken), and
+`.github/pull_request_template.md` (new). Nothing else: not `src/`, not `tests/`, and not this document.
+**Limits, which are the substance of the unit**: no behaviour change in `src/` or `tests/`, so if the committed
+configuration surfaces real findings they are **reported and never fixed silently**, because most are carried
+findings with owners and triggers in the register and fixing them quietly breaks the rule they were carried
+under; the Ruff **version is pinned explicitly**, since a configuration without a version is a new caveat wearing
+the shape of a fix; the 3.12 job must **run** the suite rather than declare it; nothing may need credentials or
+network beyond the runner's normal behaviour; and **a CI that is red on merge is worse than no CI**, so the rule
+selection must be one the tree passes, with the deliberately disabled rules listed and their reason given.
+**Acceptance**: the job set enumerated; proof that the committed rule selection is what is claimed (rule set plus
+finding count, new findings separated from zero); the 3.12 result shown locally or the gap stated plainly — a
+measured precedent exists, 548 passed under 3.12.13 in the F03-cleanup unit; the PR template rendering and
+naming the project's **real** checks (`uv run --frozen pytest`, the committed lint configuration, and native
+review under RDD); the pinned versions; and the rules deliberately left off. **Branch**: based on `main`, not on
+the peer's older unit branch, because the CI configuration belongs to the tree as it stands today.
+
 ### F10 — Wire bounded end-to-end orchestration
 
 - [ ] Correlate enrichment by event/session/version, apply bounded join deadlines,
@@ -2437,6 +2459,43 @@ it depends on the deferred F05/F10 multi-service shape.
 - Acceptance/checks: one bounded real session/model observation with timestamps,
   usage and transcript evidence; stop on the agreed failure/budget conditions.
   No automatic retries beyond the grant, purchases, broadcasting or publication.
+
+**The pilot plan, written before any call is made (2026-10-11), so that about a dozen carried findings become
+checkable items the day a subscription exists.** This is a **plan, not a grant**: it authorizes no call, no
+credential and no purchase, and the pilot still needs the user's own explicit request.
+
+**Preconditions, in order — and the first one has already cost a call.** (1) **Reconcile the gateway's
+advertised aliases against Google's official model list** and record the chosen id as a **decision rather than a
+discovery**: the twelve advertised ids are the gateway's **own aliases**, and no id may enter code or
+configuration as a provider contract without that reconciliation. (2) Confirm the credential source is the
+declared one (`.env.private/clients.env.sh`; `GOOGLE_GEMINI_BASE_URL` plus `GEMINI_API_KEY`, never a fallback)
+and that the base-URL derivation is the version-less one — the first granted probe returned **404** because the
+declared `/v1` composed a doubled version segment. (3) Agree a **ceiling**: the product decision on record is
+per-session spending without a hard cap, but the pilot is the first real spend, so the grant itself states a
+bounded request, token and wall-clock ceiling.
+
+| step | what the pilot sends | which carried findings it retires or sharpens |
+| --- | --- | --- |
+| A | one trivial prompt through `GoogleGenAIClient` on the corrected base | re-confirms the route and captures the **raw usage payload** the spend report needs |
+| B | one **real booth turn** — the actual commentary prompt the product builds, with evidence | `R3-marker-word-false-refusal` (does a real model open a line with the marker's own word?) and `R3-docstring-omits-bracket-fragment-leak`, which needs a live transcript showing a fragment |
+| C | three to five turns with a **retry forced** by a transient condition | `gemini.py:484-488` — usage is recorded **per attempt**, so a retried call records usage more than once, and only a real quota shows it — plus `R4-retry-amplification` |
+| D | a deliberately **invalid model id** | the error shape: how the provider **types** the status code (`gemini.py:258-259` tests `isinstance(code, int)`, so a provider sending `"429"` as a string would not be retried), and what a body looks like with a credential in the same payload |
+| E | one call with a **tiny `timeout_seconds`** | `gemini.py:348-354` — the SDK call receives **no timeout from configuration**, so whether any bound exists is unverified |
+| F | one call with a **revoked or rotated** credential | issue #4, the 401/403 invalidation path, deliberately unimplemented |
+
+**What to capture, and in what form.** The **wire-captured URL** for every call — a reconstructed string is not
+an observation, and that rule already cost this project a wrong diagnosis; the raw usage fields per call; the
+**sanitized** error shape for step D (status, class, and whether the message echoes anything back); the model id
+as a recorded decision; and the spend report in **tokens, not currency**, until pricing is reconciled from
+Google's documentation as its own step — measured usage is **not** a cost, and `gemini.py:559-566` already says
+it out loud: **no cost stop exists before F13**.
+**Stop conditions, agreed before starting**: a credential or token appearing in output or logs; spend beyond the
+agreed ceiling; a provider error whose body echoes the prompt back; or a call hanging past the agreed wall-clock
+bound (which is itself the answer to step E).
+**What the pilot will not establish, stated so nobody reads it as more**: one session, one model and a handful of
+prompts prove the route, the usage fields and the error shape — not streaming, not multimodal input, not
+stability under load, not the other eleven aliases, and not any general claim about commentary quality. Every
+claim above rests on the **evidence captured**, not on a successful run.
 - Depends on F12 and fresh explicit live permission. Commit/evidence: pending.
 
 ## Current next step
