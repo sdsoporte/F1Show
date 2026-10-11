@@ -136,10 +136,23 @@ rather than silently re-pointing the number.
 | `:488` | R3-005 | SUGGESTION | F13 | the live spend report | OPEN |
 | `:559-566` | R3-006 | SUGGESTION | F13 | the live spend report | OPEN |
 
-**Subject block**: `gemini.py` is unchanged since its review (567 lines, delta 0), so these coordinates are
-current — but **their subjects have not been derived from the source**, only their stability measured. A reader
-who needs a subject here must read it out of the file, and the honest state is that this table carries
-coordinates whose context was never re-read.
+**Subject block, now measured.** `gemini.py` is unchanged since its review — blob
+`466db02b1977788c0faf3e6ffbd019a219c767fa`, 567 lines — so these coordinates are the reviewer's own and the
+subjects below were read from those exact lines, not inferred: `:484-488` the retry loop's tail
+(`self._record(request, response, attempt)`, then `return response`, then the exhaustion branch
+`if not failure.retryable or attempt >= policy.max_attempts: raise failure`); `:477-480` the `TimeoutError`
+mapping inside the attempt loop; `:348-354` `_to_model_response`'s empty-turn refusal; `:258-259`
+`code = getattr(exc, "code", None)`, the status-code read; `:488` the `raise failure` that re-raises the
+classified error after the handler has exited; `:559-566` the measured-usage alert.
+**One thing the coordinates reveal that the rows did not say**, and it is worth stating because it makes the
+first row's trigger concrete rather than vague: usage is recorded **per attempt** (`self._record` runs on every
+try), so a retried call records usage **more than once**, and the only place that becomes observable is a real
+quota — which is why this row's trigger is the live spend report and not a unit. The alert at `:559-566` says
+the rest out loud itself: *"measured usage is not a hard spend limit and no cost stop exists before F13"*.
+**And a limit of this whole table that the re-derivation cannot fix**: the bodies are unrecoverable, so the
+subjects above say what the code at each coordinate **does**, never what the reviewer **meant**. Where a row's
+stated trigger and its subject look unrelated, the honest reading is that one of the two is wrong and no
+measurement available here can say which.
 
 The peer's reading, carried as its own and not as provider intent: the retry logic compares the error
 `code` against an integer, so a provider sending `"429"` **as a string** would not be retried — whose
