@@ -70,10 +70,10 @@ means the coordinates are still the ones the reviewer saw. One command per row: 
 | `src/f1show/gemini.py` | `466db02b1977788c0faf3e6ffbd019a219c767fa` | same | **current** |
 | `src/f1show/run.py` | `ee44616f94838abfd2e2d44ab83b7241b0c0c801` | same | **current** |
 | `tests/test_run.py` | `e4fd5317baf868bf0a6cfa76de238ff9dd2203b3` | same | **current** |
-| `src/f1show/auth.py` | `b1ab34d8f1b3cfff856ec7a4cbf2633cbbb2d8cc` | `51918e432e3b8ae617fb3a1f566b72a9a6193099` | **STALE — re-derive** |
-| `src/f1show/collector.py` | `a8a81ee93795b7934b32c715bfc47111770155c2` | `3973eb134e797bda1d7062cee357eb70bf69de9f` | **STALE — re-derive** |
-| `tests/test_auth.py` | `66e7e41e39640744de2670a7371c6226ce98258b` | `d9cda83a99a94e8b13da03c814baf1df54c7846e` | **STALE** — found by the hash, missed by the line audit |
-| `tests/test_collector.py` | `1b3123c684aab95ebf3ae1b9bfcc12b0941da7a7` | `7b4891758e49c00aded53413c85603e87ca169f6` | **STALE** — same |
+| `src/f1show/auth.py` | `b1ab34d8f1b3cfff856ec7a4cbf2633cbbb2d8cc` | `51918e432e3b8ae617fb3a1f566b72a9a6193099` | **STALE — rows re-derived** (16 anchors with ids and subjects); the key stays different, correctly |
+| `src/f1show/collector.py` | `a8a81ee93795b7934b32c715bfc47111770155c2` | `3973eb134e797bda1d7062cee357eb70bf69de9f` | **STALE — rows re-derived** (three already current, two moved one line, one closed by change); the key stays different |
+| `tests/test_auth.py` | `66e7e41e39640744de2670a7371c6226ce98258b` | `d9cda83a99a94e8b13da03c814baf1df54c7846e` | **STALE — its row re-derived and UNMOVED** (`:558-559` is exact); the blob over-flagged |
+| `tests/test_collector.py` | `1b3123c684aab95ebf3ae1b9bfcc12b0941da7a7` | `7b4891758e49c00aded53413c85603e87ca169f6` | **STALE — row re-derived** (`:26-33` → `:27-34`) |
 | `src/f1show/booth.py` | `681f70c38becdbb10bf6587549bee64210f2965f` (pre-F09b) | `0d1191c626fca1b9f559a6a5ea89e10f2c621c28` | **re-derived**; its rows carry measured anchors and subjects |
 | `tests/test_booth.py` | `1a2a5efc192f80fd92f32a5e47b7e073079a2a42` (pre-F09b) | `8704aeeda5f7623f8b8875c61af7e0fe2d4e35a3` | **re-derived** |
 
@@ -112,18 +112,23 @@ this project's own reviewed units, and its rows were never re-anchored.
 | `tests/test_auth.py:558-559` | R2-magic-yield-count | SUGGESTION | — | — | **DEAD RECORD**: a test-local readability remark with no future condition that forces revisiting it |
 | `:272-295`, `:168-173`, `:279-291`, `:282-288`, `:405-415`, `:256-269`, `:325-335` | R2-exchange-lifecycle, R2-post-except-raise, R3-002, R3-003, R3-004, R3-005, R4-transport-taxonomy | SUGGESTION | F13 | the first live call, where the exchange taxonomy and lifecycle become observable | OPEN, bodies unknown |
 
-**Measured re-anchoring, old → current, with the subject found at the new location.** These are the numbers a
-reader should use; the table's are historical. `:391-394` → **`:464`** (the bearer-header merge inside
-`get_json`); `:263-264` → **`:282`** (credential acceptance); `:140-148` → **`:157`** (the `expires_in`
-parse); `:211-222` → **`:235`** (the expiry/skew arithmetic, in the docstring); `:283-292` → **`:304`** (a
-completed exchange that left no valid token is discarded); `:305-311` → **`:357`** (the clock and skew passed
-to the state); `:193-200` → **`:212`** (the timezone-aware `issued_at` refusal); `:375-383` → **`:450`** (bearer
-header added to the caller's request); `:272-295` → **`:295`** (the provider `repr`); `:168-173` → **`:186`**
-(pydantic captures the refused input, so the raise happens after the handler); `:279-291` → **`:298`** (the
-valid-token docstring); `:405-415` → **`:475`** (`post_form_json`); `:256-269` → **`:280`** (the credentials
-message); `:325-335` → **`:374`** (`_post_credentials`). **`:347` → NOT FOUND**: that line no longer exists in
-the file, so whoever finishes this re-anchoring must decide from the subject whether the row is now closed
-rather than silently re-pointing the number.
+**Measured re-anchoring, old → current, with the subject and the ROW ID at each new location.** These are the
+numbers a reader should use; the table's are historical. `:391-394` **R1-001** → **`:464`** (the bearer-header
+merge inside `get_json`); `:263-264` **R1-002** → **`:282`** (credential acceptance); `:140-148` **R1-003** →
+**`:157`** (the `expires_in` parse); `:211-222` **R3-001** → **`:235`** (the expiry/skew arithmetic, in the
+docstring); `:283-292` **R4-retry-amplification** → **`:304`** (a completed exchange that left no valid token
+is discarded); `:305-311` **R4-stale-token** → **`:357`** (the clock and skew passed to the state);
+`:193-200` **R2-repr-secret-materialization**, closed → **`:212`** (the timezone-aware `issued_at` refusal);
+`:375-383` **R3-001 (hardening)** → **`:450`** (the bearer header added to the caller's request); and for the
+grouped row, in the order the anchors are listed there: `:272-295` → **`:295`** (the provider `repr`),
+`:168-173` → **`:186`** (pydantic captures the refused input, so the raise happens after the handler),
+`:279-291` → **`:298`** (the valid-token docstring), `:405-415` → **`:475`** (`post_form_json`),
+`:256-269` → **`:280`** (the credentials message), `:325-335` → **`:374`** (`_post_credentials`). Their seven
+ids **are not paired to their seven anchors here**, because the bodies are unrecoverable and that pairing
+cannot be measured — the honest record is the set on both sides, not an invented marriage.
+**`:347` (R4-001) → NOT FOUND, and it is a different finding from staleness.** That line no longer exists in
+the file at all: the coordinate is not stale, it is **gone**. Arithmetic cannot re-point it, and deciding from
+the subject whether the row is closed is real work, so it stays NOT FOUND with its owner and trigger intact.
 
 ## gemini.py — from the F08 integration review
 
@@ -136,10 +141,23 @@ rather than silently re-pointing the number.
 | `:488` | R3-005 | SUGGESTION | F13 | the live spend report | OPEN |
 | `:559-566` | R3-006 | SUGGESTION | F13 | the live spend report | OPEN |
 
-**Subject block**: `gemini.py` is unchanged since its review (567 lines, delta 0), so these coordinates are
-current — but **their subjects have not been derived from the source**, only their stability measured. A reader
-who needs a subject here must read it out of the file, and the honest state is that this table carries
-coordinates whose context was never re-read.
+**Subject block, now measured.** `gemini.py` is unchanged since its review — blob
+`466db02b1977788c0faf3e6ffbd019a219c767fa`, 567 lines — so these coordinates are the reviewer's own and the
+subjects below were read from those exact lines, not inferred: `:484-488` the retry loop's tail
+(`self._record(request, response, attempt)`, then `return response`, then the exhaustion branch
+`if not failure.retryable or attempt >= policy.max_attempts: raise failure`); `:477-480` the `TimeoutError`
+mapping inside the attempt loop; `:348-354` `_to_model_response`'s empty-turn refusal; `:258-259`
+`code = getattr(exc, "code", None)`, the status-code read; `:488` the `raise failure` that re-raises the
+classified error after the handler has exited; `:559-566` the measured-usage alert.
+**One thing the coordinates reveal that the rows did not say**, and it is worth stating because it makes the
+first row's trigger concrete rather than vague: usage is recorded **per attempt** (`self._record` runs on every
+try), so a retried call records usage **more than once**, and the only place that becomes observable is a real
+quota — which is why this row's trigger is the live spend report and not a unit. The alert at `:559-566` says
+the rest out loud itself: *"measured usage is not a hard spend limit and no cost stop exists before F13"*.
+**And a limit of this whole table that the re-derivation cannot fix**: the bodies are unrecoverable, so the
+subjects above say what the code at each coordinate **does**, never what the reviewer **meant**. Where a row's
+stated trigger and its subject look unrelated, the honest reading is that one of the two is wrong and no
+measurement available here can say which.
 
 The peer's reading, carried as its own and not as provider intent: the retry logic compares the error
 `code` against an integer, so a provider sending `"429"` **as a string** would not be retried — whose
@@ -147,9 +165,23 @@ natural trigger is the **first live call of F13**, where a rate limit is exactly
 
 ## collector.py — from the F04 reviews
 
-**`collector.py` has grown by 42 lines since the revision these coordinates were recorded against (288 →
-330), through the F04 identity correction, so every number below is HISTORICAL rather than a verified
-pointer.** Measured anchors are recorded at the end of the section.
+**The coordinates in this table are correct as they stand, and the reason this section first said they were
+HISTORICAL is itself the lesson.** The blob said the file had changed (288 → 330 lines, +42 through the F04
+identity correction), and the parent then re-anchored by matching lines against the **F04 tree** — the wrong
+revision — and reached a wrong conclusion: that three rows had "collapsed" onto one line and that everything
+here was stale. Read against the revision they were actually recorded against, the picture is specific and
+mostly reassuring. **Three rows are exactly current**, recorded after the correction, and they sit inside
+`_canonical_rendering` where they are told apart by **subject** rather than by coordinate: `:197-200` is the
+`default=repr` / `repr(value)` pair (R3-recursion-escape, dead), `:198-199` is the
+`json.dumps(value, sort_keys=True, default=repr)` line (R3-canonical-not-faithful) and `:199-200` is the
+`except (TypeError, ValueError): return repr(value)` branch (R3-valueerror-branch-untested). Two more moved by
+exactly **one line**: `:121-131` → **`:122-131`** (the `GapReading` fields and `_value_matches_kind`, subject
+"a laps reading must carry its lap count") and `:170-175` → **`:174-184`** (`_as_instant`, subject
+`dt.datetime.fromisoformat(value)`, the version-tail question). The closed row is the interesting one:
+`:245-249` described the dedup identity, and the fix moved that code into `_identity_token` at **`:203-220`**
+plus `_canonical_rendering` at **`:187-200`** — so the row is closed **by change**, and what is recorded is the
+code's new home rather than a new number for the old one. And the test row moved by one:
+`tests/test_collector.py:26-33` → **`:27-34`**, the module constants including the fixtures path.
 
 | Location | Ids | Severity | Owner | Trigger | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -161,13 +193,12 @@ pointer.** Measured anchors are recorded at the end of the section.
 | `:121-131` | R3-gapreading-cross-kind | SUGGESTION | F06 | F06 consuming `classify_gap` | OPEN |
 | `tests/test_collector.py:26-33` | R3-fixtures-outside-candidate | SUGGESTION | — | — | **DEAD RECORD**: a note about the fixtures living outside the candidate; the fixtures are committed, so the condition it described has passed |
 
-**Measured re-anchoring, old → current**: `:245-249` → **`:285`** (`timestamp_field = _TIMESTAMP_FIELD[family]`);
-`:197-200` → **`:236`** (`return GapReading(kind=GapKind.ABSENT)`); `:198-199` and `:199-200` → **`:236`** as
-well, since all three windows landed in the same tail of that helper and their distinct lines are gone — which
-means those three rows can no longer be told apart by coordinate at all, only by subject: they are the
-`classify_gap` reading, the canonical-not-faithful question and the uncovered `ValueError` branch.
-`:170-175` → **`:175`** (the recorded-timestamp parse, which reports the unknown rather than guessing);
-`:121-131` → **`:131`** (the laps reading must carry its lap count).
+**A concrete case of the over-flagging that the blob key admits, and the reason the subject is what decides.**
+`tests/test_collector.py` and `tests/test_auth.py` are **both STALE by blob**, and only one of their rows
+actually moved: the collector row above shifted by a line, while `tests/test_auth.py:558-559` — the
+`for _ in range(50): await asyncio.sleep(0)` yield count — sits at **exactly** its recorded coordinate in a file
+that grew by 172 lines. So the blob answers *"did this file change"* and only the subject answers *"did **this
+row** change"*. That is the per-symbol refinement's argument, with an instance instead of a theory.
 
 ## booth.py and its tests — the peer's, deduped by location
 
