@@ -1991,6 +1991,40 @@ evidence, plus at most N prior turns and a character budget over their text. The
 - **Forecast**: F08 delivered 1758 lines for a smaller surface, so read any estimate here as a lower
   bound — expect 500–900 authored lines, disclosed if exceeded rather than compressed.
 
+**Correction C1, registered before the edit. Found by independent verification, reproduced by the
+parent, after the review had already approved the first candidate.**
+
+- **The violation, with the exact input.** With a model answer of
+  `EVIDENCE: position[0].position\nEVIDENCE: position[99].invented\nVerstappen is P3 on track.` the
+  booth returns `OutcomeKind.TURN`: the aired turn's `evidence` is `('position[0].position',)` and its
+  **text contains the never-supplied reference verbatim**. Reproduced by the parent against the
+  shipped doubles, importing from the worktree and printing the imported module path.
+- **Why it is a defect and not a nit.** The module's own contract says an answer citing a reference
+  that was never supplied is refused. Only the first line is parsed and validated; every later line is
+  treated as commentary and airs unvalidated. A model that ignores the one-citation-line rule is
+  exactly the shape the refusal layer exists not to trust, so the unit's central structural
+  guarantee — evidence-only sourcing — is false for that input.
+- **Decision: the answer protocol requires exactly one citation line.** Any additional line whose
+  stripped form starts with the citation marker makes the answer a **protocol violation**, and the
+  turn is **refused with a typed, distinguishable reason** instead of airing partial validation.
+  Refusal is the fail-closed direction and matches the module's existing stance (blank, uncited and
+  invented references are all refused). The alternative — merging the extra citations — was rejected
+  because it would accept an answer whose commentary boundary is undefined, and validating
+  citations mid-prose would require inventing a parser this unit does not need.
+- **Required tests, genuine RED first**: the exact two-line case above; an invented reference in the
+  second line (must refuse, never air); a second line carrying an otherwise *supplied* reference (must
+  still refuse as a protocol violation, not be accepted as an extra citation); and — so the fix does
+  not over-refuse — a commentary line that merely *mentions* the marker mid-sentence after the first
+  citation line must still air as commentary. The marker check must use the same marker the
+  acceptance path uses, so the two cannot drift apart.
+- **Surfaces**: `src/f1show/booth.py`, `tests/test_booth.py`, and additive exports in
+  `src/f1show/__init__.py` only if a new public name is introduced.
+- **Non-regression**: the full suite (691) stays green, and the ten independent mutants that were
+  killed against the previous bytes must still be killed by the corrected bytes.
+- **Review status**: the approved review `review-e102f9481318fa6f` is **superseded and deliberately
+  never acknowledged** — an approval for bytes that are about to change is not a licence to commit
+  them. The corrected bytes are a **new candidate with its own review**.
+
 ### F10 — Wire bounded end-to-end orchestration
 
 - [ ] Correlate enrichment by event/session/version, apply bounded join deadlines,
