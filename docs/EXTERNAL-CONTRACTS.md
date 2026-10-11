@@ -375,6 +375,39 @@ observations below used only that key, with no automatic retries.
 artifact: the prose listed eleven entries while the file held twelve, the missing one being
 `gemini-3.6-flash-high`. Read the artifact, not the summary, before acting on a count.
 
+### The declared base URL does not work for native SDK calls, observed 2026-10-10
+
+One user-granted native-dialect generation was attempted through the published `GoogleGenAIClient`
+wrapping a real `google-genai` client, with the base URL taken **exactly as declared**. It failed with
+a typed provider refusal, **HTTP 404** in 0.071 s. No retry and no fallback were used, and the
+declaration was deliberately **not** repaired to make the call succeed.
+
+The cause is a **composition collision**, confirmed offline from the installed SDK source rather than
+by spending another call:
+
+- When an `api_key` is set, the SDK appends its **own versioned path** (`v1beta/...`) to any custom
+  base URL, through `join_url_path` in `_api_client.py`.
+- The declared value already ends in `/v1`, so the composed URL becomes
+  `http://127.0.0.1:8317/v1/v1beta/models/models/gemini-3.5-flash-lite:generateContent` — a
+  **doubled version segment** (`/v1/v1beta/`) that the gateway answers with 404. The known-good native
+  routes sit at the host root (`/v1beta/models`).
+- Note the second, independent trap in the same string: `models/` appears twice, because the adapter
+  passes the model id through and the SDK prefixes the resource path as well. A model id handed to the
+  SDK is not the same shape as the name the listing returns.
+
+**What this does and does not establish.** It establishes that the **declared configuration** is the
+blocker at the URL layer: the failure happened before the dialect or the adapter's mapping could be
+exercised at all, so it says nothing against either. It does **not** establish whether the gateway's
+native `generateContent` route works under a correctly composed URL, nor anything about response
+mapping, usage accounting or other aliases. The source reading strongly implies the route would work
+with a base URL that does not carry a version suffix — but that was not tested.
+
+**Consequence for F10.** Wiring must not pass the declared value straight into the SDK. Either the base
+URL is supplied without its version segment so the SDK appends its own, or the version is overridden
+through the SDK's `http_options`, or the gateway's OpenAI-compatible surface is used with a different
+adapter. That is a composition decision for F10, and the model-prefix trap above has to be settled with
+it. Until one of those is exercised, no native-dialect capability may be claimed.
+
 ### Authentication paths
 
 **VERIFIED (first-party)** — from <https://ai.google.dev/gemini-api/docs/api-key>

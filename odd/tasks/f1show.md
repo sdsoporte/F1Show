@@ -1989,6 +1989,31 @@ documentation. The full record lives in `docs/EXTERNAL-CONTRACTS.md`. A hygiene 
 a generated summary of that enumeration listed eleven entries while the raw artifact held twelve,
 the missing one being `gemini-3.6-flash-high` — **read the artifact, not the summary.**
 
+**The granted native generation was attempted once and FAILED — with a precise cause, which is the
+valuable part.** Verifier `mv33f9o2-1s-obwt` exercised the published `GoogleGenAIClient` over a real
+`google-genai` client with the base URL **exactly as declared**: typed provider refusal, **HTTP 404** in
+0.071 s, one call, no retry, no fallback, the declaration deliberately **not** repaired to make it
+succeed. The cause is a **composition collision**, confirmed offline from the installed SDK source
+rather than by spending a second call: when an `api_key` is set the SDK appends its **own versioned
+path** (`v1beta/...`) to any custom base URL, so a declared value already ending in `/v1` composes to
+`http://127.0.0.1:8317/v1/v1beta/models/models/gemini-3.5-flash-lite:generateContent` — a **doubled
+version segment** that the gateway answers with 404, while the good native routes sit at the host root.
+A second, independent trap hides in the same string: `models/` twice, because the adapter passes a model
+id through and the SDK prefixes the resource path too, so an id from the listing is not the shape the
+SDK wants. The parent had predicted exactly this class of finding when it noticed the declared `/v1`
+against the working `/v1beta`, and its decision to keep the declared value and forbid a repair is what
+turned a probable false success into a precise diagnosis. **What it establishes:** the declared
+configuration is the blocker at the URL layer, and the failure happened before the dialect or the
+adapter's mapping could be exercised at all — so it says nothing against either. **What it does not:**
+whether the gateway's native `generateContent` route works under a correctly composed URL, nor anything
+about response mapping, usage accounting or other aliases. Consequence for **F10**: wiring must not pass
+the declared value straight into the SDK — supply the base URL without its version segment, override the
+version through `http_options`, or use the OpenAI-compatible surface with a different adapter — and the
+`models/` prefix trap has to be settled with it. Until one of those is exercised, **no native-dialect
+capability may be claimed**. Credentials: the file was only read (SHA256 identical before and after),
+never sourced or eval'd, and no secret was printed. **Closing this needs one more granted call** with a
+corrected composition; the first grant is spent and was not stretched.
+
 **A blocker that was carried, questioned, and then cleared on the user's instruction.** The automated
 lens check reported `src/f1show/__init__.py:13 I001` as a blocker every time that file was touched.
 It was **pre-existing**: the same finding appeared on `origin/main` (13:1) and on `0b1f0c7` (9:1), a
