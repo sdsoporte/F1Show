@@ -14,10 +14,14 @@ assert the inverse direction (an importable name that is missing from
 (such as module attributes that are not meant to be public). That is the very
 maintenance this package-wide sweep exists to avoid on a surface that grows. A
 closed, hardcoded set can afford both directions; a growing one cannot, so the
-limit is declared here instead of left for a reader to over-infer.
+limit is declared here instead of left for a reader to over-infer. Resolution
+mirrors what ``from f1show import <name>`` really does: the attribute, or the
+submodule fallback the import system applies when the attribute is absent.
 """
 
 from __future__ import annotations
+
+import importlib
 
 import f1show
 
@@ -30,9 +34,16 @@ def test_every_advertised_name_is_importable_from_the_package_root() -> None:
     for name in names:
         try:
             getattr(f1show, name)
-        except AttributeError as exc:
-            # Mirror the failure ``from f1show import <name>`` would raise, so a
-            # name advertised but never imported is reported as the defect it is.
-            raise ImportError(
-                f"cannot import name {name!r} from 'f1show' ({f1show.__file__})"
-            ) from exc
+        except AttributeError:
+            # Match what ``from f1show import <name>`` actually does. When the
+            # attribute is missing, the import system falls back to importing a
+            # submodule of that name; resolving with ``getattr`` alone would be
+            # STRICTER than the language and could fail a name that imports fine.
+            try:
+                importlib.import_module(f"{f1show.__name__}.{name}")
+            except ImportError as exc:
+                # Mirror the failure the real import would raise, so a name
+                # advertised but never provided is reported as the defect it is.
+                raise ImportError(
+                    f"cannot import name {name!r} from 'f1show' ({f1show.__file__})"
+                ) from exc
