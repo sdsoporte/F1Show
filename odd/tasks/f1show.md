@@ -2753,7 +2753,20 @@ declared one (`.env.private/clients.env.sh`; `GOOGLE_GEMINI_BASE_URL` plus `GEMI
 and that the base-URL derivation is the version-less one — the first granted probe returned **404** because the
 declared `/v1` composed a doubled version segment. (3) Agree a **ceiling**: the product decision on record is
 per-session spending without a hard cap, but the pilot is the first real spend, so the grant itself states a
-bounded request, token and wall-clock ceiling.
+bounded request, token and wall-clock ceiling. (4) **Choose a session that already has data, and the first
+live test found the trap**: the free listing includes rounds that are **scheduled but not run** — for 2026 it
+returned 25 rows named `Race`, of which **19 had a past `date_start` and 6 were in the future** — and selecting
+the most recent by `max(date_start)` picked `2026-12-06` (Abu Dhabi, `session_key` 11436), whose five collector
+families **all answered 404**. The selector must therefore **filter to past or completed sessions** —
+`pick_most_recent_completed_race(sessions, now)` — or tolerate the 404 explicitly. It is recorded **here rather
+than as shipped code** because **no repository code selects a session by date**: the product takes an explicit
+`session_key`, validated as a positive integer, and the date-based selector was the parent's throwaway probe.
+**And the free historical path itself was exercised live on 2026-10-11**: Singapore / Marina Bay 2026,
+`session_key` 11388, **1,863 events** derived from payloads the collector had never seen — one event per in-scope
+record, 22 distinct drivers, 1,816 timestamps known and 47 explicitly unknown because the stints family carries
+no timestamp field — in **6 requests at ~1 req/s**, paced by the project's own limiter, with no credentials and
+nothing written into the repository. So what the pilot adds is the **authenticated/live** half, **not** the data
+path.
 
 | step | what the pilot sends | which carried findings it retires or sharpens |
 | --- | --- | --- |
