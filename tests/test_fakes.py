@@ -134,7 +134,9 @@ async def test_fake_http_never_lets_caller_mutation_poison_later_answers() -> No
     assert first.payload == {"session_key": 9462, "tags": ["fast"]}
     assert first.header("retry-after") == "2"
     # Mutating a returned payload must not reach stored state either.
-    returned = first.payload["tags"]
+    returned_payload = first.payload
+    assert isinstance(returned_payload, dict)  # narrows the port's ``object | None``
+    returned = returned_payload["tags"]
     assert isinstance(returned, list)
     returned.append("also-poisoned")
     second = await client.get_json(url)
@@ -184,7 +186,8 @@ async def test_fake_http_raises_a_scripted_typed_error_and_records_the_call() ->
 def test_fake_http_refuses_a_scripted_outcome_that_is_not_a_response_or_error() -> None:
     client = FakeHttpClient()
     with pytest.raises(TypeError):
-        client.enqueue("https://example.invalid/v1/x", "not-an-outcome")
+        # The value is intentionally not an outcome: the fake must reject it.
+        client.enqueue("https://example.invalid/v1/x", "not-an-outcome")  # type: ignore[arg-type]
 
 
 @pytest.mark.anyio

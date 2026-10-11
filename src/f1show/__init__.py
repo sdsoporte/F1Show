@@ -114,7 +114,7 @@ from f1show.session import (
     StaleRunError,
     StoreOwnershipError,
 )
-from f1show.snapshot import write_session_snapshot
+from f1show.snapshot import SnapshotResult, write_session_snapshot
 from f1show.store import SQLiteStore
 
 __all__ = [
