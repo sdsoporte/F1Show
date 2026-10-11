@@ -2038,10 +2038,21 @@ declared configuration is a defect to fix, not a limitation of the dialect or th
 established, and must not be claimed:** the `-high`/`-low` effort-tier aliases, streaming, multimodal
 input, error-shape fidelity for timeouts, refusals and rate limits, thinking-configuration passthrough,
 latency or stability under load, and correctness for the other eleven aliases. One alias with a trivial
-prompt proves the route, not the surface. **Action:** either the declared base URL drops its version
-segment — an **operator decision**, because that value lives in the credential file rather than in
-source — or F10 derives it. The dialect question is settled in favour of the native route, so **F10 can
-use the already-published adapter** instead of needing a new one.
+prompt proves the route, not the surface. **Action — and a correction to the parent's own framing.** The
+first version of this record called the declared value a defect to fix, and that recommendation was
+**wrong and would have been harmful**: the peer session spotted that the `/v1` is **load-bearing for the
+gateway's other surface** before the bad advice settled. The parent then verified it directly from the
+operator's configuration, reading assignment names and value shapes only: `CLIPROXY_BASE_URL` and
+`ANTHROPIC_BASE_URL` are the bare root, while `OPENAI_BASE_URL` and `GOOGLE_GEMINI_BASE_URL` carry `/v1` —
+and `{GOOGLE_GEMINI_BASE_URL}/models`, which is `/v1/models`, returns **200**. So changing the declared
+value to satisfy the Gemini SDK would break the OpenAI-compatible route that is already proven. What
+exists is **one declared value facing two consumers with different conventions**: the OpenAI-compatible
+surface wants the version in the base URL, while `google-genai` appends its own `v1beta` and needs a base
+without one. Therefore: **derive the base per dialect, in memory, and leave the declared value to the
+operator** — normalising it in F10 works under either declaration and costs nothing. General form worth
+keeping: **when one configured value serves two consumers with different conventions, that is a
+composition problem, not a configuration defect.** The dialect question remains settled in favour of the
+native route, so **F10 can use the already-published adapter** instead of needing a new one.
 
 **A blocker that was carried, questioned, and then cleared on the user's instruction.** The automated
 lens check reported `src/f1show/__init__.py:13 I001` as a blocker every time that file was touched.

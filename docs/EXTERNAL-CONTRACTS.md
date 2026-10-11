@@ -442,17 +442,29 @@ one came from a reconstruction, and the SDK's own composition never produced it.
 `models/` prefix alone.
 
 **What is now established:** the gateway does serve a native Gemini **generation**, and the published
-adapter composes correctly there **provided the base URL carries no version segment**. The declared
-configuration is therefore a defect to fix rather than a limitation of the dialect or the adapter.
+adapter composes correctly there **provided the base URL carries no version segment**. That is **not** a
+defect in the declared value, and an earlier version of this note wrongly called it one. The declared
+`/v1` is **load-bearing for the gateway's other surface**: the operator's configuration encodes two
+conventions in parallel — `CLIPROXY_BASE_URL` and `ANTHROPIC_BASE_URL` are the bare root, while
+`OPENAI_BASE_URL` and `GOOGLE_GEMINI_BASE_URL` carry `/v1` — and `{GOOGLE_GEMINI_BASE_URL}/models`, which
+is `/v1/models`, returns **200**. Changing the declared value to satisfy the Gemini SDK would break the
+OpenAI-compatible route that is already proven. What this actually is: **one declared value facing two
+consumers with different conventions** — the OpenAI-compatible surface wants the version in the base
+URL, while `google-genai` appends its own `v1beta` and therefore needs a base without one. The
+composition, not the configuration, is where that is resolved.
 
 **What is not established, and must not be claimed:** behaviour of the `-high`/`-low` effort-tier
 aliases (untouched), streaming, multimodal input, the fidelity of error shapes for timeouts, refusals
 and rate limits, thinking-configuration passthrough, latency or stability under load, and correctness
 for the other eleven aliases. One alias with one trivial prompt proves the route, not the surface.
 
-**Action for the project:** either the declared base URL is changed to drop its version segment, or F10
-derives it. The declared value lives in the operator's credential file, so changing it is an operator
-decision rather than a source change.
+**Action for the project: derive the base per dialect, in memory, and leave the declared value alone.**
+Editing it is the operator's call and carries a real risk of breaking a working route; an F10 that
+normalises the base before handing it to the SDK works with either declaration and costs nothing. This
+correction came from the peer session, which spotted that the value was load-bearing before the wrong
+recommendation had settled into the record — and the general form is worth keeping: **when one configured
+value serves two consumers with different conventions, treat it as a composition problem, not a
+configuration defect.**
 
 ### Authentication paths
 
