@@ -2522,6 +2522,34 @@ the CI jobs, and the enforcement step that would fail when an ignored rule has n
 **fires with this very commit**, and it cannot ride this integration because it would change the `ci.yml` bytes
 that were just approved — so it is the next small CI unit, registered with its trigger already fired.
 
+**F12b integrated and reviewed (2026-10-11).** One cherry-pick, `d0d7d5b`, of the peer's `7f1c7be` over `main`:
+two paths, **78 insertions and 16 deletions**, with **both blobs identical** to its reviewed tree `5aeffb41`.
+**What it closes**: the two findings the F12 integration deliberately left open. `timeout-minutes` now bounds all
+three jobs — tests 15, lint 10, register 10, where GitHub's default is **360 minutes** a job — and a **`register`
+job** fails, naming the rule, when an ignored rule has no row in this register. The obligation the configuration
+states is therefore **enforced** rather than promised, and the caveat row is closed.
+**Verified by the parent before conceding anything**, by extracting the guard out of the workflow and running it:
+green on the committed tree naming all five silenced rules; **red** with a planted `B904` that has no row; and the
+**configuration data identical** between F12 and F12b when both are parsed with `tomllib` — so the unit adds a
+check without re-deciding a single silence. An **independent verifier** then reproduced all of it with **its own**
+planted rule (`RET504`), plus the 3.12 suite at 778 and valid YAML. The peer's own note about that guard is worth
+keeping: it removed `setup-uv` from the `register` job because a verifier called it a dead step — "needs no
+network" was true of the **step** and false of the **job**.
+**What the guard is, and what it is not**: deliberately dumb, and it says so in its own comment — it reads the
+ignored rules out of the configuration and checks that each code **appears** in this file; it does **not** parse
+the register, because this file is human prose and a parser here would be a second thing to keep correct. Its
+limits are now rows of their own: the **substring false-green** (a rule named only inside a sentence passes — and
+the verifier found a worse variant, where deleting just the `[lint]` header leaves the guard **green with three
+rules**), the job name that claims more than the check performs, the **hardcoded path** to this file, and timeout
+values nobody explained.
+**And the honest gap the verification measured**: **nothing in this repository tests the guard or the
+workflow.** Neutering it (`if missing:` → `if False:`) passes the whole suite, and deleting a `timeout-minutes`
+passes everything; the guard's only safety net is CI running it. Recorded as a coverage gap with an owner and a
+trigger, not smoothed over.
+**Review**: four lenses at high tier, approved on its first run, authority burned — and it **re-surfaced two of
+the unit's own findings under fresh ids at the same locations**, the **sixth** measurement of that mechanism in
+this round, which is why this register's identity is the location and not the finding id.
+
 **Implementation, verification and native review (observed).**
 
 - **The decision, and why (a) rather than (b)**: shape 5 is declared as a **fifth shape described by its
