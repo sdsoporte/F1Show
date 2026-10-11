@@ -83,6 +83,28 @@ enough to name a subject, the entry says so instead of inventing one.
   the exit code shares "something failed" and the prefix distinguishes what. Added from the peer's synthesis,
   and it is the reason the F12b coverage unit exists at all: those three tests are the first ones in this
   repository that assert a CI failure by the marker that only that failure can produce.
+- **A discriminator has TWO failure modes, and the repair is the same for both.** Too **weak**: a different
+  failure disguises itself as the expected one (a `KeyError` also exits non-zero). Too **coarse**: a message
+  from the **same** component passes because it shares the carrier (a generic guard message passes an assertion
+  that only checks the `register guard:` prefix). In both cases the repair is to assert the **specific subject**
+  - the rule, the register - instead of the shared carrier, which is the exit code or the prefix. **And the
+  durability consequence nobody had written: adding a new message to a component can silently weaken an
+  assertion that already existed**, because the new message can share the carrier. The assertion that was
+  sufficient yesterday may not be today without anyone touching it, and the subject is the only thing stable
+  against new paths. Measured twice in this round, the second time **above**: a mutant that replaced the
+  refusal's subject with a generic phrase kept the prefix AND the exit code, survived the earlier review of the
+  file, and only died once the assertion started naming the register.
+- **The OBJECT of the claim determines the obligation.** Every rule above is one of two kinds, and the
+  distinction is whether the thing exists yet. **A claim about existing bytes is measured before it is
+  asserted, whoever the author is** - including when the claim arrives as a correction from the other session.
+  **A candidate over bytes that do not exist yet is labelled as a candidate, given its experiment, and
+  re-measured when those bytes exist**; demanding measurement earlier would be writing the fix first and
+  measuring it after, which is circular. This round's three half-wrong corrections were all of the first kind
+  made without running them - a record, two reviews, and a test - so they were not cases of *no obligation*:
+  they were obligations **misclassified as such**. Corollary for reading a tool's own store: a record is
+  trustworthy as an **execution** of the rule and never as **authority** - the allocator is a function of
+  (tier, size) evaluated at a moment, while authority is tied to the bytes it covered. A record can be
+  **dead authority and live data at once**, and the difference is not in the record but in the question.
 - **The WRITE PATH decides the writer profile.** A change written through the structured tools carries the
   model that wrote it and the gate reads `runtime`/`large`; the **same change written by a shell command**
   (`printf`, `sed`, a heredoc) carries **no attribution**, falls to `fallback`/`small`, and the gate compensates
@@ -143,6 +165,44 @@ paid always, for a small benefit paid rarely.
 single change that forces the re-derivation of **more than five rows in one file where only one or two actually
 moved**. That is the shape the blob key cannot handle cheaply, and it is a measurement anybody can take when it
 happens.
+
+## The review budget, measured - and where it stops being known
+
+The correction budget is not the review threshold: they are **two knobs**. The **tier decides whether a review
+happens at all** (F12b was reviewed at 94 lines because it was high, not because it was large); the **size
+decides the budget**, and whether `slice_budget_reached` fires. Measured deliveries, cited as the triple
+**(tier, lines -> budget)** and **never by their delivery state**, because the same record can be dead authority
+and live data:
+
+| tier | lines -> budget |
+| --- | --- |
+| high | 94 -> 47, 264 -> 132 (**all below the ceiling**) |
+| medium | 288 -> 200*, 350 -> 200*, 968 -> 200, 991 -> 200, 1340 -> 200 |
+
+*The first two are `under_budget` points whose budget was not read; they are listed for the threshold, not for
+the budget.*
+
+**What is measured, part by part, so that nobody reads the formula as a measurement.**
+`budget = max(2, min(ceil(lines / 2), 200))`: the **half** is measured in both tiers (94 -> 47 and 264 -> 132 on
+the high side; 968 and 991 arrive already capped on the medium side); the **ceiling of 200** is measured in
+**medium only**, because every capped case is medium and the high-tier data never reached it; the **floor
+`max(2, ...)`** is inferred from the policy name `floor_two`, not measured; and the **rounding direction** is
+not measured either, since the two uncapped points are both even and both odd ones sit above the ceiling.
+
+**And tier and size are CONFOUNDED in every point we have**: every high point is small and every medium point
+is large, so no point varies them separately and **any tier-scaling is invisible - in the `min` and in the
+threshold alike**. The honest form of the threshold claim is therefore **"measured within medium: (350, 968];
+the high side is not measured at all"**, not "the band narrows".
+
+**Four boundaries, named with their experiments and deliberately not run**, because no decision hangs on them
+today: (1) a **medium** unit above the threshold and below the ceiling (~350 lines -> 175 if the half is
+tier-independent) - the most informative and a *normal* unit, so it may happen by itself; (2) a **high** unit
+above the ceiling (~600 -> 200 if the ceiling is tier-independent); (3) a point with an **odd** number of lines
+below the ceiling, for the rounding direction - the only artificial one; and (4) **the threshold on the high
+side, which is only observable through `reviewDueReason`**, because a high candidate is reviewed regardless - a
+large CI batch settles it at zero cost, and the reading rule for that datum is **pre-registered**:
+`slice_budget_reached` means the threshold runs for high and the splitting criterion is capacity AND threshold;
+only the tier's signal means it is a medium notion (or masked), and the criterion is capacity alone.
 
 ## Register trigger
 
@@ -292,6 +352,12 @@ re-derivation is per ROW, and a section-level claim is not a substitute for it.
 | `:463-464`, the `scanner is None` branch — reported by its lineage at `:460-463` | R3-kept-refusal-coverage (F09d review `review-6023526de250aed1`, tier medium, one `review-reliability` lens, candidate tree `c091a324`, **burned** with `consumed_revision sha256:e3145025a77c3dc70e5abeab18901dc344906150d2bdcb77106aa7c11fdcdbb9`) | informational, no body | the next unit touching the scanner | any change to the scanner's derivation | OPEN — exercised **only by direct call**, never end-to-end. That is **inherent** and the test declares it open: the collector's grammar never produces a reference without `<family>[<index>].<field>` structure, so the branch that stays **fail-closed** cannot be reached through the public path |
 | `tests/test_booth.py:665-667` — reported by its lineage at `:663` | R3-module-binding (F09d review `review-6023526de250aed1`, tier medium, one `review-reliability` lens, candidate tree `c091a324`, **burned** with the same `consumed_revision`) | **WARNING** | the next unit touching that test | any rename or re-export of the private symbol | OPEN — the test reaches the new private function through `f1show.booth._is_citation_attempt`, so it couples to the **package's attribute surface** instead of importing the symbol, and a **binding** failure would read as a **behaviour** failure |
 | `:288-294` (pre-F09b) | R3-004 (integration) | SUGGESTION | — | — | **CLOSED inside the F09b unit by two pins** — no behaviour change and **no RED**, a weaker evidence class than closed by change; see below |
+| `tests/test_ci_config.py`, the property-naming comments | F12e's m4 survivor | — | — | — | **COVERAGE NOTE, and an expected one**: deleting a property-naming comment leaves **803 passed**, because prose has **no mechanical net**. Recorded so nobody reads the class closure as a test-enforced invariant: the class was closed by a **declaration with a measurable criterion** (a scan for the unit-citation tokens returns zero), not by an assertion |
+| `tests/test_ci_config.py`, the imports block | R4-1 (F12c review) | **WARNING**, body unrecoverable | — | — | **CLOSED by characterisation, with the reason written**: the subject **admits no defect today** — every import is used and the grouping is correct (`__future__`, then stdlib, then third-party). Two measurers counted the usages slightly **differently** (`tomllib` 4 versus 2) and both concluded the same; the **counts are not the evidence, the usage is**, which is why this row cites no number. The residual is honest: an assertion whose **subject was something else on that line** cannot be recovered, because the harness returns ids, severities and locations and **never bodies** |
+| `tests/test_ci_config.py`, the mirror comparison | R4-3 (F12c review) | **WARNING**, body unrecoverable | — | — | **CLOSED as obsolete by the previous refactor, with the reason**: the comparison moved into `missing_register_rows(config_text, register_text)` — a **named two-text function whose failure direction is exercised** — so the condition a readability assertion could describe there (a comparison buried in a test body with only its passing case run) **no longer exists in that form**. As a location the subject token is gone; that is the reason, not "no longer applies" |
+| `tests/test_ci_config.py:55`, the key-line pattern | the `a:b` inner-colon escape — found by the parent's verifier, no review saw it | — | the next unit touching the **key reader** | that unit | **OPEN, and it is a SIBLING of the closed charset row for a different reason**: an inner-colon key (`deploy:prod`) is valid YAML as a block-context plain scalar, it fails the key regex **entirely** rather than being filtered, and so **both scans miss it** on planted workflows. Planting it in the shipped `ci.yml` **is** caught (a test counts the key lines the scans do not read), so the delivered file is closed and the escape lives at the **scan level over planted texts**. **A measured candidate fix exists**, recorded as the peer's measurement and labelled a **candidate over future bytes** — to be re-measured when the unit is written, never cited as fixed: the permissive key-line pattern `(?m)^  ([^\s#].*):$` reads `deploy:prod` and the charset predicate then rejects it |
+| `tests/test_ci_config.py:373-386`, the charset test | the parent verifier's survivor — **refuted by the peer, then re-confirmed by measurement** | — | the next unit touching that test | any change to that test | **OPEN as a coverage note, in the precise form the two sessions converged on**: the assertion is **VACUOUS over the real tree** (every real key conforms, so `offenders` is empty and the assertion passes without looking) **and no other test calls it**, so neutering its body leaves **19 passed**. The peer claimed the planted test caught it; measured, it does **not** — the planted test computes the predicate **inline** and its control is about another **planted** workflow. The defect **class** is carried elsewhere: the planted test for the underscore and uppercase shapes, and the counting invariant for shapes that make `job_keys` return **fewer** keys than exist. **And the vacuity is a property of the TREE, not of the test**: it exists because the tree conforms |
+| `tests/test_ci_config.py`, four comments in the middle of the file | R2-assignment-context-leak **as a CLASS** — found by the peer's subject-token re-derivation, which also produced four DIFFERENT offsets (`+7`, `+32`, `+90`, `+89`) | SUGGESTION | — | — | **CLOSED by F12e (`879e3b5` → integrated `5923015`), four instances to zero.** The criterion, fixed by the parent after the peer proposed the boundary: **the class is citing the UNIT** — `this unit`, `the assignment this unit`, `the two-line fix`, `Until now` — a referent that **dies at the merge**; whereas citing a **measured state of the code IS evidence**, and fully so when it **names the revision**. That is why the four instances are closed and the **five state-citations stay** (`:144`, `:236`, `:360`, `:413`, `:449`), each verified by the parent's verifier as a state-citation rather than a unit-citation. Each replacement names the property it protects: the exit code cannot tell a refusal from a crash; a config with no `[lint].ignore` makes the guard check a **subset in silence**, which is the false-green mechanism; the refusal must be **the guard's own** |
 | — | R3-positive-seconds-overflow | SUGGESTION | — | — | **promoted, not dead**: F10 shipped and the bound is still a constant, so the entry above stays OPEN under its original condition |
 
 **The first row here closed by a BEHAVIOUR change, and it is the one the user authorized.** `R3-bullet-commentary-false-refusal` = `R3-marker-word-false-refusal` is **closed by change** in F09d (`e39c5f9`): the violation predicate now requires the marker **and** a remainder that carries a reference-shaped token — the scanner's own principle, *the guarantee is about tokens, not lines*. Measured by the parent on the integrated bytes:
@@ -476,8 +542,8 @@ approved:
 | `.github/workflows/ci.yml:108-119`, the guard's contract prose and its path | R3-register-external-dep, R2-dup-contract-prose, R2-hardcoded-register-path (integration review) | **WARNING** + SUGGESTION ×2 | the same CI unit | same | OPEN — the guard is coupled to `docs/CARRIED-FINDINGS.md` by a **hardcoded path**, and its contract is stated in more than one place |
 | `.github/workflows/ci.yml:26`, the timeout values | R2-unexplained-timeout-values (integration review) | SUGGESTION | the same CI unit | same | OPEN — 15 / 10 / 10 are **unexplained**: a reader cannot tell whether they were measured or guessed |
 | nothing catches these two | the guard's own correctness, and the timeouts | — | — | — | **CLOSED by F12c (`081e2a` → integrated `8f405d4`).** The gap, in its sharpest form: **before F12c the workflow and the guard were not repository code as far as the suite was concerned — you could delete them entirely and everything stayed green.** Now they are asserted surface: `tests/test_ci_config.py` mirrors the guard against this register, runs it in sandboxes, and asserts every job carries `timeout-minutes` — and the parent's verifier measured the closure **by deletion**: removing the whole `register` job now gives **exactly five reds**, neutering `if missing:` gives one, and deleting a `timeout-minutes` gives one naming the job |
-| `tests/test_ci_config.py:133-144` | R3-job-scan-charset, R4-2 (F12c review) **and** the parent verifier's own probe | **WARNING** + SUGGESTION | the next unit touching the test | any change to the job-key pattern or the scan | **OPEN — and it is the rare row that TWO INDEPENDENT PARTIES found separately**: I probed it and the review flagged it. A job key outside `[a-z][a-z0-9-]*` — an underscore, an uppercase letter, a digit-initial name — is invisible to **both** scans, so a `register_check` job with no `timeout-minutes` passes all ten tests. **A false green inside the test that exists to stop false greens** |
-| `tests/test_ci_config.py`, the mirror's own comparison | the parent verifier's m1 survivor | — | the next unit touching the test | any change to the mirror | **COVERAGE GAP, measured**: neutering the mirror's comparison (`missing = []`) passes **all 794** tests — nothing tests the mirror itself. The redundancy is **partial, not total**: a real divergence is still caught by the guard-on-the-real-tree test, and an emptied ignore list is caught by the empty-pass guard and by four other reds. Recorded rather than smoothed |
+| `tests/test_ci_config.py:133-144` | R3-job-scan-charset, R4-2 (F12c review) **and** the parent verifier's own probe | **WARNING** + SUGGESTION | — | — | **CLOSED by F12d (`8f405d4`)**: the scans now read keys **permissively by indentation** and a **test** rejects the charset, instead of a filter hiding the key. The defect was **reproduced on the parent commit by three parties with three different keys**: the parent planted `register_check` (3 reds after the fix), the peer planted it too, and the parent's verifier planted **its own** digit-initial `1st_job` and measured **10 passed, ZERO reds** on the parent against **3 reds** on the fixed revision. The two controls are **independent**: a malformed key with no timeout trips the charset and timeout tests, while a **conforming** key with no timeout trips **only** the timeout test |
+| `tests/test_ci_config.py`, the mirror's own comparison | the parent verifier's m1 survivor | — | — | — | **CLOSED by F12d (`8f405d4`)**: neutering the comparison now **kills exactly one test**, `test_the_mirror_fails_when_an_ignored_rule_has_no_row` — reproduced by the parent (1 red), by the peer (1 red) and by the parent's verifier (1 red, one pytest process against a pristine control). The failure direction is **genuinely exercised** on planted texts, and the control half blocks a fail-everything mutant |
 | `tests/test_ci_config.py:220-225` | R3-guard-output-contract (F12c review) | **WARNING** | the next unit touching the test | any change to the guard's message | OPEN — the test asserts against the guard's **messages**, so the two must change together |
 | `tests/test_ci_config.py:193-194` | R2-assignment-context-leak (F12c review) | SUGGESTION | the next unit touching the test | any change to the sandbox helper | OPEN — a sandbox value leaks into the assertion's context |
 | `tests/test_ci_config.py:64-75` | R3-heredoc-dedent-brittleness (F12c review) | SUGGESTION | the next unit touching the test | any change to the workflow's indentation | OPEN — the heredoc dedent is brittle; the parent's verifier measured the **consequence**: with 4-space job indentation the timeout scan reads **zero** jobs and passes **vacuously**, while only `test_the_workflow_declares_at_least_one_job` fails |
