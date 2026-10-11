@@ -2219,6 +2219,56 @@ ordering or concurrency test keeps its bounded wait, per the F03d-2 lesson.
 verification** → native review → acknowledgement → commit. The previous unit paid a wasted model run for
 running the review in parallel with verification.
 
+**Implementation, verification and native review (observed).** Five writer passes, every one driven by a
+measurement rather than by polishing: the objective; a real residual found by attacking the rule (a
+fragment glued to a supplied reference); **my own dot-rule over-refusal** of a sentence boundary; the
+invisible-character leaks an independent verifier found by attack (zero-width space, NBSP, newline); and
+a pass that only pinned the measured cost. Plus two parent-made docstring edits. Final bytes:
+`src/f1show/booth.py` **763** lines (`77181ad8…`), `tests/test_booth.py` **1685** (`e9a8e84d…`),
+`src/f1show/__init__.py` untouched (`458afd4c…`), full suite **736** (baseline 705).
+
+- **RED per channel, reproduced before the fix with the escape observed**: a bullet-prefixed marker
+  carrying a never-supplied reference; `EVIDENCE :` with a space before the colon; a mid-line escape; and
+  a bare reference. Later REDs: glued `[99].evil` and `.evil`; a non-numeric index; an empty bracket; ZWSP,
+  NBSP and newline splits; the sentence-boundary false refusal; and `word [ ]`.
+- **Three independent verifications**, each on copies with an import proof (`inspect.getsourcefile`
+  inside the copy, because a copied `.venv` silently tests the original tree): the first killed all ten
+  structural mutants and **found the invisible-character leaks by attack**; the second killed the ten
+  again, re-derived the whole shape table itself, and produced the two documentation flags; the third
+  re-checked the documentation-only delta, audited the docstring's **five claims** one by one (none
+  unsupported), and stated plainly that "documentation-only" is *supported by sampling, not proven*,
+  because the previous certified bytes exist nowhere.
+- Native review `review-ea289bc02bcd76fd`: tier **medium**, one lens, 2 files, **789** changed lines,
+  candidate tree `102ee9047af110350fcc06f8ed4f06de38829b34`; **approved on the first reviewer run with no
+  correction opened**; the exact acknowledgement **burned** authority (`consumed_revision
+  sha256:c46dbe18…`, `gentle-ai.review-acknowledged/v1`). Two informational findings with **no bodies**,
+  read and **measured by the parent** instead of reconstructed:
+  - `R3-bracket-continuation-leak` (WARNING, `booth.py:375-377`) — measured: `position[0].position.[99].evil`,
+    `position[0].position.[99]` and `position[0].position [99].evil` all **air**. Mechanism: the
+    attached-bracket check fires only for a bracket *immediately* after a matched token, and `finditer`
+    consumes the word a later bracket fragment would need, so a dot or a space between them defeats both
+    rules. What airs is a **fragment** — never a complete never-supplied reference token — so the
+    guarantee holds and this is the already-declared dotted-suffix boundary with a concrete instance.
+  - `R3-bullet-commentary-false-refusal` (SUGGESTION, `booth.py:299-302`) — measured: `- Evidence: the gap
+    closed by four tenths.`, `Evidence: the gap closed by four tenths.` and `* evidence: tyres are gone`
+    are all refused as `MULTIPLE_CITATION_LINES`. Mechanism: the violation predicate matches the marker
+    **word** with an optional bullet and any case, so a commentary line opening with the very word the
+    prompt uses as a section header is read as a second citation attempt. This is an **undeclared**
+    over-refusal that discards a legitimate answer, and it is the stronger of the two for a follow-up.
+  - **Carried with owner and trigger, not with a promise**: the bracket-fragment instance → trigger, the
+    next unit touching the scanner or a live trial showing a fragment in a transcript; the undeclared
+    over-refusal → trigger, the first live trial that observes model output style (F13) or any unit
+    touching `_CITATION_SHAPED`. Both are recorded **with the measurement**, not with the intent.
+- **Committed** as `a43d0ff8951e2b5198fca4c7c483a281c97f411d`, Conventional Commit
+  `feat(booth): refuse unsupplied reference tokens in aired commentary`. The pre-commit `HEAD` tree equals
+  the controller's `base_tree` (`df3b8b06…`), the **staged tree equals the reviewed candidate tree**
+  `102ee904…`, and the committed tree equals both — so the reviewed bytes are the committed bytes, checked
+  by tree identity rather than by reading a diff. Clean worktree afterwards, 736 passed.
+- **A consent fact worth keeping**: the host-owned consent binding has a **ten-minute** window, and this
+  unit's first binding expired while the verifications ran. The diagnostics said explicitly *not* to resend
+  it but to re-run START for a fresh envelope, which is what happened; the lineage was created only on the
+  fresh binding, and `lineage_created` was `false` for the expired one.
+
 ### F10 — Wire bounded end-to-end orchestration
 
 - [ ] Correlate enrichment by event/session/version, apply bounded join deadlines,
