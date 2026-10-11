@@ -2550,6 +2550,38 @@ trigger, not smoothed over.
 the unit's own findings under fresh ids at the same locations**, the **sixth** measurement of that mechanism in
 this round, which is why this register's identity is the location and not the finding id.
 
+**F12c integrated and published (2026-10-11).** One cherry-pick, `8f405d4`, of the peer's `081e2a6` over
+`main`: two paths, **262 insertions and 2 deletions**, both blobs **identical** to its reviewed tree `5f6ba2f7`.
+**What it closes**: the **COVERAGE GAP** — *before this unit the workflow and the guard were not repository code
+as far as the suite was concerned: you could delete them entirely and everything stayed green.* Now
+`tests/test_ci_config.py` mirrors the guard against this register, runs it in sandboxes, asserts every job
+carries `timeout-minutes`, and guards against empty passes; and the guard's missing-`[lint]` default fails **with
+its own prefix** instead of defaulting to an empty list.
+**Verified three ways before any acceptance.** The parent reproduced the three load-bearing mutations, all
+**KILLED** — both guard branches and a deleted timeout. The unit's own verifier did it with **its own** mutants
+(planting `W291`) and confirmed the **converse independence** in both directions. The parent's verifier then
+measured the closure **by deletion**, which is the strongest form: removing the whole `register` job gives
+**exactly five reds**, not one; the empty-pass guards work; and **the readability assertions are the killer** —
+without the `register guard:` prefix assertion the mutant survives on the `KeyError` path, because a `KeyError`
+also exits non-zero.
+**Review**: tier **high** by `shell_source`, **four lenses**, approved on its first run, authority **burned**
+(`consumed_revision sha256:165857d7…`). Ten findings, all informational and all registered — including one the
+verifier had **already probed independently**: a job key outside `[a-z][a-z0-9-]*` is **invisible to both
+scans**, so a job with no timeout passes all ten tests. A false green inside the test that exists to stop false
+greens, and **a row two independent parties found separately**, which is what raises its weight.
+**And the round's method rules came out of this thread**, all now in the register: the **write path** decides
+the writer profile (a change written by a shell command carries no attribution and buys an independent
+verifier); a committed range is measured with a **clean tree**, and **the leak has a direction** — contamination
+favours the candidate, so the permissive verdict is the one to distrust; an assess plan belongs to the
+**measurement event** and is never cited as precedent; **measure facts now, name boundaries and defer them**
+with their experiment; and a rule found by two independent measurements is a rule, while one two sessions merely
+agree on is a **convention**.
+**One datum the publication records rather than resolves**: this candidate reported `writerProfile: large` /
+`runtime` on a **clean** tree, because the parent had just written those docs **with the tools** — a counter-datum
+to the simpler rule sent earlier. The honest reading is that the profile follows the tool-written work **recorded
+for the root**, pending or recent, and that a **fresh root always falls back**; the exact window is unmeasured and
+recorded as such rather than smoothed.
+
 **Implementation, verification and native review (observed).**
 
 - **The decision, and why (a) rather than (b)**: shape 5 is declared as a **fifth shape described by its
@@ -2705,17 +2737,20 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F10 is closed and committed, awaiting only the publication decision.** The thin end-to-end
-orchestration landed as `20af86f9139d28e6be4ea8b15890b10a8b9551b1`, and its committed tree is
-**byte-identical** to the reviewed candidate tree `6b39ac69ec835f75d936101f439304bd1463dc48` — the check
-that matters, since a review of different bytes is a review of something else. With F10, the MVP's product
-units are all present: F04's events, F08's gateway, F09's booth and one command that runs them together.
-F05, F06, F07, F11 and F13 stay deferred with their reasons. The peer session is working its assigned unit,
-the residual citation channels in `booth.py`, and the carried findings live in their own file with owner and
-**trigger**, deduped by **location** rather than by finding id, because the size-based gate re-reviews
-already-approved bytes and surfaces the same defect under a fresh id. `main` sits at `f441c7f0` after three
-merged pull requests, and publishing the F09 integration and F10 remains a separate human decision.
-Housekeeping: the ODD mirror is five records and the splitter handles any number of parts.
+Active: **the plan's tiers are done; what remains is scope the user has not opened.** F12c closed the last unit
+of Tier 2.1/2.2 — the repository now commits its lint selection, enforces the Python floor with a 3.12/3.14
+matrix, and asserts the workflow and the guard **from the suite**, so the two caveats that rode on every claim
+this project made are retired. `main` sits at `afdc2618` after PR #30. **Tier 1 is closed too**: the over-refusal
+that two independent reviewers found is fixed by a **behaviour** change (`e39c5f9`, published as PR #27) — all
+five false refusals now air and all four escape channels stay refused, each with the test that covers it. The
+peer session has **no open unit**: it has its next assignment offered in writing, split by file because the tier
+signal **travels with the path** — the `tests/test_ci_config.py` findings in a medium unit with **no native
+review**, and the `ci.yml` findings in **one** high unit, since any unit touching the workflow lands at high with
+four lenses and batching saves **rounds** rather than tier. What stays unopened is scope the user has not
+authorized: **F05 + F11** as a pair (transport before packaging), **F06 before F07**, and **F13**, gated on a
+purchased subscription and its own explicit grant, with its plan already written and **no call made**. The
+register carries **zero rows in NOT FOUND** and a set of method rules that each cost an error to learn; the ODD
+mirror is six records and the splitter handles any number of parts.
 
 **F10 closed: the command, the derivation and the two proofs.** `20af86f9`, three paths, **991 additions and
 0 deletions** — `run.py` 335 lines, `test_run.py` 643, and 13 additive lines in `__init__.py`. Suite
