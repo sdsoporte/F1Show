@@ -2366,10 +2366,38 @@ than the case that motivated it.
   than asserted; (iii) the full suite stays green.
 - **Docs placement**: this block sits after the F09b evidence block and before `### F10`; the other
   session's F09b integration record will sit between them in its copy, and on conflict its document wins.
-- **Placement in this copy (parent)**: the block landed **after** the parent's F09b
-  integration record, the next-units block and the debt plan, immediately before `### F10`, because
-  that is where this copy's F09b material ends. The peer's own copy has no integration record, which
-  is why its anchor differs; **no content of the block was changed**, only its position.
+- **Placement in this copy (parent)**: the block landed **after** the parent's F09b integration record and
+  **immediately before the next-units block**, because that anchor is unique in this copy. The peer's own copy
+  has no integration record, which is why its anchor differs; **no content of the block was changed**, only its
+  position. (An earlier version of this bullet said it landed before `### F10`; that was wrong, and it is
+  corrected here rather than quietly deleted — a placement note that misstates the placement is the same defect
+  this register keeps catching.)
+
+**Integration by the parent, measured rather than accepted — and this time the disposition is NO native review,
+on two measured grounds.** Three cherry-picks over the F09b integration: `6352234` (design), `bde8d5f`
+(source), `221a445` (evidence). The design block conflicted and was resolved **mechanically rather than by
+retyping**: this copy's side was kept, and the peer's block was **extracted from its own commit `4adec49`** and
+re-inserted, so no transcription error can enter a record about transcription errors. The two later commits
+applied with no conflict.
+**Identity, measured**: `src/f1show/booth.py` and `tests/test_booth.py` are **blob-identical** to the peer's
+reviewed tree `84d7c65bc073abbe31812ce701a844137a424117`, `__init__.py` is untouched (`4f6669c4…`), and the suite
+is **778 passed** — 761 plus **exactly 17**, the number of parameters the new pin adds, two independently produced
+numbers agreeing. The "no behaviour change" claim was **checked, not asserted**: the source commit is a single
+hunk, `@@ -49,14 +49,46 @@`, entirely inside the module docstring.
+**Why no native review, and this is a decision on the record rather than an omission.** `ASSESS` on the range
+returned **`reviewDue: false`** with reason **`under_budget`** for 288 changed lines — and independently of that,
+the candidate's source bytes are **blob-identical to a tree the peer had already natively reviewed and
+approved**, so a review here would re-review approved bytes under a fresh id: the cost this register exists to
+document rather than to repeat. `inspect` did offer `review.start`, as it does for **any** unreviewed target;
+the offer is not the obligation, and the harness's own assessment is. The F03-cleanup formatting unit was
+recorded the same way at 11 changed lines.
+**What the parent re-measured rather than accepted**: the tip and the three commits with their tree OIDs, the
+reviewed-tree chain (`090012fb` base, `84d7c65b` source tree), the blob set in **sha256 compared against
+sha256** and never against git blob OIDs, the single docstring hunk, the 17 collected parameters, and the
+**+32 re-derivation of every `booth.py` register row by subject** rather than by arithmetic — four of four
+recorded tokens consistent, which is why the shift is stated rather than assumed. The peer's own honesty note is
+also carried: it measured the second-to-third verification delta itself, so the **third** pass is the one that
+certifies the deliverable.
 
 **Next units, assigned in writing after the F09b closure (2026-10-11).** Two, split on file ownership so
 that neither session edits a file the other owns — the peer raised this itself, correctly: this register
