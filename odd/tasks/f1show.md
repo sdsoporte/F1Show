@@ -1620,8 +1620,37 @@ deletions** count, `events.py` and the `fixtures/` tree byte-identical, 18 focus
    generation to prove the wiring. One model call is a budget decision, not an assumption.
 4. **F09 — the two-person booth.** Lead and colour personas, explicit turn order, bounded context,
    evidence-only sourcing, degradation that is neutral rather than invented.
-5. **Thin F10.** One command that runs replay → events → booth → a transcript. Not the
-   multi-service orchestration: the MVP runs in one process.
+5. **Thin F10 — in progress, design registered before the first write.** One command that runs
+   replay → events → booth → a transcript, in one process. Not the multi-service shape: no Redis, no
+   bus, no venue.
+   - **New module `src/f1show/run.py`** plus `tests/test_run.py` and additive root exports. The
+     composition entry point takes its dependencies **injected** — the replay source, the store, the
+     clock and a model client — so the whole path is exercisable offline with a fake provider and
+     stays deterministic. Nothing here builds its own HTTP client, opens a store or reads a clock of
+     its own.
+   - **`main()` must make a live call impossible by accident.** It takes an explicit, **required**
+     provider selection with no default, so the offline path is chosen rather than fallen into and a
+     real call cannot happen by omission. The fake path is exercised by tests end to end; the gateway
+     path is not, because a real generation needs its own grant.
+   - **The registered composition requirement is part of this unit, as a proof and not a claim**: the
+     base URL is derived **per dialect in memory** — stripping a trailing version segment before the
+     native SDK appends its own — and the derivation is exercised against **both** declared forms, one
+     carrying `/v1` and one carrying no version segment, as two parameterised cases whose composed URL
+     is **captured from the wire** rather than rebuilt. A normalisation written only for today's shape
+     would fail silently the day an operator changes the declared value and land back on the 404 that
+     took three rounds to diagnose. The declared value itself is **not** changed by this unit: its `/v1`
+     is load-bearing for the gateway's OpenAI-compatible surface.
+   - **No model id may appear in code or configuration.** It is supplied at runtime; the enumerated ids
+     are gateway aliases and not provider contracts.
+   - **The transcript is the deliverable**: the two personas' turns in order, with the evidence each
+     turn used, so a reader can see the product's claim rather than infer it. Degradation stays neutral
+     — a provider outage produces a stated absence, never invented commentary.
+   - Checks: offline end-to-end over the **recorded fixtures** through replay, events and booth, with a
+     fake provider, asserting turn order, evidence propagation and a stable transcript; the two base-URL
+     cases with wire-captured URLs; refusal of a missing provider selection; and that no live call is
+     reachable without the explicit selection. Forecast 250–500 lines, to be read as a lower bound.
+   - F10 does **not** carry the F09 review's carried findings into its diff: they are registered with
+     owner and trigger instead.
 
 **Deferred from the MVP, with the reason:** **F05** Redis fan-out is infrastructure for services
 that do not exist in a single-process MVP; **F06** tactical analysis is value added on top of
@@ -2184,21 +2213,20 @@ reviewed, committed and published on `origin/feat/f03-source-adapters`. F03b-1 c
 `3ec02ea`, independently verified at 34 focused/185 full-suite tests and native-approved/
 acknowledged, with five informational advisories carried separately. Main is unchanged.
 
-Active: **F04 and its two corrections are closed; MVP step 3 is F08.** F04 stands as units
-`893fa5b` (the collector, +657), `cfbe614` (the hashable-identity correction, +164/−2) and, before
-it, the classifier guard folded into the same unit — with independent verification at **8/8 mutants
-killed**, a medium-tier review whose authority is **burned**, and one post-approval correction
-carried **without** a review because ASSESS returned `reviewDue: false` under budget. The parent
-proved the behaviour claim element-wise against a pre-fix shadow, so that omission rests on evidence
-rather than on trust. Next is F08, whose isolated track already closed on
-`feat/f08-gemini-gateway` as `b56a2fe` with a burned authority and 10/10 mutants killed, and whose
-integration is agreed: this branch's task document wins, the design and evidence arrive as
-`cherry-pick -n 11f78c8 f7e7412` (verified to apply cleanly in sequence), and the additive
-`__init__.py` conflict is resolved here. Then F09's two-person booth and a thin single-process F10
-that prints a transcript. Seven deferred items stay tracked as issues #3–#9, and issue #7 now also
-carries the measured fact that **no ruff configuration is committed**, so every lint claim in this
-project is config-scoped and must name its rule selection. The user chose **free mode**. `main` stays
-at `2c83a150`. Housekeeping: the ODD mirror is four records and the splitter handles any number.
+Active: **F10, the thin end-to-end orchestration**, with its design registered above before the first write
+and its dependency satisfied: F09's booth is integrated, verified by content and natively reviewed with its
+authority burned, and the suite sits at **706**. F10 composes replay, the event collector and the booth into
+one command that prints a transcript, with every dependency injected so the whole path is exercisable
+offline, and it carries the composition requirement as a proof rather than a claim — the base URL derived
+per dialect and exercised against both declared forms with the composed URL captured from the wire. With
+that, the MVP's product units are all present: F04's events, F08's gateway and F09's booth are done, and
+F05, F06, F07, F11 and F13 stay deferred with their reasons. The peer session is working its assigned unit,
+the residual citation channels in `booth.py`, and the carried findings are being registered in a **new file**
+with owner and **trigger**, deduped by **location** rather than by finding id, because the size-based gate
+re-reviews already-approved bytes and surfaces the same defect under a fresh id. `main` sits at `f441c7f0`
+after three merged pull requests, this branch is eight commits ahead of the remote, and publishing the F09
+integration remains a separate human decision. Housekeeping: the ODD mirror is five records and the
+splitter handles any number of parts.
 **Parallel track, coordinated 2026-10-10.** A second session implements **F08** (the Gemini gateway)
 in an isolated worktree `/home/s/dev/projects/work/F1Show-f08`, branch `feat/f08-gemini-gateway`,
 based on `0b1f0c7`, registering its own design in that branch's copy of the F08 section. Verified
