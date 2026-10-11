@@ -2345,13 +2345,29 @@ does not own and turn a clean cherry-pick into a reconciliation.
    demanded: a **mutation proof** that the pin has teeth (invert the code, the pin goes red), every declared
    shape exercised by a test that makes it air, the full suite, and the identity chain. A docstring has no
    behavioural RED, so the peer is asked to **say that** rather than manufacture one.
-2. **The register's per-subject re-derivation — the parent's.** Surface `docs/CARRIED-FINDINGS.md`. Remaining:
-   `auth.py` (11 rows) and `collector.py` (7), whose measured anchors are already recorded; the two test-file
-   rows the blob hash surfaced (`tests/test_auth.py`, `tests/test_collector.py`); and `gemini.py`'s six rows,
-   whose coordinates are current but whose **subjects were never read**. Acceptance is measurable — every row
-   carries a subject, and every key in **Staleness keys** matches or is explicitly STALE. One item is not a
-   number edit: `auth.py:347` is **NOT FOUND**, the line no longer exists, so deciding whether that row is
-   closed is real work.
+2. **The register's per-subject re-derivation — the parent's. COMPLETED and published as PR #18 =**
+   **`c8a0d9d0`.** Surface `docs/CARRIED-FINDINGS.md`. Every row now carries a **coordinate and a subject**, and
+   every stale file's rows were re-derived by reading the recorded revision and finding the same subject in the
+   current file. Verified on `main` rather than in the working tree: the four false claims this round produced
+   (`superseded by measurement`, "every anchor below was re-measured", "subjects have not been derived",
+   "windows collapsed onto one line") each return **zero** occurrences across `docs/` and `odd/`.
+   **The pass corrected the parent twice, which is the point of doing it by measurement.** First, the
+   `collector.py` "collapsed windows" claim was wrong: it came from matching lines against the **F04 tree**
+   while those rows were recorded against the **post-correction file**, and re-read against the right revision
+   **three of them are exactly current** inside `_canonical_rendering` — `:197-200` (the `default=repr` /
+   `repr(value)` pair), `:198-199` (the canonical `json.dumps`) and `:199-200` (the `except (TypeError,
+   ValueError)` branch) — one small function, three rows told apart by subject. Two more moved by exactly one
+   line, and the closed row is closed **by change**, with the code's new home recorded (`_identity_token`
+   `:203-220`, `_canonical_rendering` `:187-200`) instead of a new number for the old one. Second, the blob's
+   over-flagging got an **instance** rather than an argument: `tests/test_auth.py` is STALE by blob while its
+   one row — the `for _ in range(50): await asyncio.sleep(0)` yield count at `:558-559` — sits at **exactly**
+   its recorded coordinate in a file that grew by 172 lines.
+   **What remains, and it is real work rather than an edit**: `auth.py:347` (**R4-001**) is **NOT FOUND**. It is
+   a different finding from staleness — the line no longer exists at all, arithmetic cannot re-point it, and
+   deciding from the subject whether the row is closed needs a human. The grouped auth row's seven anchors are
+   **not paired to its seven ids**, because the bodies are unrecoverable and that pairing cannot be measured.
+   And the per-symbol hash remains the next refinement, unadopted, for the reason recorded in **Staleness
+   keys**: the blob is file-level and therefore over-flags.
 **A decision deliberately NOT taken, and the reason.** The over-refusal
 `R3-marker-word-false-refusal` is left alone. It is a **trade, not a bug**: the unit closed four escape
 channels by **widening** its refusal predicate, so narrowing it re-opens the channel that was just shut. With
