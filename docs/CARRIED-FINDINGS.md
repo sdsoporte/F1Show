@@ -26,6 +26,17 @@ enough to name a subject, the entry says so instead of inventing one.
 - **A trigger names a concrete condition, never a person's attention.** Owner answers *who*; trigger
   answers *when*. An entry whose only possible trigger is "the next time someone touches that file" is a
   dead record by this rule, because that is attention wearing a costume.
+- **A row carries a COORDINATE and a SUBJECT, and a coordinate without a subject is not evidence.** Lines
+  move — a file grows by an insertion far above a row and every number below it is wrong while still looking
+  verified. Each file's table is therefore followed by a **measured subject block**: what the location holds,
+  read from the old blob and found again in the current file. This rule was added after the F09b unit, when
+  two rows in this file were found pointing at the wrong code and one of them had been *described in a note as
+  re-measured* when it never was.
+- **Staleness has a mechanical trigger: the line-count delta from the revision a location was recorded
+  against.** A file whose length changed has **every** row in it flagged until re-derived by subject, and the
+  table says so in one line instead of carrying numbers that read as verified. Measured at the F09b closure:
+  `gemini.py` and `run.py` unchanged (rows current), `booth.py` +148, `auth.py` +70 and `collector.py` +42 —
+  the last two never re-derived until then.
 - **A closure has a TYPE, and "closed" alone is not evidence.** Three kinds appear here and they are not
   interchangeable: closed by **change** (bytes moved and a test went red first), closed by **pin** (a test was
   added that also passes on the unaffected code, so behaviour did not change and there was **no RED**), and
@@ -44,8 +55,15 @@ composition entries and **F13** for everything that needs the live service.
 
 ## auth.py — from the F03d-2 reviews
 
+**Every coordinate in this table is from the F03d-2 revision, and `auth.py` has grown by 70 lines since (416
+→ 486) through the auth-hardening unit. No row here has been re-derived by subject, so read these numbers as
+HISTORICAL, not as verified pointers.** The re-derivation was run at the F09b closure and the measured anchors
+are recorded at the end of this section, so the work is not lost and the next unit touching this file can
+finish it. This is exactly the rot the register suffers when coordinates are trusted: the hardening is one of
+this project's own reviewed units, and its rows were never re-anchored.
+
 | Location | Ids | Severity | Owner | Trigger | Status |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | `:391-394` | R1-001 | WARNING | F03d follow-up | any change to bearer-header injection or the caller-`Authorization` refusal | OPEN |
 | `:263-264` | R1-002 | WARNING | F03d follow-up | any change to credential acceptance | OPEN |
 | `:140-148` | R1-003 | WARNING | F03d follow-up | any change to `expires_in` parsing | OPEN |
@@ -58,10 +76,23 @@ composition entries and **F13** for everything that needs the live service.
 | `tests/test_auth.py:558-559` | R2-magic-yield-count | SUGGESTION | — | — | **DEAD RECORD**: a test-local readability remark with no future condition that forces revisiting it |
 | `:272-295`, `:168-173`, `:279-291`, `:282-288`, `:405-415`, `:256-269`, `:325-335` | R2-exchange-lifecycle, R2-post-except-raise, R3-002, R3-003, R3-004, R3-005, R4-transport-taxonomy | SUGGESTION | F13 | the first live call, where the exchange taxonomy and lifecycle become observable | OPEN, bodies unknown |
 
+**Measured re-anchoring, old → current, with the subject found at the new location.** These are the numbers a
+reader should use; the table's are historical. `:391-394` → **`:464`** (the bearer-header merge inside
+`get_json`); `:263-264` → **`:282`** (credential acceptance); `:140-148` → **`:157`** (the `expires_in`
+parse); `:211-222` → **`:235`** (the expiry/skew arithmetic, in the docstring); `:283-292` → **`:304`** (a
+completed exchange that left no valid token is discarded); `:305-311` → **`:357`** (the clock and skew passed
+to the state); `:193-200` → **`:212`** (the timezone-aware `issued_at` refusal); `:375-383` → **`:450`** (bearer
+header added to the caller's request); `:272-295` → **`:295`** (the provider `repr`); `:168-173` → **`:186`**
+(pydantic captures the refused input, so the raise happens after the handler); `:279-291` → **`:298`** (the
+valid-token docstring); `:405-415` → **`:475`** (`post_form_json`); `:256-269` → **`:280`** (the credentials
+message); `:325-335` → **`:374`** (`_post_credentials`). **`:347` → NOT FOUND**: that line no longer exists in
+the file, so whoever finishes this re-anchoring must decide from the subject whether the row is now closed
+rather than silently re-pointing the number.
+
 ## gemini.py — from the F08 integration review
 
 | Location | Ids | Severity | Owner | Trigger | Status |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | `:484-488` | R3-001 | **WARNING** | F13 | the live spend report, where usage accounting becomes observable | OPEN |
 | `:477-480` | R3-002 | SUGGESTION | F13 | the live spend report | OPEN |
 | `:348-354` | R3-003 | SUGGESTION | F13 | **the F10 trigger fired and the finding was not addressed**: F10 shipped without touching this call site, so no configured timeout reaches the SDK. The condition that matters is now the first live call, where an unbounded call becomes observable | OPEN |
@@ -69,14 +100,23 @@ composition entries and **F13** for everything that needs the live service.
 | `:488` | R3-005 | SUGGESTION | F13 | the live spend report | OPEN |
 | `:559-566` | R3-006 | SUGGESTION | F13 | the live spend report | OPEN |
 
+**Subject block**: `gemini.py` is unchanged since its review (567 lines, delta 0), so these coordinates are
+current — but **their subjects have not been derived from the source**, only their stability measured. A reader
+who needs a subject here must read it out of the file, and the honest state is that this table carries
+coordinates whose context was never re-read.
+
 The peer's reading, carried as its own and not as provider intent: the retry logic compares the error
 `code` against an integer, so a provider sending `"429"` **as a string** would not be retried — whose
 natural trigger is the **first live call of F13**, where a rate limit is exactly what should be retried.
 
 ## collector.py — from the F04 reviews
 
+**`collector.py` has grown by 42 lines since the revision these coordinates were recorded against (288 →
+330), through the F04 identity correction, so every number below is HISTORICAL rather than a verified
+pointer.** Measured anchors are recorded at the end of the section.
+
 | Location | Ids | Severity | Owner | Trigger | Status |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | `:245-249` | R3-unhashable-identity | WARNING | — | — | **CLOSED**: `cfbe614` made the dedup identity hashable for any payload value |
 | `:197-200` | R3-recursion-escape | WARNING | — | — | **DEAD RECORD**: reproduced by the parent and it does **not** crash; a pathologically deep programmatic payload is not reachable from a JSON parse |
 | `:198-199` | R3-canonical-not-faithful | WARNING | F06 | F06 consuming `classify_gap`, or any change to the intervals normalization | OPEN |
@@ -85,19 +125,28 @@ natural trigger is the **first live call of F13**, where a rate limit is exactly
 | `:121-131` | R3-gapreading-cross-kind | SUGGESTION | F06 | F06 consuming `classify_gap` | OPEN |
 | `tests/test_collector.py:26-33` | R3-fixtures-outside-candidate | SUGGESTION | — | — | **DEAD RECORD**: a note about the fixtures living outside the candidate; the fixtures are committed, so the condition it described has passed |
 
+**Measured re-anchoring, old → current**: `:245-249` → **`:285`** (`timestamp_field = _TIMESTAMP_FIELD[family]`);
+`:197-200` → **`:236`** (`return GapReading(kind=GapKind.ABSENT)`); `:198-199` and `:199-200` → **`:236`** as
+well, since all three windows landed in the same tail of that helper and their distinct lines are gone — which
+means those three rows can no longer be told apart by coordinate at all, only by subject: they are the
+`classify_gap` reading, the canonical-not-faithful question and the uncovered `ValueError` branch.
+`:170-175` → **`:175`** (the recorded-timestamp parse, which reports the unknown rather than guessing);
+`:121-131` → **`:131`** (the laps reading must carry its lap count).
+
 ## booth.py and its tests — the peer's, deduped by location
 
-**Every anchor below was re-measured after the F09b unit**, which grew `booth.py` from 615 to 763 lines and
-`tests/test_booth.py` by 619. The re-anchoring was done by **reading the old blob and finding the same
-subject in the new file**, never by trusting a diff's arithmetic: the repr fallbacks moved from `:317-322`
-to `:466-470`, the positive-seconds bound from `:336-340` to `:482-489`, and the bound guards in the test
-file from `1039-1050` to `1658-1670`. This is the standing cost of the location-as-identity rule: when a file
-grows, a location that is not re-derived by subject becomes silently wrong, and a wrong location is worse
-than no location because it reads as verified.
+**This note was wrong in its first form, and the error is the point.** It said every anchor below had been
+re-measured after the F09b unit. Three had been: the repr fallbacks (`:317-322` → `:466-470`), the
+positive-seconds bound (`:336-340` → `:482-489`) and the bound guards in the test file (`1039-1050` →
+`1658-1670`). **The fourth had not**, and it had moved: the persona validator is now at `:143-150`, not
+`:117-123`, because the hardening inserted lines above it too. A note claiming that everything was re-measured,
+written over a table where one row was not, is the failure mode this whole register is built against — **a
+statement that reads as verified without being about the thing it claims.** The lesson is mechanical: the
+re-derivation is per ROW, and a section-level claim is not a substitute for it.
 
 | Location | Ids observed there | Severity | Owner | Trigger | Status |
 | --- | --- | --- | --- | --- | --- |
-| `:117-123` | R3-005 (integration) = R3-persona-validator-uncovered (unit) | SUGGESTION | issue #8 | promoting probe-only coverage, or any change to the personas | OPEN |
+| `:143-150` | R3-005 (integration) = R3-persona-validator-uncovered (unit) | SUGGESTION | issue #8 | promoting probe-only coverage, or any change to the personas | OPEN |
 | `:466-470` | R3-001 and R3-003 (integration) = R3-render-repr-determinism (unit) | SUGGESTION | F13 | **an evidence value that cannot be serialized reaches the prompt** — a data event, or a change in F04's contract | OPEN, with the fix already decided below |
 | `:482-489` | R3-002 (integration) = R3-positive-seconds-overflow (unit) | SUGGESTION | whoever sources a bound from configuration | **the F10 trigger did NOT fire**: `main` calls `run_session` without the bound parameters, so they keep their signature defaults. The composition wiring shipped without promoting a single bound into configuration | OPEN |
 | `tests/test_booth.py:1658-1670` | R3-006 (integration) = R3-bound-guards-uncovered (unit) | SUGGESTION | issue #8 | any change to the bounds list | OPEN |
@@ -135,6 +184,14 @@ surfaces the same defect under a fresh id** — now observed rather than predict
 the row it shares with the unit's id instead of on a parallel row. It also **raises the weight of the
 finding**: what was one reviewer's reading plus the parent's re-measurement is now two independent reviewers
 on the same subject, and it was created by the very change that closed the escape channels.
+
+**Subjects at these locations, measured at the F09b closure** — the coordinate plus what it holds, which is
+what makes a row checkable: `:143-150` the persona validator (`@field_validator("name",
+"register_instruction")` / `_strip_non_blank`); `:466-470` the two `repr` fallbacks inside `_render`;
+`:482-489` `_positive_seconds`; `tests/test_booth.py:1658-1670` the bounds list in
+`test_every_bound_must_be_in_range`; `:299-303` the tolerant violation predicate `_CITATION_SHAPED`;
+`:375-377` `_reference_scanner`'s compiled pattern; `:53-54` the module docstring's list of shapes left
+airing; and `:288-294` (pre-F09b) the `cited` construction, the duplicate collapse and the empty-item drop.
 
 **R3-004: closed inside the F09b unit by PIN, and this register had it wrong until the peer measured it.**
 The row pointed at the pre-F09b `booth.py:288-294`, which held
@@ -188,6 +245,13 @@ inference, not the reviewer's words**. The location is the identity.
 | `:286-316` | R3-003 | SUGGESTION | F13 | the first live call: the gemini branch materializes the credential and builds the SDK client with a base URL and **no timeout**, so the same subject as the `gemini.py` row above sits on the F10 side too | OPEN, body unknown |
 | `:168-173` | R3-004 | SUGGESTION | the first live call, or any change to the declared base URL | the `native_base_url` derivation: the trailing-segment rule is proved for the two declarations in use, so a third declaration shape is what would revisit it | OPEN, body unknown |
 
+**Subjects at these locations, measured** (and this file is unchanged since its review, so the coordinates are
+current): `:123-128` the unreadable-JSON branch of `load_recorded_session`, the only place that puts a
+decoder's own message into a `RecordedSourceError`; `:243-255` the client construction in `main`, which
+happens **before** the corpus is read; `:286-316` the provider branches of `_model_client`, including the
+gemini branch that materializes the credential and builds the SDK client with no timeout; `:168-173` the
+version-segment derivation inside `native_base_url`.
+
 One honest note about this unit: **the four F10-owned triggers in the tables above were reached by the same
 commit**, and three of them did not fire, which is the reconciliation this register exists to force. F10
 chose a dialect and a base URL, and it promoted nothing else: no bound, no timestamp and no timeout travelled
@@ -197,7 +261,7 @@ because a reviewer of the register should be able to check the claim without tru
 ## Cross-cutting, from verification rather than from reviews
 
 | Subject | Where recorded | Owner | Trigger | Status |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | Five probe-only cases from F03c-3a: empty checkpoint from a distinct prior stamp, checkpoint-await cancellation, direct-await KI/SystemExit, no-prior-watermark write failure, drivers immutability/mixed-session refusal | issue #8 | issue #8 | promoting probe-only coverage | OPEN |
 | The F03c-4 generation branch is unreachable through the public API | issue #8 | issue #8 | deciding to reach it or to delete it | OPEN |
 | Race coverage in the session lifecycle is scripted, not real concurrency | issue #8 | issue #8 | any change to the lifecycle, or a decision that real concurrency is needed | OPEN |
