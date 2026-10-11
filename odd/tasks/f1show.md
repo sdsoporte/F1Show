@@ -2614,6 +2614,23 @@ planted texts, with a **measured candidate fix** recorded as a candidate rather 
 test's assertion is **vacuous over the real tree** with no other test calling it, so neutering its body is
 uncatchable — **a property of the tree, not of the test**.
 
+**First live exercise of the product's data path (2026-10-11, authorized by the user).** The free OpenF1 API
+was driven **through the project's own path** — its HTTP boundary, its shared rate limiter, its retry policy
+and its collector — for **one Grand Prix only**. `GET /sessions?year=2026` returned **131 sessions**, and the
+most recent race **with a past `date_start`** was **Singapore / Marina Bay 2026, `session_key` 11388**
+(`2026-10-11`). The five collector families all answered **200**, and the collector derived **1,863 events**
+from payloads it had never seen: position 396, laps 1,240, pit 25, stints 47, race_control 155 — one event per
+in-scope record, **22 distinct drivers**, **1,816 timestamps known** and **47 explicitly unknown** with the
+reason `family_carries_no_timestamp_field` (the stints family has no timestamp field), and **no overtake event**
+because the enum has no such type. **Six requests in ~6 s, ~1 req/s**, paced by the project's own limiter — well
+inside the published free tier (3/s, 30/min), with no credentials, no gateway and no authenticated endpoint.
+**Two findings the recorded corpus could not have produced**: the sessions listing includes **scheduled rounds
+with no data yet** — 6 of 25 races in 2026 were in the future, and selecting by `max(date_start)` picked one whose
+families all answer **404**, which the collector handled by deriving **zero events and inventing nothing**, so the
+defect is in the **selection** — and the stints family's absent timestamp field is now confirmed **live** rather
+than only against fixtures. Nothing was written into the repository: the live payloads and the summary live under
+`/tmp/f1show_live/`.
+
 **Implementation, verification and native review (observed).**
 
 - **The decision, and why (a) rather than (b)**: shape 5 is declared as a **fifth shape described by its
