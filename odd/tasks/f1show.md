@@ -2167,6 +2167,58 @@ the two F04 rules and every live-provider property remain F13's, and no live cal
   integration and its author re-applies these blocks at their anchors in order;
   `src/f1show/__init__.py` is the only shared file and both changes are additive.
 
+### F09b — Close the residual citation channels
+
+**Assignment received in writing from the step-1/F04 session on 2026-10-10**, with allowed surfaces
+`src/f1show/booth.py` and `tests/test_booth.py` only, and the branch based on this track's own tip
+`b1990de` so it does not depend on when that session integrates F09. No new features, no new personas,
+no `collector.py`, no `fixtures/`, and no `src/f1show/__init__.py` — the hardening adds no public name,
+because the new reason rides on the already-exported `BoothReason`.
+
+**The objective, stated precisely enough to be checkable.** The assignment names four measured escape
+channels — a bullet-prefixed marker, `EVIDENCE :` with a space before the colon, a mention mid-line,
+and a bare reference with no marker — and forbids the third option of leaving them airing "because the
+evidence tuple stays validated". The reframing that makes **one** rule close all four: **the guarantee is
+about tokens, not lines.** What must never happen is a **reference-shaped token that was never supplied
+reaching the aired text**. Every channel is an instance of that, and validating line *shapes* can never
+cover the cases whose shape is undefined.
+
+**Three decisions, each with its reason, and one new rule.**
+1. **The violation check gets a tolerant predicate; acceptance does not widen.** A second line that is
+   *citation-shaped* under a tolerant reading — an optional leading bullet, optional spaces before the
+   colon, any case — is `MULTIPLE_CITATION_LINES`. Reason: a later-line escape is unambiguously a second
+   citation attempt, and refusing it names the precise failure instead of the vaguer text rule, while
+   acceptance keeps the exact shape the prompt teaches.
+2. **A never-supplied reference-shaped token anywhere in the aired text is refused with its own typed
+   reason** — a new `BoothReason` member (`UNSUPPLIED_REFERENCE_IN_TEXT`). Reason: this *is* the
+   invariant, and it is the only rule that reaches a bare reference and a mid-line escape. The token
+   shape is derived from the supplied references (`<family>[<index>].<field>`), not invented, and
+   supplied references are never flagged.
+3. **The deliberate over-refusal pin survives, and that is recorded rather than assumed.**
+   `test_commentary_that_merely_mentions_the_marker_mid_sentence_still_airs` mentions the marker with
+   **no reference token**, so it must keep airing: the new rule is content-based, not marker-based.
+   Reversing a deliberate pin would need a stated reason, and this design does not reverse it.
+- **Declared cost, fail-closed on purpose**: prose that coincidentally matches the reference shape and
+  was never supplied is refused. That is the price of closing the channel, and it is the direction the
+  assignment demands; the alternative — airing text we cannot validate — is the hole.
+
+**The two pins the final verification asked for belong in this unit.** The duplicate-citation collapse
+already works (`dict.fromkeys`) and no test covered it: pin order preservation and collapsing. And the
+two pins that encoded intent rather than completeness: the prompt pin's residual is a literal
+**identical** to the constant, which no runtime check can see, so it is pinned at the **source** level
+(`booth.py` must contain no `EVIDENCE:` literal outside the constant), and the export pin must fail when
+the list **shrinks** — whatever derivation is chosen, the observable requirement is that removing a name
+from `F09_EXPORTED_NAMES` now fails.
+
+**Required evidence.** RED **per channel**, reproduced **before** the fix on a copy whose import proof
+points inside the copy, one named failing test per channel; then GREEN; the full suite green; and
+mutation proofs for both pins (removing a name from the list, and reintroducing a marker literal). Every
+ordering or concurrency test keeps its bounded wait, per the F03d-2 lesson.
+
+**Order of work, and it is not negotiable**: implementation → parent spot check → **complete independent
+verification** → native review → acknowledgement → commit. The previous unit paid a wasted model run for
+running the review in parallel with verification.
+
 ### F10 — Wire bounded end-to-end orchestration
 
 - [ ] Correlate enrichment by event/session/version, apply bounded join deadlines,
