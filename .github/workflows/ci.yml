@@ -1,0 +1,61 @@
+# The repository's own CI. Two properties are the reason this file exists: the declared Python
+# floor (>= 3.12) is a claim nothing enforced, and the lint standard lived outside the
+# repository. Both are checked here, and the Ruff version is pinned because version drift was
+# the observed failure mode.
+#
+# The suite is offline by design: it uses recorded fixtures, fake providers and an injected
+# clock. No step needs a credential, a live endpoint or a paid provider.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: pytest on Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 is the declared floor in pyproject.toml and must *run*, not be asserted.
+        # 3.14 is the interpreter this repository is developed on.
+        python: ["3.12", "3.14"]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the locked environment
+        run: uv sync --frozen --python ${{ matrix.python }}
+
+      - name: Run the offline suite
+        run: uv run --frozen --python ${{ matrix.python }} pytest -q
+
+  lint:
+    name: ruff on the committed selection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # The selection and its documented exceptions live in the repository's own ruff.toml, so a
+      # reader can reproduce this locally. `--no-cache` keeps the result independent of cache
+      # state; the version is pinned so a report from one machine means the same on another.
+      - name: Report the version and the selection's own counts
+        run: |
+          uvx ruff@0.17.0 --version
+          uvx ruff@0.17.0 check --no-cache --statistics src tests
+
+      - name: Enforce the committed selection
+        run: uvx ruff@0.17.0 check --no-cache src tests

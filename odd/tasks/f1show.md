@@ -2493,6 +2493,35 @@ naming the project's **real** checks (`uv run --frozen pytest`, the committed li
 review under RDD); the pinned versions; and the rules deliberately left off. **Branch**: based on `main`, not on
 the peer's older unit branch, because the CI configuration belongs to the tree as it stands today.
 
+**F12 integrated, measured, and published with the register rows its own configuration demands (2026-10-11).**
+One cherry-pick, `dbcd58c`, over `main`: the source commit `cbf27d32`, whose stage, review and commit trees are
+all `cffa7b5c`, with **all three blobs identical** to the reviewed tree on the integrated side — new paths, so
+there was no conflict surface at all. Native review at **tier high with four lenses** (a reviewer sees a
+workflow as shell and a configuration that launches processes), approved on its first run and **burned**.
+**What the unit retired**: the two caveats that rode on *every* claim this project made. The declared `>=3.12`
+floor is now **enforced by a matrix job** and was proven **locally** rather than deferred to CI — 778 passed on
+3.12.13 and on 3.14 — and a lint configuration is **committed** with its version pinned to `0.17.0`, so
+"Ruff clean" now names a file inside this repository rather than one outside it. The agent harness's
+configuration stays a **tool, not the yardstick**.
+**The parent changed the SHAPE of the exceptions, and this is the part worth keeping**: the peer had proposed a
+flat five-entry `ignore`; measuring **where** each rule fires changed the shape. `S101` fires **1552 times, all
+in `tests/` and none in `src/`** — a global ignore would have hidden an `assert` in production code, which has
+real weight because **asserts compile out under `-O`** — while `UP042` fires only in `src/` and `I001` only in
+`tests/`. So two rules stay global (they fire in both trees) and three are **per-file scoped**, and the scoping
+was verified **behaviourally in both directions** on the delivered bytes: a planted `assert` in `src/`
+**reports**, the same `assert` under `tests/` is **silenced**, and the enforcement command run from the worktree
+root discovers the committed configuration and passes.
+**The five register rows shipped in the same pull request, and they could not ship earlier because of the
+configuration's own rule**: a row about a file that is not committed yet would be a claim about a future state.
+One row per silenced rule, each with its count, revision, version, owner and the trigger that removes it, keeping
+the distinction between **mechanical** (`UP017`, `I001`) and **needs behaviour tests** (`UP042`), with `S101`
+stating **where** it is silenced and where it is not. The cross-cutting row about having no committed lint
+configuration is **closed**.
+**Two review findings, both raised by two independent lenses and neither fixed here**: no `timeout-minutes` on
+the CI jobs, and the enforcement step that would fail when an ignored rule has no row. The second one's trigger
+**fires with this very commit**, and it cannot ride this integration because it would change the `ci.yml` bytes
+that were just approved — so it is the next small CI unit, registered with its trigger already fired.
+
 **Implementation, verification and native review (observed).**
 
 - **The decision, and why (a) rather than (b)**: shape 5 is declared as a **fifth shape described by its
