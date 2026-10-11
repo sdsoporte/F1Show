@@ -2115,7 +2115,19 @@ resolves through `getattr`, and on `AttributeError` falls back to `importlib.imp
 the language itself does. **Proved in both directions**: in a copy whose `__all__` lists a submodule-only
 name that nothing imports, the previous `getattr`-only logic **failed** (a false failure on a name that
 imports fine) while the corrected guard **passes**, with an import proof that the copy was the module
-under test. Committed as `test(api): mirror the import-system submodule fallback in the surface guard`. Also worth keeping: the peer counted
+under test. Committed as `test(api): mirror the import-system submodule fallback in the surface guard`.
+Independent verification PASS on those bytes: pins identical before and after, the strict-direction
+asymmetry reproduced in a copy whose `__all__` lists a submodule-only name while pinning
+`f1show.__file__` per tree to defeat the editable-install `.pth` trap, and — the half that matters most —
+**the teeth confirmed intact**, because a fix that removed the bite would be worse than the asymmetry: a
+mutant naming a symbol that exists nowhere is still rejected with the mirrored `ImportError`, and the
+pristine copy passes. Suite 644, Ruff clean with isort enabled. The verifier judged the docstring honest —
+the implementation is literally the from-import algorithm — and **named two residual gaps instead of
+smoothing them**: the mirrored `ImportError` replaces the underlying `ModuleNotFoundError` message (the
+original survives as `__cause__` but is not shown), and a submodule that exists yet raises at import time
+propagates a non-`ImportError`, so the guard reaches the same verdict through a different message shape.
+Both are informational, because in every case examined the pass/fail outcome matches what a real import
+does; they matter only to whoever reads the error text. Also worth keeping: the peer counted
 **101** entries in `__all__` against this branch's **93**, and the difference is simply that its tree
 carries eight booth exports — **the third time this session that two apparently conflicting numbers
 turned out to be two trees**, so a per-tree count must always travel with its tree.
