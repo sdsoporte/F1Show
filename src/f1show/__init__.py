@@ -76,13 +76,18 @@ from f1show.gemini import (
     SafeguardedModelClient,
 )
 from f1show.http import HttpxJsonClient
-from f1show.ingest import EndpointOutcome, SessionSyncResult, ingest_endpoint, sync_session
+from f1show.ingest import (
+    EndpointOutcome,
+    SessionSyncResult,
+    ingest_endpoint,
+    sync_session,
+)
 from f1show.ports import (
     Bus,
     Clock,
+    HttpClient,
     HttpDecodeError,
     HttpError,
-    HttpClient,
     HttpResponse,
     HttpResponseTooLargeError,
     HttpTimeoutError,
@@ -98,8 +103,8 @@ from f1show.replay import SessionMismatchError, SnapshotReplaySource
 from f1show.request_policy import (
     PacingPolicy,
     RateLimiter,
-    RetryPolicy,
     RetryingHttpClient,
+    RetryPolicy,
 )
 from f1show.session import (
     RunNotActiveError,
@@ -109,7 +114,7 @@ from f1show.session import (
     StaleRunError,
     StoreOwnershipError,
 )
-from f1show.snapshot import write_session_snapshot
+from f1show.snapshot import SnapshotResult, write_session_snapshot
 from f1show.store import SQLiteStore
 
 __all__ = [

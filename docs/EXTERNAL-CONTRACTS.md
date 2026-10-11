@@ -346,6 +346,135 @@ available or default.** The documented prerequisite is: authenticate, enumerate,
 then confirm GA status in the documentation, before any model ID is written into
 configuration or code.
 
+### Operator-configured gateway, observed 2026-10-10
+
+The endpoint this project actually talks to is a **local loopback gateway**, not Google directly: the
+configured base URL is `http://127.0.0.1:8317/v1` and the credential is a single API key. The
+observations below used only that key, with no automatic retries.
+
+- **The `/v1` is already part of the base URL.** Appending another `/v1` duplicates the path and
+  returns a 404, which has already cost one debugging cycle here. Treat the configured value as a
+  complete prefix rather than a bare host.
+- **Two surfaces answer on the same gateway.** The OpenAI-compatible surface returned
+  `GET /v1/models` → 200 in 0.02 s (twelve entries) and `POST /v1/chat/completions` → 200 in 0.82 s
+  with usage 8/1/9 and the text `ok`. The native surface returned `GET /v1beta/models` → 200 in
+  0.002 s with the native shape — `{"models": [{"name": "models/…"}]}` plus `displayName`,
+  `description`, `supportedGenerationMethods` and modality fields.
+- **Both surfaces advertise the same twelve entries**, so a native-dialect client does have a real
+  endpoint on this gateway. What remains **unexercised is a generation in the native dialect**;
+  matching listing shape is necessary but not sufficient, so that stays an open question for F10
+  and F13 rather than an established capability.
+- **The advertised ids are gateway aliases, not first-party model ids.** Suffixes such as `-high`
+  and `-low` are the gateway's own effort tiers. **No id from this enumeration may enter
+  configuration or code as though it were a provider contract** until it is reconciled against
+  Google's documentation — the same rule this file already applies to every model id.
+- The catalogue itself is recorded in the ODD task document; it is a measurement of one gateway on
+  one date, not a compatibility guarantee.
+
+**A hygiene note for any enumeration here.** A generated summary disagreed with its own raw
+artifact: the prose listed eleven entries while the file held twelve, the missing one being
+`gemini-3.6-flash-high`. Read the artifact, not the summary, before acting on a count.
+
+### The declared base URL does not work for native SDK calls, observed 2026-10-10
+
+One user-granted native-dialect generation was attempted through the published `GoogleGenAIClient`
+wrapping a real `google-genai` client, with the base URL taken **exactly as declared**. It failed with
+a typed provider refusal, **HTTP 404** in 0.071 s. No retry and no fallback were used, and the
+declaration was deliberately **not** repaired to make the call succeed.
+
+The cause is a **composition collision**, confirmed offline from the installed SDK source rather than
+by spending another call:
+
+- When an `api_key` is set, the SDK appends its **own versioned path** (`v1beta/...`) to any custom
+  base URL, through `join_url_path` in `_api_client.py`.
+- The declared value already ends in `/v1`, so the composed URL becomes
+  `http://127.0.0.1:8317/v1/v1beta/models/models/gemini-3.5-flash-lite:generateContent` — a
+  **doubled version segment** (`/v1/v1beta/`) that the gateway answers with 404. The known-good native
+  routes sit at the host root (`/v1beta/models`).
+- **A correction, because an earlier version of this note was wrong.** The composed URL originally
+  recorded here (with `models/` appearing twice) was a **reconstruction error, not an observation**: the
+  SDK does not produce it. Verified in `google.genai._transformers.t_model` on the non-Vertex path —
+  `if model.startswith('models/'): return model` — so the prefix is **idempotent** and both `gemini-x`
+  and `models/gemini-x` compose to a single `models/gemini-x`; `join_url_path` likewise yields one
+  `models/`. The model-id shape is therefore **not** a trap, and an F10 that trims or normalises the
+  prefix would be making an unnecessary change. The only real defect here is the doubled version
+  segment above.
+
+**Lesson carried into F10 and worth applying to every future diagnosis: capture a composed URL from the
+wire, never rebuild it.** A reconstructed string looks like evidence and is not, and the error corrected
+above is its own demonstration — it survived into this file because it was written as an observation
+when it was a derivation. If a URL cannot be captured, say so and label it as reconstructed.
+
+**What this does and does not establish.** It establishes that the **declared configuration** is the
+blocker at the URL layer: the failure happened before the dialect or the adapter's mapping could be
+exercised at all, so it says nothing against either. It does **not** establish whether the gateway's
+native `generateContent` route works under a correctly composed URL, nor anything about response
+mapping, usage accounting or other aliases. The source reading strongly implies the route would work
+with a base URL that does not carry a version suffix — but that was not tested.
+
+**Consequence for F10.** Wiring must not pass the declared value straight into the SDK. Either the base
+URL is supplied without its version segment so the SDK appends its own, or the version is overridden
+through the SDK's `http_options`, or the gateway's OpenAI-compatible surface is used with a different
+adapter. That is a composition decision for F10, and the model-prefix trap above has to be settled with
+it. Until one of those is exercised, no native-dialect capability may be claimed.
+
+#### Resolved 2026-10-10: the native route works with a version-less base URL
+
+A second granted probe settled it, and **it succeeded**. A native Gemini generation through the
+published `GoogleGenAIClient`, with the base URL derived **in memory** from the declared one by
+stripping its trailing version segment, returned `text='ok'` in **1,015.6 ms** with usage 8 input and
+1 output tokens, against the alias `gemini-3.5-flash-lite` selected at runtime from the gateway's
+native listing.
+
+**The composed URLs were captured from the wire this time, not reconstructed**, through a recording
+transport with a fabricated response — so both strings below are observations:
+
+- The **declared** base URL `http://127.0.0.1:8317/v1` composed to
+  `http://127.0.0.1:8317/v1/v1beta/models/gemini-3.5-flash-lite:generateContent` and returned **404**,
+  with the doubled version segment.
+- The **corrected** base URL `http://127.0.0.1:8317` composed to
+  `http://127.0.0.1:8317/v1beta/models/gemini-3.5-flash-lite:generateContent` and returned **200** with
+  the generation.
+
+Both strings carry **one** `models/`, which independently confirms the correction above: the doubled
+one came from a reconstruction, and the SDK's own composition never produced it. The SDK source agrees —
+`api_key` set forces the versioned path to be joined (`_api_client.py`), and `t_model` leaves an existing
+`models/` prefix alone.
+
+**What is now established:** the gateway does serve a native Gemini **generation**, and the published
+adapter composes correctly there **provided the base URL carries no version segment**. That is **not** a
+defect in the declared value, and an earlier version of this note wrongly called it one. The declared
+`/v1` is **load-bearing for the gateway's other surface**: the operator's configuration encodes two
+conventions in parallel — `CLIPROXY_BASE_URL` and `ANTHROPIC_BASE_URL` are the bare root, while
+`OPENAI_BASE_URL` and `GOOGLE_GEMINI_BASE_URL` carry `/v1` — and `{GOOGLE_GEMINI_BASE_URL}/models`, which
+is `/v1/models`, returns **200**. Changing the declared value to satisfy the Gemini SDK would break the
+OpenAI-compatible route that is already proven. What this actually is: **one declared value facing two
+consumers with different conventions** — the OpenAI-compatible surface wants the version in the base
+URL, while `google-genai` appends its own `v1beta` and therefore needs a base without one. The
+composition, not the configuration, is where that is resolved.
+
+**What is not established, and must not be claimed:** behaviour of the `-high`/`-low` effort-tier
+aliases (untouched), streaming, multimodal input, the fidelity of error shapes for timeouts, refusals
+and rate limits, thinking-configuration passthrough, latency or stability under load, and correctness
+for the other eleven aliases. One alias with one trivial prompt proves the route, not the surface.
+
+**Action for the project: derive the base per dialect, in memory, and leave the declared value alone.**
+Editing it is the operator's call and carries a real risk of breaking a working route. An earlier version
+of this note asserted that normalising the base in F10 "works with either declaration and costs
+nothing" — that was an **unproven property**, and this file does not record unproven properties as facts.
+What F10 must therefore do is **prove it**: the derivation is written so that it is exercised against
+**both** base forms — one carrying `/v1` and one carrying no version segment — as two parameterised cases,
+with the composed URL **captured from the wire** in each. The reason is the failure mode, not tidiness: a
+normalisation written only for today's `/v1` shape, such as one that always strips the last path segment,
+would **fail silently** the moment an operator changes the declared value, and land back on the same 404
+that took three rounds to diagnose. Two captured cases turn the claim into a measurable fact.
+
+The general form is worth keeping: **when one configured value serves two consumers with different
+conventions, treat it as a composition problem, not a configuration defect.** And the sharper version,
+because the same pattern has now bitten this project three times in one round — a `/v1` appended by hand,
+a `models/` prefix reconstructed, a declared base assumed to be self-contained — is that **every one of
+those was a value whose context was assumed instead of measured.**
+
 ### Authentication paths
 
 **VERIFIED (first-party)** — from <https://ai.google.dev/gemini-api/docs/api-key>

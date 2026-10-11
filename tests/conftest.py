@@ -39,6 +39,8 @@ def make_settings(clean_settings_env: None) -> Callable[..., Any]:
     from f1show.config import Settings
 
     def _make(**overrides: Any) -> Any:
-        return Settings(_env_file=None, **overrides)
+        # ``_env_file`` is a documented pydantic-settings runtime parameter, not a
+        # model field; passing it disables dotenv loading for this instance.
+        return Settings(_env_file=None, **overrides)  # type: ignore[call-arg]
 
     return _make

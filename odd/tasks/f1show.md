@@ -1970,3 +1970,164 @@ labelled as the parent's own rather than the provider's intent.
 until account enumeration and current documentation verify it. **No live, model, purchase or
 deployment call is authorized**, and no subscription exists: the project runs in **free mode**, so
 real-service correctness remains an F13 question and the live gaps are tracked as issue #3.
+
+**Operator gateway, observed 2026-10-10, recorded for F10.** The endpoint the project actually talks
+to is a **local loopback gateway**, not Google: the configured base URL is
+`http://127.0.0.1:8317/v1` and the credential is a single API key. Details that change how F10 must
+be written: **the `/v1` is already part of the base URL**, so appending another one duplicates the
+path and returns a 404 — a trap that has already cost a debugging cycle. **Both surfaces answer on
+that gateway**: the OpenAI-compatible one returned `GET /v1/models` 200 in 0.02 s and
+`POST /v1/chat/completions` 200 in 0.82 s with usage 8/1/9, while the native one returned
+`GET /v1beta/models` 200 in 0.002 s in native shape and advertised **the same twelve entries**. So
+the native route **exists** and `GoogleGenAIClient` has a real endpoint there — which downgrades the
+risk raised when only the OpenAI-compatible surface had answered. What remained **unproven is a
+native-dialect generation**, and matching listing shape is necessary but not sufficient — that question
+was later **closed with a positive result** by two granted probes, recorded below. And the advertised ids are **gateway
+aliases** whose `-high`/`-low` suffixes are the gateway's own effort tiers, so **no id from that
+enumeration may enter configuration as a provider contract** before reconciling with Google's
+documentation. The full record lives in `docs/EXTERNAL-CONTRACTS.md`. A hygiene note worth keeping:
+a generated summary of that enumeration listed eleven entries while the raw artifact held twelve,
+the missing one being `gemini-3.6-flash-high` — **read the artifact, not the summary.**
+
+**The granted native generation was attempted once and FAILED — with a precise cause, which is the
+valuable part.** Verifier `mv33f9o2-1s-obwt` exercised the published `GoogleGenAIClient` over a real
+`google-genai` client with the base URL **exactly as declared**: typed provider refusal, **HTTP 404** in
+0.071 s, one call, no retry, no fallback, the declaration deliberately **not** repaired to make it
+succeed. The cause is a **composition collision**, confirmed offline from the installed SDK source
+rather than by spending a second call: when an `api_key` is set the SDK appends its **own versioned
+path** (`v1beta/...`) to any custom base URL, so a declared value already ending in `/v1` composes to
+`http://127.0.0.1:8317/v1/v1beta/models/models/gemini-3.5-flash-lite:generateContent` — a **doubled
+version segment** that the gateway answers with 404, while the good native routes sit at the host root.
+A second, independent trap was **claimed here and has since been REFUTED**: the record said `models/`
+appeared twice because the adapter passes a model id through while the SDK prefixes the resource path.
+That is **wrong**, and the peer session caught it with lines from the installed source; the parent then
+re-verified it independently rather than accepting it: `google.genai._transformers.t_model` on the
+non-Vertex path does `if model.startswith('models/'): return model`, so the prefix is **idempotent**, and
+`_api_client.join_url_path` with the declared base composes `/v1/v1beta/models/<id>` with a **single**
+`models/`. The doubled `models/` came from a **reconstruction in the previous report, not from the SDK**.
+So the model-id shape is not a trap and F10 must not trim or normalise the prefix for it. **The lesson is
+the one this session keeps meeting from another angle: a rebuilt string is not an observation.** The
+previous report's URL was assembled rather than captured, and it reached this document as a fact. Any
+future composed URL must be **captured from the wire**, or explicitly labelled as reconstructed. The parent had predicted exactly this class of finding when it noticed the declared `/v1`
+against the working `/v1beta`, and its decision to keep the declared value and forbid a repair is what
+turned a probable false success into a precise diagnosis. **What it establishes:** the declared
+configuration is the blocker at the URL layer, and the failure happened before the dialect or the
+adapter's mapping could be exercised at all — so it says nothing against either. **What it does not:**
+whether the gateway's native `generateContent` route works under a correctly composed URL, nor anything
+about response mapping, usage accounting or other aliases. Consequence for **F10**: wiring must not pass
+the declared value straight into the SDK — supply the base URL without its version segment, override the
+version through `http_options`, or use the OpenAI-compatible surface with a different adapter — and the
+`models/` prefix trap has to be settled with it. Until one of those is exercised, **no native-dialect
+capability may be claimed**. Credentials: the file was only read (SHA256 identical before and after),
+never sourced or eval'd, and no secret was printed. **Closing this needs one more granted call** with a
+corrected composition; the first grant is spent and was not stretched.
+
+**The second grant closed it, and the native route WORKS.** A second granted probe succeeded: a native
+Gemini generation through the published `GoogleGenAIClient`, with the base URL derived **in memory** by
+stripping the declared trailing version segment, returned `text='ok'` in **1,015.6 ms** with usage 8
+input / 1 output token against the alias `gemini-3.5-flash-lite` chosen at runtime from the native
+listing. **And this time the composed URLs were captured from the wire** — through a recording transport
+with a fabricated response, zero network I/O, the grant untouched — which is exactly what the previous
+report failed to do. The declared base composes
+`http://127.0.0.1:8317/v1/v1beta/models/<id>:generateContent` and 404s, while the corrected one composes
+`http://127.0.0.1:8317/v1beta/models/<id>:generateContent` and returns the generation. **Both carry a
+single `models/`**, independently confirming that the doubled one was a reconstruction artifact rather
+than the SDK's doing. **What is established:** the gateway does serve native Gemini generation and the
+published adapter composes correctly there **provided the base URL carries no version segment** — so the
+declared configuration is a defect to fix, not a limitation of the dialect or the adapter. **What is not
+established, and must not be claimed:** the `-high`/`-low` effort-tier aliases, streaming, multimodal
+input, error-shape fidelity for timeouts, refusals and rate limits, thinking-configuration passthrough,
+latency or stability under load, and correctness for the other eleven aliases. One alias with a trivial
+prompt proves the route, not the surface. **Action — and a correction to the parent's own framing.** The
+first version of this record called the declared value a defect to fix, and that recommendation was
+**wrong and would have been harmful**: the peer session spotted that the `/v1` is **load-bearing for the
+gateway's other surface** before the bad advice settled. The parent then verified it directly from the
+operator's configuration, reading assignment names and value shapes only: `CLIPROXY_BASE_URL` and
+`ANTHROPIC_BASE_URL` are the bare root, while `OPENAI_BASE_URL` and `GOOGLE_GEMINI_BASE_URL` carry `/v1` —
+and `{GOOGLE_GEMINI_BASE_URL}/models`, which is `/v1/models`, returns **200**. So changing the declared
+value to satisfy the Gemini SDK would break the OpenAI-compatible route that is already proven. What
+exists is **one declared value facing two consumers with different conventions**: the OpenAI-compatible
+surface wants the version in the base URL, while `google-genai` appends its own `v1beta` and needs a base
+without one. Therefore: **derive the base per
+dialect, in memory, and leave the declared value to the operator.** An earlier version of this record
+asserted that normalising in F10 "works under either declaration and costs nothing" — the peer session
+correctly flagged that as an **unproven property**, and this project does not record unproven properties
+as facts. **F10's requirement, not yet met:** the derivation must be exercised against **both** base forms
+— one carrying `/v1` and one carrying no version segment — as two parameterised cases, each with the
+composed URL **captured from the wire**. The reason is the failure mode: a normalisation written only for
+today's `/v1` shape, such as one that always strips the last path segment, would **fail silently** the
+moment an operator changes the declared value and land back on the same 404 that took three rounds to
+diagnose. General form worth keeping: **when one configured value serves two consumers with different
+conventions, that is a composition problem, not a configuration defect** — and the sharper version, since
+the same pattern bit this project three times in one round (a `/v1` appended by hand, a `models/` prefix
+reconstructed, a declared base assumed self-contained), is that **each one was a value whose context was
+assumed instead of measured.** The dialect question remains settled in favour of the native route, so
+**F10 can use the already-published adapter** instead of needing a new one.
+
+**A blocker that was carried, questioned, and then cleared on the user's instruction.** The automated
+lens check reported `src/f1show/__init__.py:13 I001` as a blocker every time that file was touched.
+It was **pre-existing**: the same finding appeared on `origin/main` (13:1) and on `0b1f0c7` (9:1), a
+commit from before this session introduced anything, and the line had only moved because the
+integration added four docstring lines. The parent carried it with the reasoning recorded on issue #6
+and a pointer to #7 — the line-length half of that rule comes from a configuration that **lives
+outside this repository**, and conforming the repo to an invisible config would settle the symptom and
+leave the cause — and the check kept firing, which made the standoff itself a cost. The parent then
+put the choice to the user rather than either ignoring the tool or fixing silently, and the user
+chose to fix it and close the loop.
+**Done as a formatting-only unit**, `59f3ad0508355f963e1c615c95c3f3bcca064579`,
+`style(init): sort the package import block`, one path **+8/−3**: it wrapped the over-length
+`from f1show.ingest import ...` line and reordered `HttpClient` ahead of `HttpDecodeError`/`HttpError`
+and `RetryingHttpClient` ahead of `RetryPolicy`. Verified rather than assumed: the **imported name set
+is identical** before and after (93 names, none added or removed, proved by an AST comparison against
+the published version), the full suite stayed at **643 passed**, both the `--select I` rule and the
+whole harness config report *All checks passed!*, and the module still exports 93 names with spot
+checks on both parties' symbols. ASSESS returned **`reviewDue: false`, `under_budget`** at 11 changed
+lines, so no native review was run for it — a decision on the record, not an omission. It is
+**unpublished** work awaiting its own delivery decision.
+
+**Issue #6 closed, and it hid a real defect behind a familiar warning.** The line the parent had been
+reporting as "the pre-existing `SnapshotResult` warning" for several units was in fact a **broken public
+export**: the name was listed in `f1show.__all__`, the class existed at `src/f1show/snapshot.py:86`, and it
+was **never imported**, so `from f1show import SnapshotResult` raised `ImportError` and a wildcard import
+raised `AttributeError` — on published code. A warning repeated often enough stops being read, and
+boilerplate is where real findings hide. The fix is one additive import line; the three other findings
+were genuinely cosmetic and took narrow per-line annotations with reasons, none of which widened a
+signature or weakened an assertion. **A peer session independently reproduced the defect in a second
+worktree and measured its shape**: of all the names in `__all__`, this was the **only** unresolvable one,
+and no test walked the list, which is why it survived. That produced the durable half of the fix: a new
+`tests/test_public_api.py` reading the real `__all__`, refusing an empty or duplicated list, and resolving
+every listed name — so the **next** decorative name fails the suite instead of living for years.
+Independent verification PASS: the direct import and the wildcard both work and the object is the same
+class; **all 93 names resolve with zero unresolvable**; the guard is load-bearing, proved by removing the
+import in a `/tmp` copy and watching it fail while the pristine control passes; the suite is at **644**;
+and the verifier **reproduced the pre-change contrast** from `git archive HEAD` to show the four errors
+and the warning genuinely existed rather than reporting a clean result it could not contrast.
+**Two boundaries are declared rather than left to inference.** The guard asserts only the forward
+direction (`__all__` → module) and deliberately not the inverse, because `__all__` constrains only a
+wildcard import and a reverse check would need a hand-maintained exception list on a surface that grows.
+And the verifier found that its `getattr`-based resolution is in fact **stricter** than the language: a
+real `from f1show import name` additionally falls back to importing a submodule of that name, which
+`getattr` does not, so a name exported only as a submodule could false-positive fail. That is a gap in the
+strict direction, not a weak one. **Both the verifier and the reviewer flagged it independently**, which
+upgraded it from one agent's pedantry to something worth fixing, and it was fixed rather than carried —
+because "carried as informational" is precisely how the broken export survived five units. The guard now
+resolves through `getattr`, and on `AttributeError` falls back to `importlib.import_module`, which is what
+the language itself does. **Proved in both directions**: in a copy whose `__all__` lists a submodule-only
+name that nothing imports, the previous `getattr`-only logic **failed** (a false failure on a name that
+imports fine) while the corrected guard **passes**, with an import proof that the copy was the module
+under test. Committed as `test(api): mirror the import-system submodule fallback in the surface guard`.
+Independent verification PASS on those bytes: pins identical before and after, the strict-direction
+asymmetry reproduced in a copy whose `__all__` lists a submodule-only name while pinning
+`f1show.__file__` per tree to defeat the editable-install `.pth` trap, and — the half that matters most —
+**the teeth confirmed intact**, because a fix that removed the bite would be worse than the asymmetry: a
+mutant naming a symbol that exists nowhere is still rejected with the mirrored `ImportError`, and the
+pristine copy passes. Suite 644, Ruff clean with isort enabled. The verifier judged the docstring honest —
+the implementation is literally the from-import algorithm — and **named two residual gaps instead of
+smoothing them**: the mirrored `ImportError` replaces the underlying `ModuleNotFoundError` message (the
+original survives as `__cause__` but is not shown), and a submodule that exists yet raises at import time
+propagates a non-`ImportError`, so the guard reaches the same verdict through a different message shape.
+Both are informational, because in every case examined the pass/fail outcome matches what a real import
+does; they matter only to whoever reads the error text. Also worth keeping: the peer counted
+**101** entries in `__all__` against this branch's **93**, and the difference is simply that its tree
+carries eight booth exports — **the third time this session that two apparently conflicting numbers
+turned out to be two trees**, so a per-tree count must always travel with its tree.
