@@ -58,6 +58,13 @@ enough to name a subject, the entry says so instead of inventing one.
 - **"Carried as informational" is not a resting place.** It is how a broken public export survived five
   units in this repository, registered in every static report with a name and a line number and with
   nothing forcing anyone to look again.
+- **Absence is checked by CONTEXT, never by count.** Once this register — or the task record — **quotes** a
+  wrong claim in order to record that it was corrected, a bare `git grep -c` for that claim returns a hit on
+  `main` again: the quotation itself. Measured when it happened: three corrected phrases each came back as `1`
+  after the correction record was published, while every one of those hits sits inside the single sentence that
+  lists what was fixed. So the check is **where** a phrase appears and **how** it is framed, never how many
+  times — otherwise the honest record of a correction reads as a surviving defect, and the next reader either
+  panics at it or, worse, "re-fixes" the quotation.
 
 ## Staleness keys
 
