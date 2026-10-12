@@ -2634,3 +2634,177 @@ def test_every_bound_must_be_in_range(keyword: str, value: float) -> None:
     arguments[keyword] = value
     with pytest.raises((ValueError, TypeError)):
         CommentaryBooth(**arguments)
+
+
+# --- The declared turn mode (F09g U2) ------------------------------------------
+
+#: The declared instruction heading. The MODE block is instruction text in the prompt,
+#: never evidence: it adds no citable reference and no bracket.
+MODE_HEADING = "MODE:"
+
+
+def mode_block(prompt: str) -> list[str]:
+    """The two-line MODE instruction of an assembled prompt.
+
+    Failing loudly when the heading is absent is the RED this section needs: a prompt with
+    no declared mode must not quietly pass a membership check.
+    """
+    lines = prompt.splitlines()
+    start = next(
+        index for index, line in enumerate(lines) if line.startswith(MODE_HEADING)
+    )
+    return lines[start : start + 2]
+
+
+@pytest.mark.anyio
+async def test_the_prompt_declares_the_turn_mode_as_instruction_text() -> None:
+    """RED before F09g U2: the prompt never told a seat whether the turn was build or climax.
+
+    A routine lap is ``build`` (one line of context); a position change of two or more
+    places, a flag or a pit stop is ``climax`` (short, emphatic). The mode is instruction
+    text: it adds no bracket and no reference-shaped token, so it cannot make anything new
+    citable, and the prompt's reference set is unchanged.
+    """
+    events = (
+        detected(
+            index=0,
+            event_type=EventType.LAP_COMPLETED,
+            family="laps",
+            evidence={"lap_number": 1, "lap_duration": 109.752},
+            driver_number=24,
+        ),
+        detected(index=1, evidence={"position": 19}, driver_number=24),
+        detected(
+            index=2, evidence={"position": 17}, driver_number=24
+        ),  # delta 2: climax
+        detected(
+            index=3,
+            event_type=EventType.PIT_STOP,
+            family="pit",
+            evidence={"lap_number": 3, "pit_duration": 34.983},
+            driver_number=23,
+        ),
+    )
+    model = ScriptedModelClient(answered(events, ["L0.", "L1.", "L2.", "L3."]))
+    booth = make_booth(events, model)
+
+    await bounded(booth.run(), hazard="the declared-mode run")
+
+    prompts = [request.prompt for request in model.requests]
+    assert mode_block(prompts[0])[0] == "MODE: build", prompts[0]
+    assert mode_block(prompts[1])[0] == "MODE: build", prompts[1]
+    assert mode_block(prompts[2])[0] == "MODE: climax", prompts[2]
+    assert mode_block(prompts[3])[0] == "MODE: climax", prompts[3]
+    for prompt in prompts:
+        block = mode_block(prompt)
+        assert len(block) == 2, "a declared MODE line plus one sentence of what it asks"
+        assert not any(character in "".join(block) for character in BRACKETS), block
+        assert REFERENCE_TOKEN.search("\n".join(block)) is None, block
+    assert set(REFERENCE_TOKEN.findall(prompts[-1])) == set(
+        evidence_references(events[-1])
+    ), "the MODE line is instruction text: it must not add a reference"
+
+
+@pytest.mark.anyio
+async def test_the_mode_line_leaves_the_marker_count_and_the_reference_set_untouched() -> (
+    None
+):
+    """The prompt-shape pins still hold with the MODE block present."""
+    event = detected(index=0, evidence={"position": 3})
+    model = ScriptedModelClient([spoken(ref(event), "Verstappen is P3.")])
+    booth = make_booth([event], model)
+
+    await bounded(booth.run(), hazard="the mode prompt-shape run")
+
+    prompt = model.requests[0].prompt
+    assert prompt.count(f1show.booth._CITATION_MARKER) == 2, (
+        "the marker still appears exactly twice: the rule line and the EVIDENCE header"
+    )
+    assert set(REFERENCE_TOKEN.findall(prompt)) == set(evidence_references(event))
+
+
+@pytest.mark.anyio
+async def test_two_runs_render_byte_identical_prompts_with_the_declared_mode() -> None:
+    events = (
+        detected(index=0, evidence={"position": 19}, driver_number=24),
+        detected(index=1, evidence={"position": 17}, driver_number=24),
+    )
+    texts = ["L0.", "L1."]
+    first = ScriptedModelClient(answered(events, texts))
+    second = ScriptedModelClient(answered(events, texts))
+
+    await bounded(make_booth(events, first).run(), hazard="the first mode render run")
+    await bounded(make_booth(events, second).run(), hazard="the second mode render run")
+
+    assert [request.prompt for request in first.requests] == [
+        request.prompt for request in second.requests
+    ]
+
+
+# --- The dead priority band: the derived caution signal (F09g U2) --------------
+
+
+@pytest.mark.parametrize(
+    ("flag_value", "category", "message"),
+    [
+        ("YELLOW", "Flag", "YELLOW IN TRACK SECTOR 3"),
+        ("DOUBLE YELLOW", "Flag", "DOUBLE YELLOW IN TRACK SECTOR 3"),
+        (None, "SafetyCar", "SAFETY CAR DEPLOYED"),
+    ],
+    ids=["yellow", "double-yellow", "safety-car"],
+)
+@pytest.mark.anyio
+async def test_a_recorded_caution_row_lets_the_lead_take_the_next_slot(
+    flag_value: object, category: str, message: str
+) -> None:
+    """RED before F09g U2: the priority band could match no recorded event.
+
+    The collector emits ``RACE_CONTROL`` for every race-control row, so a band built only
+    from ``FLAG``, ``SAFETY_CAR`` and ``VIRTUAL_SAFETY_CAR`` matched nothing on the corpus.
+    The band now consults the same derived caution signal the mode decision uses, so a
+    recorded flag or safety-car row pulls the lead into the next slot.
+    """
+    first = detected(index=0)
+    caution = detected(
+        index=1,
+        event_type=EventType.RACE_CONTROL,
+        family="race_control",
+        evidence={"category": category, "flag": flag_value, "message": message},
+        driver_number=None,
+    )
+    third = detected(index=2)
+    events = [first, caution, third]
+    model = ScriptedModelClient(answered(events, ["L0.", "L1.", "L2."]))
+    booth = make_booth(events, model)
+
+    order = await spoken_order(
+        booth, hazard=f"the derived-caution band run for {flag_value!r}"
+    )
+
+    # Plain alternation would give lead/colour/lead; the caution pulls the lead in.
+    assert order == (Speaker.lead, Speaker.lead, Speaker.color)
+
+
+@pytest.mark.anyio
+async def test_a_clearing_race_control_row_does_not_take_the_priority_slot() -> None:
+    """A caution *clearing* is not a caution starting: the band must not over-fire."""
+    first = detected(index=0)
+    clearing = detected(
+        index=1,
+        event_type=EventType.RACE_CONTROL,
+        family="race_control",
+        evidence={
+            "category": "Flag",
+            "flag": "CLEAR",
+            "message": "CLEAR IN TRACK SECTOR 3",
+        },
+        driver_number=None,
+    )
+    third = detected(index=2)
+    events = [first, clearing, third]
+    model = ScriptedModelClient(answered(events, ["L0.", "L1.", "L2."]))
+    booth = make_booth(events, model)
+
+    order = await spoken_order(booth, hazard="the clearing-row band run")
+
+    assert order == (Speaker.lead, Speaker.color, Speaker.lead)

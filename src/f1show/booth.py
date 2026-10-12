@@ -9,13 +9,24 @@ import from the F08 gateway is the typed ``ModelError`` taxonomy this module mus
 no gateway adapter or policy class is imported or built here.
 
 **Deterministic order.** The lead opens, then the seats alternate strictly. A priority
-band - ``FLAG``, ``SAFETY_CAR`` and ``VIRTUAL_SAFETY_CAR``, the flags and incidents -
-lets the lead take the next slot instead of waiting its turn. The choice is a function of
-the events alone: there is no random source and the clock never chooses a speaker, so the
-same input always produces the same order. A non-priority event's seat follows the last
-turn that actually aired, so a refused, degraded or suppressed turn never shifts the
+band - the flags and incidents, declared as ``PRIORITY_EVENT_TYPES`` and widened by the
+**derived caution signal** (:func:`f1show.mode.announces_caution`) - lets the lead take
+the next slot instead of waiting its turn. The derived signal is what the recorded corpus
+reaches: the collector emits ``RACE_CONTROL`` for every race-control row, so the
+incident-type band alone matches no recorded event, and a flag or safety-car row is a
+priority event only once the row's own recorded content is read. The choice is a function
+of the events alone: there is no random source and the clock never chooses a speaker, so
+the same input always produces the same order. A non-priority event's seat follows the
+last turn that actually aired, so a refused, degraded or suppressed turn never shifts the
 alternation; a priority event is the single exception that lets the lead speak twice in a
 row.
+
+**The turn's mode.** The prompt also declares each turn ``build`` or ``climax``
+(:func:`f1show.mode.turn_mode`) as instruction text, in the same spirit as the persona
+registers: a routine lap is ``build``, and a position change of two or more places, a
+pit stop or an announced or escalated caution is ``climax``. The declaration is prose with
+no bracket and no reference-shaped token, so it is instruction and never evidence, and the
+acceptance below is unchanged.
 
 **Bounded context.** The prompt carries the current event plus at most ``max_context_turns``
 prior turns under a ``context_char_budget`` over their text. The immediately previous turn
@@ -169,6 +180,13 @@ from f1show.config import BoothSettings
 from f1show.dialogue import Speaker, Transcript, Turn
 from f1show.events import EventType
 from f1show.gemini import ModelError
+from f1show.mode import (
+    CAUTION_EVENT_TYPES,
+    TurnMode,
+    announces_caution,
+    render_mode_instruction,
+    turn_mode,
+)
 from f1show.ports import Clock, ModelClient, ModelRequest
 from f1show.salience import SalienceSummary, render_salience, salience_summary
 
@@ -187,11 +205,12 @@ __all__ = [
 ]
 
 #: The priority band: a flag or an incident is a break in the running order, so the lead
-#: takes the next slot rather than waiting for its own. It is exactly these three event
-#: types and no more.
-PRIORITY_EVENT_TYPES: frozenset[EventType] = frozenset(
-    {EventType.FLAG, EventType.SAFETY_CAR, EventType.VIRTUAL_SAFETY_CAR}
-)
+#: takes the next slot rather than waiting for its own. The collector emits ``RACE_CONTROL``
+#: for every race-control row, so a band built from event types alone matched **no recorded
+#: event**; the band now consults :func:`f1show.mode.announces_caution`, the same derived
+#: caution signal the turn-mode decision uses. This declared set is the incident-event
+#: subset of that band, and it is the same object the signal reads.
+PRIORITY_EVENT_TYPES: frozenset[EventType] = CAUTION_EVENT_TYPES
 
 #: The one declared fallback for a driver the session directory cannot resolve: a null
 #: ``driver_number``, or a number the directory does not hold. Deliberately a single line
@@ -729,6 +748,7 @@ class CommentaryBooth:
                 )
                 continue
             speaker = self._speaker_for(event, turns)
+            prefix = self._events[: index + 1]
             request = ModelRequest(
                 model_id=self._settings.model_id,
                 prompt=self._prompt(
@@ -736,7 +756,8 @@ class CommentaryBooth:
                     _PERSONAS[speaker],
                     citable,
                     self._bounded_context(turns),
-                    salience_summary(self._events[: index + 1]),
+                    salience_summary(prefix),
+                    turn_mode(prefix),
                 ),
                 max_output_tokens=self._max_output_tokens,
                 timeout_seconds=self._timeout_seconds,
@@ -808,10 +829,12 @@ class CommentaryBooth:
 
         Alternation follows what actually aired rather than every processed event, so a
         turn that was refused, degraded or suppressed never shifts it. The priority band
-        is the one exception: a flag or an incident hands the next slot to the lead even
-        when the last turn already came from the lead.
+        is the one exception: a flag, a safety car, or a race-control row that announces or
+        escalates a caution hands the next slot to the lead even when the last turn already
+        came from the lead. The recorded corpus reaches the band only through that derived
+        signal, because every race-control row is a ``RACE_CONTROL`` event.
         """
-        if event.event_type in PRIORITY_EVENT_TYPES:
+        if announces_caution(event):
             return Speaker.lead
         if not turns or turns[-1].speaker is Speaker.color:
             return Speaker.lead
@@ -878,6 +901,7 @@ class CommentaryBooth:
         citable: tuple[tuple[str, object], ...],
         prior_turns: tuple[Turn, ...],
         salience: SalienceSummary,
+        mode: TurnMode,
     ) -> str:
         """Assemble the whole prompt from the supplied references, history and window story.
 
@@ -888,12 +912,15 @@ class CommentaryBooth:
         fallback otherwise; that identity is prompt material only, never citable evidence,
         and it never enters ``event.evidence``. The CONTEXT block narrates the window's
         salience projection as plain prose; it carries no bracket and no reference-shaped
-        token, so it adds no citable reference either.
+        token, so it adds no citable reference either. The MODE block declares this turn's
+        prosody as instruction text, beside the persona register and under the same
+        no-bracket, no-token rule.
         """
         lines = [
             f"You are {persona.name}, the {persona.seat.value} commentator in a two-person "
             "Formula 1 booth.",
             persona.register_instruction,
+            *render_mode_instruction(mode).splitlines(),
             f"Commentate the one event below in {self._settings.language}.",
             "",
             "RULES:",

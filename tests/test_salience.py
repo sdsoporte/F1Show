@@ -19,6 +19,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import re
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,15 @@ from pydantic import ValidationError
 from f1show import salience
 from f1show.collector import collect_session_events
 from f1show.events import EventType
+from f1show.mode import (
+    CAUTION_CATEGORIES,
+    CAUTION_FLAGS,
+    CLIMAX_POSITION_DELTA,
+    TurnMode,
+    announces_caution,
+    render_mode_instruction,
+    turn_mode,
+)
 from f1show.salience import (
     FAST_OUTLIER_FACTOR,
     SLOW_OUTLIER_FACTOR,
@@ -696,3 +706,395 @@ def test_the_designs_window_rating_names_the_recorded_drivers() -> None:
     assert "34.983" in block
     assert "99.923" in block
     assert not any(character in block for character in BRACKETS), block
+
+
+# --- The two declared modes: build and climax (F09g U2) ------------------------
+
+
+def test_a_position_change_of_two_places_is_climax_and_one_place_is_build() -> None:
+    """The declared boundary: two places is a climax, exactly one is ordinary build."""
+    build_events = (
+        lap(0, 1, 100.0, driver_number=24),
+        pos(1, 24, 19),
+        pos(2, 24, 18),
+    )
+    climax_events = (
+        lap(0, 1, 100.0, driver_number=24),
+        pos(1, 24, 19),
+        pos(2, 24, 17),
+    )
+
+    assert turn_mode(build_events) is TurnMode.BUILD
+    assert turn_mode(climax_events) is TurnMode.CLIMAX
+
+
+def test_a_position_change_of_two_places_up_is_also_climax() -> None:
+    """The delta is signed-position magnitude, so a gain of two is the same climax."""
+    events = (
+        lap(0, 1, 100.0, driver_number=24),
+        pos(1, 24, 14),
+        pos(2, 24, 12),
+    )
+
+    assert turn_mode(events) is TurnMode.CLIMAX
+
+
+def test_a_driver_seen_for_the_first_time_in_the_window_is_build() -> None:
+    """With no previous observation inside the window there is no measured change."""
+    events = (lap(0, 1, 100.0, driver_number=24), pos(1, 24, 14))
+
+    assert turn_mode(events) is TurnMode.BUILD
+
+
+def test_the_window_starts_at_the_race_so_the_grid_cannot_invent_a_climax() -> None:
+    """A pre-race grid row is not a previous observation: the window starts at lap 1.
+
+    The recorded corpus opens with a pre-race grid snapshot, and a change measured from it
+    would disagree with U1's window. The mode decision uses the same window boundary, so a
+    big grid-to-race move is not a climax.
+    """
+    events = (
+        pos(0, 24, 19),
+        lap(1, 1, 109.752, driver_number=24),
+        pos(2, 24, 17),
+    )
+
+    assert turn_mode(events) is TurnMode.BUILD
+
+
+def test_a_pit_stop_is_always_climax() -> None:
+    events = (lap(0, 1, 100.0), pit(1, 23, 3, pit_duration=34.983))
+
+    assert turn_mode(events) is TurnMode.CLIMAX
+
+
+def test_a_lap_completion_is_build() -> None:
+    events = (lap(0, 1, 100.0), lap(1, 2, 99.923, driver_number=55))
+
+    assert turn_mode(events) is TurnMode.BUILD
+
+
+@pytest.mark.parametrize(
+    ("flag_value", "category", "message"),
+    [
+        ("YELLOW", "Flag", "YELLOW IN TRACK SECTOR 3"),
+        ("DOUBLE YELLOW", "Flag", "DOUBLE YELLOW IN TRACK SECTOR 3"),
+        (None, "SafetyCar", "SAFETY CAR DEPLOYED"),
+        (None, "SafetyCar", "SAFETY CAR IN THIS LAP"),
+    ],
+    ids=["yellow", "double-yellow", "safety-car-deployed", "safety-car-this-lap"],
+)
+def test_every_declared_caution_kind_is_climax(
+    flag_value: object, category: str, message: str
+) -> None:
+    """A caution starting (yellow, safety car) or escalating (double yellow) is climax."""
+    events = (
+        lap(0, 1, 100.0),
+        flag(1, flag_value, category=category, message=message),
+    )
+
+    assert announces_caution(events[-1])
+    assert turn_mode(events) is TurnMode.CLIMAX
+
+
+@pytest.mark.parametrize(
+    ("flag_value", "category", "message"),
+    [
+        ("CLEAR", "Flag", "CLEAR IN TRACK SECTOR 3"),
+        ("GREEN", "Flag", "GREEN LIGHT - PIT EXIT OPEN"),
+        ("BLUE", "Flag", "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 15:36:45"),
+        (
+            "BLACK AND WHITE",
+            "Flag",
+            "BLACK AND WHITE FLAG FOR CAR 4 (NOR) - TRACK LIMITS",
+        ),
+        ("CHEQUERED", "Flag", "CHEQUERED FLAG"),
+        (None, "Drs", "DRS ENABLED"),
+        (None, "Other", "PIT EXIT CLOSED"),
+    ],
+    ids=["clear", "green", "blue", "black-and-white", "chequered", "drs", "other"],
+)
+def test_every_declared_non_caution_kind_is_build(
+    flag_value: object, category: str, message: str
+) -> None:
+    """Clearing a caution, a green flag, and every flag-less row are ordinary build."""
+    events = (
+        lap(0, 1, 100.0),
+        flag(1, flag_value, category=category, message=message),
+    )
+
+    assert not announces_caution(events[-1])
+    assert turn_mode(events) is TurnMode.BUILD
+
+
+@pytest.mark.parametrize(
+    "flag_value",
+    [None, "", "   ", 7, "SAFETY CAR DEPLOYED"],
+    ids=["null", "empty", "blank", "not-text", "message-not-flag"],
+)
+def test_a_flag_field_that_is_not_a_caution_flag_is_not_a_caution(
+    flag_value: object,
+) -> None:
+    """Only a recorded caution flag counts; a message in the flag field is not one."""
+    events = (
+        lap(0, 1, 100.0),
+        flag(1, flag_value, category="Other", message=None),
+    )
+
+    assert not announces_caution(events[-1])
+
+
+def test_a_position_change_whose_driver_cannot_be_resolved_is_build() -> None:
+    """A null driver number has no previous observed position, so no delta is measured."""
+    events = (
+        lap(0, 1, 100.0),
+        pos(1, 24, 19),
+        pos(2, 24, 14),
+        detected(index=3, evidence={"position": 5}, driver_number=None),
+    )
+
+    assert turn_mode(events) is TurnMode.BUILD
+
+
+def test_a_position_event_without_a_recorded_position_is_build() -> None:
+    events = (
+        lap(0, 1, 100.0),
+        pos(1, 24, 19),
+        detected(index=2, evidence={}, driver_number=24),
+    )
+
+    assert turn_mode(events) is TurnMode.BUILD
+
+
+def test_the_mode_decision_is_deterministic_and_pure() -> None:
+    events = (
+        lap(0, 1, 100.0, driver_number=24),
+        pos(1, 24, 19),
+        pos(2, 24, 17),
+    )
+
+    assert turn_mode(events) is turn_mode(events)
+    assert turn_mode(tuple(events)) is turn_mode(list(events))
+    assert turn_mode(()) is TurnMode.BUILD
+
+
+def test_the_declared_caution_sets_and_the_climax_delta_are_exactly_as_stated() -> None:
+    assert frozenset({"YELLOW", "DOUBLE YELLOW"}) == CAUTION_FLAGS
+    assert frozenset({"SafetyCar"}) == CAUTION_CATEGORIES
+    assert CLIMAX_POSITION_DELTA == 2
+    assert TurnMode.BUILD.value == "build"
+    assert TurnMode.CLIMAX.value == "climax"
+
+
+def test_the_mode_instruction_is_a_declared_line_and_one_sentence() -> None:
+    """The MODE instruction is prose: a declared ``MODE:`` line plus one sentence, no token."""
+    for mode in (TurnMode.BUILD, TurnMode.CLIMAX):
+        text = render_mode_instruction(mode)
+        lines = text.splitlines()
+        assert lines[0] == f"MODE: {mode.value}", text
+        assert len(lines) == 2, text
+        assert not any(character in text for character in BRACKETS), text
+        assert REFERENCE_TOKEN.search(text) is None, text
+
+
+# --- The declared caution list, enumerated from the recorded corpus -------------
+
+#: The recorded ``race_control`` fixture holds 120 rows. The flag values and their counts
+#: are measured here, not assumed, so a corpus change shows up as a failing expectation.
+RECORDED_RACE_CONTROL_ROWS = 120
+RECORDED_FLAG_COUNTS = {
+    None: 78,
+    "BLUE": 20,
+    "CLEAR": 7,
+    "BLACK AND WHITE": 5,
+    "YELLOW": 4,
+    "DOUBLE YELLOW": 3,
+    "GREEN": 2,
+    "CHEQUERED": 1,
+}
+RECORDED_CAUTION_ROWS = 9
+RECORDED_CAUTION_FLAG_COUNTS = {None: 2, "YELLOW": 4, "DOUBLE YELLOW": 3}
+
+
+def test_the_declared_caution_list_matches_the_recorded_corpus() -> None:
+    """Every flag value in the corpus with its count, and which ones are cautions.
+
+    A caution **starting** (``YELLOW``, a safety-car row) or **escalating**
+    (``DOUBLE YELLOW``) is climax; clearing it (``CLEAR``), a green flag, a blue flag, a
+    black-and-white warning, the chequered flag and every flag-less row are build.
+    """
+    rows = [
+        event
+        for event in recorded_events()
+        if event.event_type is EventType.RACE_CONTROL
+    ]
+
+    assert len(rows) == RECORDED_RACE_CONTROL_ROWS
+    assert Counter(event.evidence.get("flag") for event in rows) == RECORDED_FLAG_COUNTS
+
+    cautions = [event for event in rows if announces_caution(event)]
+    assert len(cautions) == RECORDED_CAUTION_ROWS
+    assert Counter(event.evidence.get("flag") for event in cautions) == (
+        RECORDED_CAUTION_FLAG_COUNTS
+    ), "the two flag-less cautions are the SafetyCar category rows"
+    assert Counter(
+        event.evidence.get("message")
+        for event in cautions
+        if event.evidence.get("category") == "SafetyCar"
+    ) == Counter({"SAFETY CAR DEPLOYED": 1, "SAFETY CAR IN THIS LAP": 1})
+
+    for flag_value in ("CLEAR", "GREEN", "BLUE", "BLACK AND WHITE", "CHEQUERED"):
+        assert not any(
+            announces_caution(event)
+            for event in rows
+            if event.evidence.get("flag") == flag_value
+        ), flag_value
+    assert not any(
+        announces_caution(event)
+        for event in rows
+        if event.evidence.get("flag") is None
+        and event.evidence.get("category") != "SafetyCar"
+    ), "a flag-less row that is not a safety-car row is not a caution"
+
+
+def test_the_trigger_is_the_current_step_not_u1s_cumulative_window_change() -> None:
+    """The mode trigger is the step at this event, not U1's window salience measure.
+
+    A driver whose **cumulative** first-observed-versus-latest change in the window is two
+    or more places, but whose **current step** is one place, is **build**. A climax is about
+    the moment, so the trigger measures what happened at this event; the cumulative
+    quantity is U1's salience measure for the CONTEXT block (the design's ``Zhou +5``), not
+    the mode trigger. This pin exists because the per-event-versus-cumulative reading is
+    exactly the kind that drifts, so the two are held apart by an assertion rather than by
+    a sentence.
+    """
+    events = (
+        lap(0, 1, 100.0, driver_number=24),
+        pos(1, 24, 19),
+        pos(2, 24, 18),
+        pos(3, 24, 17),
+    )
+
+    # U1's window measure on the very same events is a cumulative change of two places ...
+    assert salience_summary(events).biggest_gains == (
+        PositionMove(driver_number=24, first_position=19, last_position=17, change=-2),
+    )
+    # ... yet every current step is one place, so every turn is build.
+    assert turn_mode(events[:2]) is TurnMode.BUILD
+    assert turn_mode(events[:3]) is TurnMode.BUILD
+    assert turn_mode(events[:4]) is TurnMode.BUILD
+
+
+#: The recorded session's mode counts under the single-step basis, and the same session
+#: under U1's cumulative first-observed-versus-latest reading for contrast. The two are
+#: not interchangeable: 46 climax turns against 271, so a basis swap cannot pass silently.
+RECORDED_CLIMAX_TURNS = 46
+RECORDED_BUILD_TURNS = 1602
+RECORDED_CLIMAX_BY_TRIGGER = {"pit_stop": 23, "caution": 9, "position_step_2plus": 14}
+RECORDED_CLIMAX_TURNS_IF_CUMULATIVE = 271
+
+
+def _window_start_index(events, end: int) -> int:
+    """The window's first index before ``end``: the first completed lap, or ``end``."""
+    return next(
+        (
+            index
+            for index, event in enumerate(events[:end])
+            if event.event_type is EventType.LAP_COMPLETED
+        ),
+        end,
+    )
+
+
+def _observed_positions(events, driver_number: int, start: int, end: int):
+    """Every resolved position of one driver in ``events[start:end]``, in order."""
+    for event in events[start:end]:
+        if (
+            event.event_type is EventType.POSITION_CHANGE
+            and event.driver_number == driver_number
+        ):
+            position = event.evidence.get("position")
+            if isinstance(position, int) and not isinstance(position, bool):
+                yield position
+
+
+def _recorded_step_delta(events, index: int):
+    """The current step of the position event at ``index``, re-derived from the corpus."""
+    event = events[index]
+    number = event.driver_number
+    position = event.evidence.get("position")
+    if number is None or not isinstance(position, int) or isinstance(position, bool):
+        return None
+    previous = None
+    for held in _observed_positions(
+        events, number, _window_start_index(events, index + 1), index
+    ):
+        previous = held
+    return None if previous is None else position - previous
+
+
+def _recorded_cumulative_delta(events, index: int):
+    """U1's first-observed-versus-latest change at ``index``, re-derived from the corpus."""
+    event = events[index]
+    number = event.driver_number
+    position = event.evidence.get("position")
+    if number is None or not isinstance(position, int) or isinstance(position, bool):
+        return None
+    first = next(
+        iter(
+            _observed_positions(
+                events, number, _window_start_index(events, index + 1), index
+            )
+        ),
+        None,
+    )
+    return None if first is None else position - first
+
+
+def test_the_recorded_mode_counts_are_the_single_step_measurement() -> None:
+    """The corpus distinguishes the two readings: 46 climax turns, not 271.
+
+    The single-step basis is the mode trigger; the cumulative first-observed-versus-latest
+    count is computed here only as the contrast that proves the basis, and it is asserted
+    too, so the two readings cannot coincide by accident. The breakdown is the trigger:
+    23 pit stops, 9 caution rows and 14 position steps of two or more places.
+    """
+    events = recorded_events()
+    modes = Counter(
+        turn_mode(events[: index + 1]).value for index in range(len(events))
+    )
+
+    assert modes[TurnMode.BUILD.value] == RECORDED_BUILD_TURNS
+    assert modes[TurnMode.CLIMAX.value] == RECORDED_CLIMAX_TURNS
+
+    triggers: Counter[str] = Counter()
+    cumulative = 0
+    for index, event in enumerate(events):
+        is_pit = event.event_type is EventType.PIT_STOP
+        is_caution = announces_caution(event)
+        step = (
+            _recorded_step_delta(events, index)
+            if event.event_type is EventType.POSITION_CHANGE
+            else None
+        )
+        window = (
+            _recorded_cumulative_delta(events, index)
+            if event.event_type is EventType.POSITION_CHANGE
+            else None
+        )
+        if is_pit:
+            triggers["pit_stop"] += 1
+        elif is_caution:
+            triggers["caution"] += 1
+        elif step is not None and abs(step) >= 2:
+            triggers["position_step_2plus"] += 1
+        if is_pit or is_caution or (window is not None and abs(window) >= 2):
+            cumulative += 1
+
+    assert triggers == RECORDED_CLIMAX_BY_TRIGGER
+    assert sum(triggers.values()) == RECORDED_CLIMAX_TURNS
+    assert cumulative == RECORDED_CLIMAX_TURNS_IF_CUMULATIVE, (
+        "U1's cumulative reading would make 271 recorded turns climax; the mode uses the "
+        "single-step basis, so this is the contrast that proves the basis, never the "
+        "expected mode count"
+    )
