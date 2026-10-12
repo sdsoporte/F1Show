@@ -2826,11 +2826,22 @@ fixes are registered as product decisions.
   resolves inside the parent worktree, focused **158 passed**, full **821 passed**. Review
   workload note, stated honestly: of the 921 lines roughly 379 are harness formatter reflow
   rather than authored logic.
-- **Next step:** re-anchor the affected register rows by subject against `fe4dda3` (delegated
-  to a read-only peer), add the `R3-copy-shape-truncation` row, close the live citation-form
-  row for its deterministic mechanism while leaving the live-rate measurement historical, and
-  land one parent-owned `docs(odd)` closure commit. Push, pull request and merge remain the
-  user's decision.
+- **Documentation closure complete.** The re-anchoring arrived from the read-only peer at
+  `fe4dda3` and every affected row was re-derived **by subject** before it was written: twelve
+  coordinates re-anchored, the three staleness keys updated (`booth.py d6e56ea8…`,
+  `test_booth.py 34ef0009…`, `test_run.py 8aaa35e8…`), the live citation-form row **closed for
+  its deterministic half** with its live-rate half left historical and unmeasured, the
+  `R3-copy-shape-truncation` row added from the approved review, and the method rule recorded
+  that a child's artifact hash is a pre-`agent_end` claim. Landed as
+  `b556abdcc3c25520c9900fbf51de6170be3086f9`, Conventional Commit
+  `docs(odd): close F09e and re-anchor the register by subject`, which also carries this task
+  document. The parent branch is **ahead 4** and clean: three source work units plus this docs
+  commit.
+- **Unit state: closed.** Verified, natively reviewed and approved, authority burned,
+  integrated locally and documented. Nothing was pushed, and push, pull request and merge remain
+  the user's decision. The next unit — names and teams, then the championship context, then
+  salience and the two modes — is **registered as design and awaits explicit authorization**,
+  because the earlier grants do not authorize later-unit implementation.
 
 ### The show: what the profession says, what the data says, and the design
 
