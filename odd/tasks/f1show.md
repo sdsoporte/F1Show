@@ -2949,7 +2949,8 @@ fixes are registered as product decisions.
   `cited_text` cut block), `R3-003` (the partition line inside it) and `R3-002` (the new required
   `driver_directory` parameter). The live citation-form row's live half stays **open**, because this
   unit touched `_prompt` and its trigger re-fired; the declared airing shapes are confirmed **six** and
-  unmoved. Landed as a `docs(odd)` closure commit that also carries this document.
+  unmoved. Landed as `66a725b67dc2c1181b2643316f2833dcc10baa4a`, Conventional Commit
+  `docs(odd): re-anchor the register at bad0eba and close F09f`, which also carries this document.
 - **Unit state: closed.** Evaluated, independently verified, natively reviewed and approved with its
   authority burned, integrated by fast-forward and documented. Push, pull request and merge remain the
   user's decision; the next show items (championship context, salience, the two modes) are registered as
