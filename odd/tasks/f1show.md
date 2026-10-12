@@ -2975,6 +2975,125 @@ fixes are registered as product decisions.
   header and add `invented_reference` refusals. No deterministic test can see that; it belongs to
   the next live trial and is recorded in the live citation-form row's open half.
 
+### F09g — The show items: salience, the two modes and the championship context
+
+- [ ] **Authorized 2026-10-12.** User: "ok, procedamos con lo proximo mencionado." The grant covers the
+  registered design items: **salience as context**, the **two modes** (build and climax) and the
+  **championship context**. It does **not** cover any live or model call, credential use, publication,
+  `team_colour`, `broadcast_name` as a register change, `name_acronym` or `country_code`.
+- **Objective, from the registered design above:** the prompt receives the window's **stories** (who gains,
+  who loses, who stopped, which sector is flagged, who set the fastest lap) so the colour seat can answer
+  *why*; each turn is declared **build** (a routine lap: one line of context) or **climax** (a position
+  change of two or more places, a flag, or a pit stop: short and emphatic) per the prosody structure and the
+  climax rule; and the championship picture — 53 rows over three endpoints — reaches the booth, with any
+  **in-race provisional** table **derived** from positions plus declared per-season points rules.
+- **Exploration complete (`mv5rslp4-1-rv6s`), and it splits the work in four.** The seam is the
+  `ModelRequest` call site in `CommentaryBooth.run` (`booth.py:719-742`) feeding the single prompt
+  builder `_prompt` (`:861-938`, five blocks); `_bounded_context` (`:840-859`) knows only aired turns, so a
+  salience projection and a per-turn mode both enter as **new booth state plus a new prompt block**, never
+  as evidence.
+  - **U1 — the window's salience projection (offline, startable now):** a new pure module
+    (`src/f1show/salience.py`), a `CONTEXT` block in `_prompt`, and the threading through `run` and
+    `run_session`. Offline it can compute position deltas, pit stops with their durations, race-control
+    flags with sector and message, and lap-time outliers, and it must **derive** the fastest lap because no
+    `fastest*` field exists anywhere in the corpus. It cannot attribute a flagged sector to a driver: flag
+    rows carry `driver_number: null`.
+  - **U2 — the two modes (offline, after U1, which it shares):** climax is a position change of two or more
+    places, a flag, or a pit stop; build otherwise. The mode is instruction text, never evidence.
+  - **U3a — the provisional championship derivation (offline, arithmetic only):** a new module plus the run
+    seam; it proves our arithmetic and nothing about the source's real values.
+  - **U3b — the recorded championship rows in the prompt: BLOCKED on a live call the user has not
+    authorized.** `fixtures/openf1/PROVENANCE.md:84` records that the championship endpoints were
+    **deliberately not fetched**; nothing is cached in this repository or in any reachable worktree, and
+    `/tmp` holds no recorder output. The honest path is a fresh **free-tier, credential-free** fetch of three
+    GETs for `session_key=9617` (the contract allows it inside 3 req/s) — asked for explicitly rather than
+    invented.
+- **Decisions taken here.** (1) A **position change** is the difference between a driver's **first observed**
+  position in the window and the latest one at the current event, because `position.json` carries **no
+  `lap_number`** and the corpus therefore cannot support a per-lap reading; the design's own measured
+  example (Zhou +5) was computed exactly this way. (2) A **flag climax** is read from `race_control`
+  evidence in the projection layer instead of promoting race-control derivation into `collector.py`, so the
+  F04 contract stays untouched unless a measurement says otherwise.
+- **Defect found while mapping, registered rather than fixed here:**
+  `PRIORITY_EVENT_TYPES = {FLAG, SAFETY_CAR, VIRTUAL_SAFETY_CAR}` (`booth.py:183-186`) can match **no
+  recorded event**, because the collector emits `RACE_CONTROL` for every race-control record
+  (`collector.py:51`). The priority band is **dead over the corpus**, and it shares a surface with U2's flag
+  trigger. Owner: U2, or the next unit touching seat priority; trigger: any change to race-control
+  derivation or to the priority band.
+- **Scope guard, stated because the map found these adjacent:** loading `intervals.json` (21,041 rows on
+  disk, not loaded) or `sessions.json`, deriving any **citable** delta, and using `team_colour`,
+  `broadcast_name`, `name_acronym` or `country_code` are all **out of scope** and each needs its own
+  authorization.
+- **Invariants that must not move:** the acceptance still emits only current-event supplied references; no
+  new airing shape and no newly citable token; the declared airing shapes stay **six**; a replay still
+  reproduces the transcript byte for byte; and any salience or championship value becomes citable only if
+  the design says so, which it does not.
+- **Route:** read-only exploration `mv5rslp4-1-rv6s` maps the context seam, the offline data, the unit split
+  and the workload; then one unit at a time — writer in a dedicated worktree, independent verification, the
+  provider-offered native route under RDD on, local integration by fast-forward or cherry-pick, and the
+  register re-derived **by subject** at the final revision. Delivery stays a separate user decision.
+- **U1 — the window's salience projection: implemented, verified, reviewed and integrated.** Commit
+  `920988d2`, branch `feat/f09g-salience`, **PR #43** merged as
+  **`2b52519513533cf5439898f75e5eabdb22eeeb7c`** (the branch was based on `0e0ba62` and main was at
+  `ccb24f9`; no file overlapped).
+  - **What it does:** a new pure module `src/f1show/salience.py` (611 lines) projects the window's stories
+    from the detected-event prefix — biggest gain, tied biggest losses, the busiest driver by recorded
+    position updates, every pit stop with its recorded durations, every race-control flag with flag,
+    sector and message, and a **derived** fastest lap with one declared outlier rule — and `_prompt`
+    renders them as a plain-prose `CONTEXT` block computed from `self._events[:index+1]`. No new
+    constructor parameter, no run-path change, and `run.py` untouched.
+  - **Accepted against the design's measured table**, re-derived by an independent verifier from the raw
+    fixtures **without importing the module**: Zhou +5; the tied Alonso and Ocon losses; Albon with **13**
+    recorded updates and a **34.983 s** pit on lap 3; the **DOUBLE YELLOW in sector 3**; Sainz **99.923**
+    on lap 2; Hamilton next busiest. **No row disagreed.**
+  - **The declared outlier rule, with its measured limitation:** 76 valid laps, median **141.195500 s**
+    (re-measured a third time by the parent), fences **105.896625 / 176.494375 s**, **19 fast and 0 slow**
+    outliers. The earlier docstring rationale — that a median *cannot be dragged* by a safety-car period —
+    was **false on this very window and was removed**; the module now states the measured numbers and
+    declares plainly that the rule as written **cannot express** the design's lap-5 narrative. Five fence
+    mutations each fail the recorded test on a distinct assertion, so a relaxed fence cannot pass silently.
+  - **Coverage note, measured:** the design's own lap-5 row ("166-168 s") is only **partially** matched —
+    the 19 valid lap-5 durations span **141.9 to 168.8 s**.
+  - **Invariants verified on the live bytes:** across **981** real prompts the CONTEXT block carries **no
+    bracket** and no `family[index].field` token; the reference-token set still equals the event's supplied
+    references; the marker still appears **exactly 2** times; the six declared airing shapes and their 17
+    cases are untouched; two renders and two `booth.run()` executions are byte-identical; and a hostile
+    injection (a flag value carrying brackets and a fabricated reference) is **neutralised** in the block.
+  - **Cost, measured rather than estimated:** the projection is O(window) per turn, so the full suite
+    costs **18.35 s** wall and 158 MB peak RSS, up from about 5.5 s. Carried with a trigger, not optimised
+    now.
+  - **Native review `review-435383adf7953268`:** tier medium, one `review-reliability` lens, 5 files,
+    **1,461** changed lines, candidate tree `f1ead79f…` — **approved**, authority **burned**
+    (`consumed_revision sha256:7d359732…`). Three non-blocking advisories, carried with owner and trigger:
+    `R3-empty-context-misstates-lap1` (`salience.py:454-455`, WARNING),
+    `R3-pit-flag-prose-unbounded` (`:475-485`, SUGGESTION) and `R3-salience-median-overflow` (`:415`,
+    WARNING). The harness returns ids, severities and locations and **never bodies**, so their subjects
+    were **located in the source** and are recorded as located rather than quoted.
+  - **Budget anomaly, logged rather than smoothed:** the delivery-range assessment returned
+    `reviewDue: false` (`under_budget`) at **1,461** changed lines, while an earlier **921**-line candidate
+    returned `reviewDue: true` (`slice_budget_reached`). The size ordering is **inverted** against the model
+    this document had recorded. Because this is new code no review had ever covered, the review was run
+    anyway and the contradiction is kept as a measured counter-example.
+  - **Checks:** focused **196** and full **859** passed, Ruff 0.17.0 clean, and CI green on the PR
+    (`pytest` on 3.12 and 3.14, `ruff`, and the register-row guard).
+  - **Next: U2** — the two modes, which also owns the **dead priority band** found while mapping.
+- **The register is re-anchored by subject at `2b52519`.** Twenty-one blocks were applied in one pass: twelve
+  `booth.py`/`tests/test_booth.py` coordinates re-derived row by row (the whole booth table moved again, and
+  the shift was again **not constant**), the live citation-form row and the `R3-copy-shape-truncation` pins
+  moved with it, and four staleness keys updated — `booth.py` `88934c0b…`, `tests/test_booth.py`
+  `ff456963…`, `tests/test_run.py` `ff64b2ec…` (still **UNMOVED**, the **third** blob over-flag) and
+  `run.py` confirmed **current**. Five rows were **added**: the three U1 advisories with their subjects
+  **located in the source** because the harness returns no bodies, the **dead priority band** for U2, and the
+  **CONTEXT block** as the new prompt subject. Two staleness keys that had **never existed** were created for
+  `src/f1show/salience.py` and `tests/test_salience.py`, and the omission is named in the register rather
+  than silently corrected: **a module can enter the tree and be reviewed without the register ever holding a
+  key for it**, which is the state the blob rule exists to prevent. One defect the pass introduced and this
+  record fixes: an edit closed a table row early, leaving it with five cells instead of four; a Markdown
+  column-count check caught it and the row was repaired before the commit.
+- **Checks pending for the remaining units:** RED/GREEN per unit, focused and full suite on the delivered
+  bytes, Ruff 0.17.0, determinism, deliberate prompt-pin updates, the register rows re-derived **by subject**
+  at each revision, independent verification and the provider-offered native route.
+
 ### The show: what the profession says, what the data says, and the design
 
 **Research, 2026-10-11, first-party sources read.** The rules below are the practitioners' own words, and the
