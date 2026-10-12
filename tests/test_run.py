@@ -31,6 +31,7 @@ import pytest
 from google.genai import Client as GenaiClient
 
 import f1show
+import f1show.booth
 import f1show.run
 from f1show.booth import (
     PRIORITY_EVENT_TYPES,
@@ -45,6 +46,7 @@ from f1show.dialogue import Speaker
 from f1show.events import EventType
 from f1show.fakes import FrozenClock
 from f1show.gemini import GoogleGenAIClient, ModelServerError
+from f1show.mode import announces_caution
 from f1show.ports import ModelClient, ModelRequest, ModelResponse
 from f1show.run import (
     DEFAULT_FIXTURE_DIR,
@@ -90,6 +92,14 @@ FABRICATED_NATIVE_RESPONSE = {
 #: is end-anchored: a numbered value line, the old ``reference = value`` line and a bulleted
 #: rule line are all left alone, and only a supplied reference is ever cited.
 _PROMPT_REFERENCE = re.compile(r"^-\s+([a-z_]+\[\d+\]\.[a-z0-9_]+)\s*$", re.MULTILINE)
+
+#: Any reference-shaped token anywhere in the prompt: ``family[record].field``. The set of
+#: these must equal the current event's supplied references, so the MODE instruction text
+#: can never make a new token citable.
+REFERENCE_TOKEN = re.compile(r"[a-z_]+\[\d+\]\.[a-z0-9_]+")
+
+#: Every bracket character. The MODE instruction block is declared to carry none of them.
+BRACKETS = "[](){}"
 
 #: A hard test-side bound on every await, so a stall fails loudly instead of hanging.
 HAZARD_TIMEOUT_SECONDS = 30.0
@@ -762,6 +772,13 @@ RECORDED_FAMILY_COUNTS = {
     "drivers": 20,
 }
 
+#: The F09g U2 consequence, measured on the recorded session (1,648 detected events): the
+#: derived caution signal catches **9** race-control rows, and consulting it in the priority
+#: band changes the seat of **1,023** aired turns against the previous strict alternation.
+#: The seat is the only field that changes; the turn count, order, text and evidence do not.
+RECORDED_CAUTION_EVENTS = 9
+RECORDED_SEAT_CHANGES = 1023
+
 
 def test_the_project_default_recorded_directory_resolves_to_the_recorded_corpus() -> (
     None
@@ -957,8 +974,104 @@ async def test_main_runs_the_full_command_from_the_recorded_source_with_a_fake_p
         "the recorded source must have produced at least one model call"
     )
     assert turns and turns[0].speaker is Speaker.lead
-    assert [turn.speaker for turn in turns] == [
+    # F09g U2 changed this expectation deliberately rather than deleting it. The old pin
+    # asserted strict lead/colour alternation over the whole recorded session, which held
+    # only because the priority band could match no recorded event: the collector emits
+    # RACE_CONTROL for every race-control row. The band now consults the derived caution
+    # signal, so a recorded flag or safety-car row pulls the lead into the next slot and the
+    # alternation phase flips. The measured number of changed seats is pinned, and both the
+    # change and its cause are asserted, so a band that quietly stopped firing fails here.
+    strict = [
         Speaker.lead if index % 2 == 0 else Speaker.color for index in range(len(turns))
     ]
+    seats = [turn.speaker for turn in turns]
+    changed = sum(
+        actual is not expected for actual, expected in zip(seats, strict, strict=True)
+    )
+    assert changed == RECORDED_SEAT_CHANGES, (
+        f"the derived caution band changes {RECORDED_SEAT_CHANGES} recorded seats; this "
+        f"run changed {changed}"
+    )
+    assert seats != strict, "the derived caution band must fire on the recorded session"
+    assert any(
+        left is Speaker.lead and right is Speaker.lead
+        for left, right in zip(seats, seats[1:], strict=False)
+    ), "a recorded caution row hands the lead two turns in a row"
     for turn in turns:
         assert turn.text in printed
+
+
+# --- The derived caution band: the measured seat consequence (F09g U2) ---------
+
+
+@pytest.mark.anyio
+async def test_the_recorded_session_seats_are_deliberate_once_the_caution_band_fires() -> (
+    None
+):
+    """The dead priority band, fixed and measured on the recorded session.
+
+    The collector emits ``RACE_CONTROL`` for every race-control row, so the band's
+    ``FLAG``/``SAFETY_CAR``/``VIRTUAL_SAFETY_CAR`` types matched nothing and the recorded
+    seats were strict alternation. With the derived caution signal consulted, a recorded
+    caution row hands the lead the next slot, which flips the phase nine times and changes
+    **1,023** of the 1,648 aired seats. Only the seat changes: the number of turns, their
+    order, their text and their evidence are untouched, so this is the seat band and not a
+    transcript-shape change.
+    """
+    events = recorded_events()
+    cautions = [event for event in events if announces_caution(event)]
+    assert len(cautions) == RECORDED_CAUTION_EVENTS, (
+        "the derived caution signal catches exactly the recorded flag and safety-car rows"
+    )
+    assert {event.evidence.get("flag") for event in cautions} == {
+        "YELLOW",
+        "DOUBLE YELLOW",
+        None,
+    }
+    model = EvidenceEchoModelClient()
+
+    result = await bounded(
+        run_session(
+            payloads=recorded_payloads(),
+            session_key=SESSION_KEY,
+            model=model,
+            clock=FrozenClock(T0),
+            settings=booth_settings(),
+        ),
+        hazard="the recorded derived-caution seat run",
+    )
+
+    turns = result.transcript.turns
+    strict = [
+        Speaker.lead if index % 2 == 0 else Speaker.color for index in range(len(turns))
+    ]
+    seats = [turn.speaker for turn in turns]
+    changed = sum(
+        actual is not expected for actual, expected in zip(seats, strict, strict=True)
+    )
+    assert changed == RECORDED_SEAT_CHANGES
+    assert len(turns) == len(events), (
+        "the caution band changes the seat, never the transcript shape"
+    )
+    assert [turn.event_ref for turn in turns] == [
+        event_reference(event) for event in events
+    ]
+    # The MODE block is instruction text, and the prompt-shape pins hold on every one of
+    # the recorded session's prompts: the declared line is present, the citation marker
+    # still appears exactly twice, and the MODE block adds no bracket and no reference-shaped
+    # token. (The whole-prompt token set also carries prior turns' own cited references, which
+    # is the pre-existing context contract, so the new-block check is what proves no leak.)
+    marker = f1show.booth._CITATION_MARKER
+    assert len(model.requests) == len(events), "one prompt per aired recorded event"
+    for event, request in zip(events, model.requests, strict=True):
+        lines = request.prompt.splitlines()
+        start = next(
+            index for index, line in enumerate(lines) if line.startswith("MODE:")
+        )
+        block = "\n".join(lines[start : start + 2])
+        assert not any(character in block for character in BRACKETS), block
+        assert REFERENCE_TOKEN.search(block) is None, block
+        assert request.prompt.count(marker) == 2
+        assert set(evidence_references(event)) <= set(
+            REFERENCE_TOKEN.findall(request.prompt)
+        ), "the event's own references are still offered"
