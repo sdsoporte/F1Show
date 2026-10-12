@@ -150,7 +150,7 @@ import json
 import math
 import re
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 
@@ -183,6 +183,12 @@ __all__ = [
 PRIORITY_EVENT_TYPES: frozenset[EventType] = frozenset(
     {EventType.FLAG, EventType.SAFETY_CAR, EventType.VIRTUAL_SAFETY_CAR}
 )
+
+#: The one declared fallback for a driver the session directory cannot resolve: a null
+#: ``driver_number``, or a number the directory does not hold. Deliberately a single line
+#: with no number, so the prompt never renders a half-join -- a name with no team, or a
+#: bare number standing in for a name -- and never renders two driver lines.
+_UNKNOWN_DRIVER = "driver: unknown"
 
 
 class _Record(BaseModel):
@@ -637,8 +643,10 @@ class CommentaryBooth:
         context_window_seconds: float,
         max_output_tokens: int,
         timeout_seconds: float,
+        driver_directory: Mapping[int, tuple[str, str]],
     ) -> None:
         self._model = model
+        self._driver_directory = dict(driver_directory)
         self._events = tuple(events)
         if not self._events:
             raise ValueError(
@@ -861,7 +869,10 @@ class CommentaryBooth:
 
         No reference outside ``citable`` appears anywhere in it, so the prompt cannot hand
         the model a source the event does not own. Both F04 prohibitions are carried
-        verbatim in the rules block.
+        verbatim in the rules block. The EVENT block names the driver and the team from
+        the session directory when it resolves the event's number, and the declared
+        fallback otherwise; that identity is prompt material only, never citable evidence,
+        and it never enters ``event.evidence``.
         """
         lines = [
             f"You are {persona.name}, the {persona.seat.value} commentator in a two-person "
@@ -903,8 +914,16 @@ class CommentaryBooth:
         lines.extend(
             ["", "EVENT:", f"type: {event.event_type.value}", f"family: {event.family}"]
         )
-        if event.driver_number is not None:
-            lines.append(f"driver_number: {event.driver_number}")
+        identity = (
+            None
+            if event.driver_number is None
+            else self._driver_directory.get(event.driver_number)
+        )
+        if identity is None:
+            lines.append(_UNKNOWN_DRIVER)
+        else:
+            full_name, team_name = identity
+            lines.append(f"driver: {full_name} ({team_name}, #{event.driver_number})")
         if event.timestamp_value is not None:
             lines.append(f"timestamp: {event.timestamp_value.isoformat()}")
         else:

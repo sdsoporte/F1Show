@@ -60,6 +60,15 @@ __all__ = [
     "run_session",
 ]
 
+#: The recorded session's entry list. It derives no event, so it is not a collector
+#: family, but the booth joins ``full_name`` and ``team_name`` from it to name the driver
+#: in the prompt. It is loaded under its own key rather than mixed into the event families.
+_DRIVER_DIRECTORY_FAMILY = "drivers"
+
+#: The families a recorded session must hold one JSON file for: the five collector
+#: families plus the driver directory the booth joins.
+_LOADED_FAMILIES = (*FAMILY_ORDER, _DRIVER_DIRECTORY_FAMILY)
+
 #: A trailing path segment that names an API version, e.g. ``v1``, ``v2`` or ``v1beta``.
 #: The native SDK supplies its own, so exactly this segment is stripped before it is
 #: handed the base URL.
@@ -77,7 +86,9 @@ DEFAULT_TIMEOUT_SECONDS = 30.0
 #: The recorded fixture corpus: the MVP's production artifact, read from the repository
 #: next to this package. A path derived from this file, never an absolute string literal
 #: and never a credential; an operator may point elsewhere through ``fixtures_dir``.
-DEFAULT_FIXTURE_DIR = pathlib.Path(__file__).resolve().parents[2] / "fixtures" / "openf1"
+DEFAULT_FIXTURE_DIR = (
+    pathlib.Path(__file__).resolve().parents[2] / "fixtures" / "openf1"
+)
 
 
 class RecordedSourceError(RuntimeError):
@@ -100,11 +111,15 @@ def load_recorded_session(
     """Read the recorded fixture corpus, grouped by family and filtered by session.
 
     The corpus is the project's production artifact: one JSON file per family under
-    ``fixtures/openf1/``. Only the families ``collect_session_events`` consumes are
-    loaded - ``intervals``, ``sessions`` and ``drivers`` derive no event - and every
-    record is filtered to ``session_key`` here rather than assumed to be, because
-    ``sessions.json`` holds the whole season. A missing directory, a missing family file
-    or a session with no records is a typed failure, never a silently empty payload.
+    ``fixtures/openf1/``. The five families ``collect_session_events`` consumes are
+    loaded, ``intervals`` and ``sessions`` are deliberately not because nothing reads
+    them, and the session's ``drivers`` entry list is loaded too under its own key: it
+    derives no event, but the booth joins ``full_name`` and ``team_name`` from it so the
+    prompt names the driver, so it belongs to the declared loaded contract rather than to
+    a run path that reads the corpus twice. Every record is filtered to ``session_key``
+    here rather than assumed to be, because ``sessions.json`` holds the whole season. A
+    missing directory, a missing family file or a session with no records is a typed
+    failure, never a silently empty payload.
     """
     directory = pathlib.Path(fixtures_dir)
     if not directory.is_dir():
@@ -113,12 +128,12 @@ def load_recorded_session(
             "at a fixtures/openf1 directory, or omit it for the project default"
         )
     payloads: dict[str, list[dict[str, object]]] = {}
-    for family in FAMILY_ORDER:
+    for family in _LOADED_FAMILIES:
         path = directory / f"{family}.json"
         if not path.is_file():
             raise RecordedSourceMissingError(
                 f"the recorded family file {path} is missing; the corpus must hold one JSON "
-                f"file per collector family ({', '.join(FAMILY_ORDER)})"
+                f"file per loaded family ({', '.join(_LOADED_FAMILIES)})"
             )
         try:
             records = json.loads(path.read_text(encoding="utf-8"))
@@ -133,7 +148,8 @@ def load_recorded_session(
         selected = [
             dict(record)
             for record in records
-            if isinstance(record, Mapping) and _is_session(record.get("session_key"), session_key)
+            if isinstance(record, Mapping)
+            and _is_session(record.get("session_key"), session_key)
         ]
         if not selected:
             raise RecordedSessionNotFoundError(
@@ -146,7 +162,9 @@ def load_recorded_session(
 
 def _is_session(value: object, session_key: int) -> bool:
     """Whether a recorded ``session_key`` is the requested session, refusing ``bool``."""
-    return isinstance(value, int) and not isinstance(value, bool) and value == session_key
+    return (
+        isinstance(value, int) and not isinstance(value, bool) and value == session_key
+    )
 
 
 def native_base_url(declared: str) -> str:
@@ -207,8 +225,35 @@ async def run_session(
         context_window_seconds=context_window_seconds,
         max_output_tokens=max_output_tokens,
         timeout_seconds=timeout_seconds,
+        driver_directory=_driver_directory(payloads),
     )
     return await booth.run()
+
+
+def _driver_directory(
+    payloads: Mapping[str, Sequence[Mapping[str, object]]],
+) -> dict[int, tuple[str, str]]:
+    """The session's driver directory, keyed by ``driver_number``.
+
+    The recorded ``drivers`` family is the session's entry list, not an event family: the
+    collector derives no event from it and the event itself carries only the number, so
+    the join is read here and handed to the booth. A record missing the number, the name
+    or the team is skipped rather than half-joined, and the booth renders its declared
+    fallback for any driver the directory cannot resolve.
+    """
+    directory: dict[int, tuple[str, str]] = {}
+    for record in payloads.get(_DRIVER_DIRECTORY_FAMILY, ()):
+        number = record.get("driver_number")
+        full_name = record.get("full_name")
+        team_name = record.get("team_name")
+        if (
+            isinstance(number, int)
+            and not isinstance(number, bool)
+            and isinstance(full_name, str)
+            and isinstance(team_name, str)
+        ):
+            directory[number] = (full_name, team_name)
+    return directory
 
 
 async def main(

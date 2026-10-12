@@ -324,6 +324,71 @@ async def test_run_session_turns_the_recorded_fixtures_into_an_evidence_carrying
 
 
 @pytest.mark.anyio
+async def test_run_session_threads_the_recorded_driver_directory_into_the_prompt() -> (
+    None
+):
+    """The loader's ``drivers`` payload reaches the booth, and only a joined line is drawn.
+
+    The loader returns the session's driver directory under its own key and ``run_session``
+    derives the ``driver_number -> (full_name, team_name)`` map from the payload it already
+    holds, so the EVENT block names the driver and the team instead of showing a bare
+    number. Every rendered identity line is exactly a directory entry; anything the
+    directory cannot resolve renders the declared fallback, never a half-join. The
+    acceptance is unchanged: every aired turn still cites only references its own event
+    supplied, so the join creates no newly citable token.
+    """
+    payloads = load_recorded_session(SESSION_KEY)
+    directory = {
+        record["driver_number"]: (record["full_name"], record["team_name"])
+        for record in payloads["drivers"]
+    }
+    model = EvidenceEchoModelClient()
+
+    result = await bounded(
+        run_session(
+            payloads=payloads,
+            session_key=SESSION_KEY,
+            model=model,
+            clock=FrozenClock(T0),
+            settings=booth_settings(),
+        ),
+        hazard="the recorded driver-directory run",
+    )
+
+    assert model.requests, "the recorded session must have produced a model call"
+    expected = {
+        f"driver: {full_name} ({team_name}, #{number})"
+        for number, (full_name, team_name) in directory.items()
+    }
+    joined_lines: list[str] = []
+    for request in model.requests:
+        driver_lines = [
+            line for line in request.prompt.splitlines() if line.startswith("driver:")
+        ]
+        assert len(driver_lines) == 1, (
+            "every prompt carries exactly one driver line; got "
+            f"{driver_lines!r} in:\n{request.prompt}"
+        )
+        (line,) = driver_lines
+        if line != "driver: unknown":
+            assert line in expected, (
+                f"a joined driver line must be a directory entry; got {line!r}"
+            )
+            joined_lines.append(line)
+    assert joined_lines, (
+        "the recorded directory must resolve at least one aired event, or the join is "
+        "never exercised through the run path"
+    )
+    references = {event_reference(event) for event in recorded_events()}
+    for turn in result.transcript.turns:
+        assert turn.event_ref in references
+        assert turn.evidence
+        assert all(
+            reference.startswith(f"{turn.event_ref}.") for reference in turn.evidence
+        )
+
+
+@pytest.mark.anyio
 async def test_run_session_alternates_the_two_seats_over_a_controlled_payload() -> None:
     events = small_events()
     assert [event.event_type for event in events] == [EventType.POSITION_CHANGE] * 3
@@ -639,13 +704,16 @@ async def test_the_fake_cites_only_a_reference_line_and_refuses_a_prompt_without
 
 # --- The recorded source: the loader that makes main one command ----------------
 
-#: The family record counts measured on the recorded session, per the provenance file.
+#: The record counts measured on the recorded session, per the provenance file. ``drivers``
+#: is the session's entry list rather than an event family: it is loaded for the booth's
+#: identity join, so it is counted here beside the five collector families.
 RECORDED_FAMILY_COUNTS = {
     "position": 403,
     "laps": 1059,
     "pit": 23,
     "stints": 43,
     "race_control": 120,
+    "drivers": 20,
 }
 
 
@@ -660,7 +728,10 @@ def test_the_project_default_recorded_directory_resolves_to_the_recorded_corpus(
 def test_recorded_source_loads_the_collector_families_with_the_session_filter() -> None:
     loaded = load_recorded_session(SESSION_KEY)
 
-    assert set(loaded) == set(FAMILY_ORDER)
+    # F09f: the loaded contract is the five collector families plus the session's driver
+    # directory, which the booth joins to name the driver. The set is asserted exactly, so
+    # a sixth accidental family still fails here rather than riding along.
+    assert set(loaded) == set(FAMILY_ORDER) | {"drivers"}
     assert {
         family: len(records) for family, records in loaded.items()
     } == RECORDED_FAMILY_COUNTS
@@ -675,19 +746,37 @@ def test_recorded_source_loads_the_collector_families_with_the_session_filter() 
     assert collect_session_events(SESSION_KEY, loaded) == recorded_events()
 
 
-def test_recorded_source_excludes_the_families_the_collector_cannot_use() -> None:
-    """``intervals``, ``sessions`` and ``drivers`` are deliberately not loaded.
+def test_recorded_source_loads_the_driver_directory_but_derives_no_event_from_it() -> (
+    None
+):
+    """``drivers`` is loaded for the join yet stays an event-free family.
 
-    ``collect_session_events`` derives no event from any of them - ``intervals`` is only
-    normalized by the deferred F06 helper and ``sessions``/``drivers`` are not event
-    families - so loading them would add weight for zero commentary. Their recorded counts
-    are asserted here so the exclusion is visible rather than assumed.
+    F09f deliberately changed this pin rather than deleting it. The recorded ``drivers``
+    family is now part of the loaded contract - the booth names the driver and the team
+    from it - so the old ``drivers not in loaded`` assertion is no longer true. The
+    invariant that actually matters is strengthened instead: the directory is available
+    from the loader, and ``collect_session_events`` still derives **zero** extra events
+    from it, which is proved by collecting the loaded payload with and without the family.
+    ``intervals`` and ``sessions`` are still excluded, because nothing reads them.
     """
     loaded = load_recorded_session(SESSION_KEY)
 
+    assert "drivers" in loaded, (
+        "the directory must be available from the loader, because the run path derives the "
+        "driver identity map from the payload it already holds"
+    )
+    assert loaded["drivers"], (
+        "an empty directory would make the join silently fall back"
+    )
+    assert all(record["session_key"] == SESSION_KEY for record in loaded["drivers"])
+    collector_payloads = {
+        family: records for family, records in loaded.items() if family in FAMILY_ORDER
+    }
+    assert collect_session_events(SESSION_KEY, loaded) == collect_session_events(
+        SESSION_KEY, collector_payloads
+    ), "the drivers family must derive no event when it is present"
     assert "intervals" not in loaded
     assert "sessions" not in loaded
-    assert "drivers" not in loaded
     intervals = load("intervals")
     assert len(intervals) == 21041
     assert all(record["session_key"] == SESSION_KEY for record in intervals)
@@ -712,6 +801,86 @@ def test_recorded_source_refuses_a_missing_family_file(tmp_path: Path) -> None:
     with pytest.raises(RecordedSourceMissingError) as caught:
         load_recorded_session(SESSION_KEY, fixtures_dir=tmp_path)
     assert "position" in str(caught.value)
+
+
+def _write_synthetic_corpus(
+    directory: Path, *, drivers: Sequence[Mapping[str, object]] | None
+) -> None:
+    """Write a minimal recorded corpus into ``directory``.
+
+    Every collector family holds one record whose only load-bearing property is the session
+    key, because what these tests exercise is the loader's per-family file selection and its
+    session filter, not the record shape the collector validates afterwards. ``drivers`` is
+    written only when supplied, so a caller can model a corpus that is missing exactly that
+    family. Nothing here touches the real fixtures: the corpus is built under pytest's
+    ``tmp_path`` and thrown away with it.
+    """
+    for family in FAMILY_ORDER:
+        (directory / f"{family}.json").write_text(
+            json.dumps([{"session_key": SESSION_KEY}]), encoding="utf-8"
+        )
+    if drivers is not None:
+        (directory / "drivers.json").write_text(
+            json.dumps([dict(record) for record in drivers]), encoding="utf-8"
+        )
+
+
+def test_recorded_source_refuses_a_corpus_missing_only_the_driver_directory(
+    tmp_path: Path,
+) -> None:
+    """The directory family is required, and the refusal must name it.
+
+    Honest pin, not a RED-derived test: the behaviour already exists. The empty-directory
+    test above stops on ``position`` and therefore never reaches the directory family, so
+    this path had no coverage. Every other family here is present and session-matching, so
+    the typed refusal can only come from the missing ``drivers.json``.
+    """
+    _write_synthetic_corpus(tmp_path, drivers=None)
+
+    with pytest.raises(RecordedSourceMissingError) as caught:
+        load_recorded_session(SESSION_KEY, fixtures_dir=tmp_path)
+
+    message = str(caught.value)
+    assert str(tmp_path / "drivers.json") in message, (
+        f"the typed refusal must name the missing family file; got {message!r}"
+    )
+
+
+def test_recorded_source_filters_the_driver_directory_by_session(
+    tmp_path: Path,
+) -> None:
+    """The directory is session-filtered like every other family, not merely trusted.
+
+    Honest pin, not a RED-derived test: the loader already filters every loaded family. The
+    recorded corpus holds 20 directory rows that all carry the requested session key, so a
+    loader that stopped filtering the directory would still satisfy every pin asserted
+    against the real fixtures. This synthetic corpus spans two session keys and gives the
+    clause teeth: only the requested session's directory rows may come back, and the other
+    session's row must be dropped rather than joined.
+    """
+    wanted: Mapping[str, object] = {
+        "session_key": SESSION_KEY,
+        "driver_number": 4,
+        "full_name": "Lando Norris",
+        "team_name": "McLaren",
+    }
+    other: Mapping[str, object] = {
+        "session_key": SESSION_KEY + 1,
+        "driver_number": 44,
+        "full_name": "Lewis HAMILTON",
+        "team_name": "Ferrari",
+    }
+    _write_synthetic_corpus(tmp_path, drivers=[wanted, other])
+
+    loaded = load_recorded_session(SESSION_KEY, fixtures_dir=tmp_path)
+
+    assert loaded["drivers"] == [wanted], (
+        "the loader keeps only the requested session's directory rows; got "
+        f"{loaded['drivers']!r}"
+    )
+    assert all(record["session_key"] == SESSION_KEY for record in loaded["drivers"]), (
+        "no other session's driver may survive the filter"
+    )
 
 
 @pytest.mark.anyio

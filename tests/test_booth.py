@@ -187,6 +187,7 @@ def make_booth(
     context_window_seconds: float = 3600.0,
     max_output_tokens: int = 64,
     timeout_seconds: float = 3.0,
+    driver_directory: dict[int, tuple[str, str]] | None = None,
 ) -> CommentaryBooth:
     """Build the booth with the shipped frozen clock and explicit bounds."""
     if settings is None:
@@ -201,6 +202,7 @@ def make_booth(
         context_window_seconds=context_window_seconds,
         max_output_tokens=max_output_tokens,
         timeout_seconds=timeout_seconds,
+        driver_directory={} if driver_directory is None else driver_directory,
     )
 
 
@@ -412,6 +414,125 @@ async def test_the_prompt_offers_exactly_the_supplied_references() -> None:
     )
     assert "\n1. 3" in prompt, "the value is still shown, on a value line of its own"
     assert set(REFERENCE_TOKEN.findall(prompt)) == {"position[7].position"}
+
+
+# --- The driver-identity join (F09f) -------------------------------------------
+
+#: Driver 4 of the recorded session, the worked example the F09f scope names.
+JOINED_DRIVER_NUMBER = 4
+JOINED_DRIVER_NAME = "Lando Norris"
+JOINED_TEAM_NAME = "McLaren"
+#: The one declared fallback for a driver the directory cannot resolve. It is a single
+#: string, not a half-join: a bare number with no name and a name with no team are both
+#: refused as half-joins by rendering exactly this.
+UNKNOWN_DRIVER_LINE = "driver: unknown"
+
+
+@pytest.mark.anyio
+async def test_the_prompt_joins_the_driver_name_and_team_into_the_event_block() -> None:
+    """RED before F09f: the prompt showed ``driver_number: 4`` and named nobody.
+
+    The EVENT block must carry the joined identity so both seats can name the driver and
+    the team; the bare ``driver_number:`` line it replaces is asserted absent, because a
+    prompt that still printed it would leave the join half-done beside a raw number.
+    """
+    event = detected(index=0, driver_number=JOINED_DRIVER_NUMBER)
+    model = ScriptedModelClient([spoken(ref(event), "Norris is P3.")])
+    booth = make_booth(
+        [event],
+        model,
+        driver_directory={JOINED_DRIVER_NUMBER: (JOINED_DRIVER_NAME, JOINED_TEAM_NAME)},
+    )
+
+    await bounded(booth.run(), hazard="the driver-identity join run")
+
+    prompt = model.requests[0].prompt
+    joined = (
+        f"driver: {JOINED_DRIVER_NAME} ({JOINED_TEAM_NAME}, #{JOINED_DRIVER_NUMBER})"
+    )
+    assert joined in prompt, (
+        "the EVENT block must join the driver's name and team; the pre-F09f prompt "
+        f"carried only the bare number. Expected {joined!r} in:\n{prompt}"
+    )
+    assert "driver_number:" not in prompt, (
+        "the joined identity line replaces the bare driver number, so the prompt no "
+        "longer renders 'driver_number:' at all"
+    )
+    # No newly citable token: the identity line is prose and changes nothing about the
+    # reference set the event offers.
+    assert set(REFERENCE_TOKEN.findall(prompt)) == set(evidence_references(event))
+
+
+@pytest.mark.anyio
+async def test_the_joined_driver_identity_is_not_citable_evidence() -> None:
+    """The join is prompt material, never a source: identity cannot become a citation.
+
+    Identity is deliberately kept out of ``event.evidence`` and ``_citable_evidence``. An
+    answer that cites the identity line therefore has no reference to cite and is refused
+    as an invented reference, which is what makes the join safe to show the model.
+    """
+    event = detected(index=0, driver_number=JOINED_DRIVER_NUMBER)
+    identity = f"{JOINED_DRIVER_NAME} ({JOINED_TEAM_NAME}, #{JOINED_DRIVER_NUMBER})"
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text=f"EVIDENCE: {identity}\nNorris is P3.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth(
+        [event],
+        model,
+        driver_directory={JOINED_DRIVER_NUMBER: (JOINED_DRIVER_NAME, JOINED_TEAM_NAME)},
+    )
+
+    result = await bounded(booth.run(), hazard="the identity-citability run")
+
+    assert evidence_references(event) == ("position[0].position",), (
+        "the event's citable references never carry the joined identity"
+    )
+    assert result.transcript.turns == (), (
+        "a citation of the identity is not backed by the event and must not air"
+    )
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.INVENTED_REFERENCE
+
+
+@pytest.mark.parametrize(
+    ("driver_number", "directory"),
+    [
+        (None, {}),
+        (91, {}),
+        (91, {JOINED_DRIVER_NUMBER: (JOINED_DRIVER_NAME, JOINED_TEAM_NAME)}),
+    ],
+    ids=["null-number", "absent-from-directory", "absent-beside-another-driver"],
+)
+@pytest.mark.anyio
+async def test_an_unresolvable_driver_renders_one_declared_fallback(
+    driver_number: int | None, directory: dict[int, tuple[str, str]]
+) -> None:
+    """A null number or a number the directory lacks renders the declared fallback.
+
+    A half-join -- a name with no team, or a bare number with no name -- would tell the
+    model something the corpus does not support. Exactly one fallback line is drawn, so
+    the prompt is honest about what it does not know instead of inventing a driver.
+    """
+    event = detected(index=0, driver_number=driver_number)
+    model = ScriptedModelClient([spoken(ref(event), "Someone is P3.")])
+    booth = make_booth([event], model, driver_directory=directory)
+
+    await bounded(booth.run(), hazard="the unresolved-driver fallback run")
+
+    prompt = model.requests[0].prompt
+    driver_lines = [line for line in prompt.splitlines() if line.startswith("driver:")]
+    assert driver_lines == [UNKNOWN_DRIVER_LINE], (
+        "an unresolvable driver renders exactly the one declared fallback line, never a "
+        f"half-join and never two driver lines; got {driver_lines!r} in:\n{prompt}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -2427,6 +2548,9 @@ def test_every_bound_must_be_in_range(keyword: str, value: float) -> None:
         "context_window_seconds": 3600.0,
         "max_output_tokens": 64,
         "timeout_seconds": 3.0,
+        # Supplied so a new required keyword cannot make the guard pass vacuously through
+        # a TypeError instead of the in-range refusal this test is about.
+        "driver_directory": {},
     }
     arguments[keyword] = value
     with pytest.raises((ValueError, TypeError)):
