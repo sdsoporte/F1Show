@@ -120,3 +120,44 @@ roughly every 6 seconds of the race.
 
 8 requests were performed, all `GET`, all to `api.openf1.org`, all unauthenticated and all HTTP 200 on the
 first attempt. The authorized ceiling was 12; 8 were used and 4 remain unused. No other host was contacted.
+
+## Championship and session-result recording (2026-10-12)
+
+**Why these three now:** the design needs the championship picture for the recorded session, and the live
+observation of 2026-10-11 recorded that these three paths answer and that each championship path carries
+**both checkpoints in one call** — `position_start`/`points_start` before the session and
+`position_current`/`points_current` after it. This recording turns that observation into recorded bytes. The
+user authorized it explicitly on 2026-10-12 (*"Sí, autorizo la descarga en vivo"*).
+
+**Method, unchanged from the first recording:** a throwaway recorder kept outside the repository (in
+`/tmp`), plain HTTPX with `trust_env=False`, `follow_redirects=False` and a bounded timeout, `GET` only, host
+`api.openf1.org` only, **no authentication of any kind** (no token, no `Authorization` header, no cookies, no
+account), `sleep 0.5` between requests, every body written verbatim.
+
+| Endpoint | URL (exact, including query) | HTTP | Bytes | Records | Requested (UTC) | SHA256 |
+| --- | --- | --- | --- | --- | --- | --- |
+| championship_drivers | `https://api.openf1.org/v1/championship_drivers?session_key=9617` | 200 | 3266 | 23 | 2026-10-12T22:01:02.050442Z | `cc91d9a2c5b336a60117dfa8d7229b2f8cc5804b2c0b6c99e35f7f0061d8a065` |
+| championship_teams | `https://api.openf1.org/v1/championship_teams?session_key=9617` | 200 | 1467 | 10 | 2026-10-12T22:01:03.746350Z | `6b3a6387c2a5a4c240a4273996d1f74ed3e3027f83641dc33ebd7e6c551bf066` |
+| session_result | `https://api.openf1.org/v1/session_result?session_key=9617` | 200 | 3668 | 20 | 2026-10-12T22:01:04.518237Z | `f6a4197d773a2e33b28d49e9c96860fc3cd17454437fa31204977958051c23b6` |
+
+**Fields observed, verbatim from the received bodies:** `championship_drivers` carries `driver_number`,
+`meeting_key`, `session_key`, `position_start`, `points_start`, `position_current`, `points_current`;
+`championship_teams` carries `team_name` plus the same six; `session_result` carries `driver_number`,
+`position`, `points`, `number_of_laps`, `duration`, `gap_to_leader`, `dnf`, `dns`, `dsq`, `meeting_key` and
+`session_key`. **Neither championship path carries a timestamp field**, so a downstream loader must treat
+these as **session-scoped** rows rather than timestamped events.
+
+**Race-session-only, stated because it is a property of the source and not of this recording:** these three
+paths answer for a **race** session; a practice or qualifying session has no championship rows. The in-race
+*provisional* table is a different object and must still be **derived** from the live positions plus the
+declared per-season points rules — these files give the **before and after checkpoints**, not an in-race
+table.
+
+**Independent confirmation:** the observation of 2026-10-11 counted 23, 10 and 20 rows for these three
+endpoints. This recording returns the same three counts. The *shape* is stable across two observations made a
+day apart; the *values* remain a point-in-time snapshot, and this repository makes no claim that they hold
+for other sessions.
+
+**Request budget:** 3 requests were authorized for this recording and **3 were used**, all `GET`, all to
+`api.openf1.org`, all unauthenticated and all HTTP 200 on the first attempt, paced by `sleep 0.5` inside the
+documented free-tier limits (3 requests/second, 30 requests/minute).
