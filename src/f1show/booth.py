@@ -59,6 +59,24 @@ of the supplied references -- or a matched reference with a bracket glued direct
 mid-line mention. Every emitted ``Turn`` therefore carries a non-empty ``evidence`` tuple
 drawn from that one event's own references.
 
+**Two faithful-but-wrong citation shapes are normalised, both measured in a live round**
+(206 calls, round 5 Austin 2024): 55 answers copied the reference *together with its
+rendered value* (``EVIDENCE: laps[6].lap_duration = 105.091``), because the prompt's
+EVIDENCE block printed that line, and 93 cited the event's **identity**
+(``EVIDENCE: laps[3]``), a faithful name of a real event that is not itself a reference.
+Both are now admitted by normalisation, and each has a **measured** boundary rather than a
+claimed one. A header that carries an ``=`` is cut at its **first** ``=`` *before* any
+comma split, so only the reference side is ever split, validated, cited or aired: the left
+side of the ``=`` is validated as references -- an unsupplied token there is still refused
+-- while the right side is treated as that reference's copied value, is not validated at
+all, and is never cited or aired, even when it is itself reference-shaped. That boundary is
+what execution measured, and it refutes the earlier claim that an unsupplied token on
+either shape is still refused: that claim never held for the right-hand side. A
+reference-side item naming the event's own identity expands to every reference the event
+owns, in recorded order. Neither normalisation moves the invariant that the emitted tuple
+contains only supplied references, and the EVIDENCE block is rendered so a reference and
+its value can no longer be copied together in the first place.
+
 **The boundary of that guarantee, stated plainly.** The rule holds over reference-shaped
 tokens *as they appear after normalization* -- Unicode format characters removed and every
 whitespace character made a plain space -- and not over arbitrary obfuscation: an
@@ -132,7 +150,7 @@ import json
 import math
 import re
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 
@@ -165,6 +183,12 @@ __all__ = [
 PRIORITY_EVENT_TYPES: frozenset[EventType] = frozenset(
     {EventType.FLAG, EventType.SAFETY_CAR, EventType.VIRTUAL_SAFETY_CAR}
 )
+
+#: The one declared fallback for a driver the session directory cannot resolve: a null
+#: ``driver_number``, or a number the directory does not hold. Deliberately a single line
+#: with no number, so the prompt never renders a half-join -- a name with no team, or a
+#: bare number standing in for a name -- and never renders two driver lines.
+_UNKNOWN_DRIVER = "driver: unknown"
 
 
 class _Record(BaseModel):
@@ -465,7 +489,9 @@ def _is_citation_attempt(line: str, scanner: re.Pattern[str] | None) -> bool:
     return scanner.search(_scan_view(line)) is not None
 
 
-def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _RefusedAnswer:
+def _parse_answer(
+    raw: str, allowed: tuple[str, ...], identity: str | None = None
+) -> _AcceptedAnswer | _RefusedAnswer:
     """Parse the citation-first protocol, refusing anything not backed by ``allowed``.
 
     The first non-empty line must be the citation line, and it must be the only one: a
@@ -481,9 +507,20 @@ def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _Refu
     refuses a citation-shaped line. What *accepts* the first line stays
     the exact marker the prompt teaches. The shape is decided before the content, so a
     missing or empty citation is ``UNCITED`` only once no later line opens with the
-    marker; any cited reference absent from ``allowed`` is ``INVENTED_REFERENCE``; and
-    commentary that is blank after the citation is ``BLANK_TEXT``. Finally the content
-    rule matches on a normalized view of the aired commentary -- Unicode format characters
+    marker.
+
+    The reference side is then normalised against the event's own tokens, in this order: a
+    header carrying ``=`` is cut at its first ``=`` *before* the comma split, so a copied
+    value whose own text carries commas (``laps[4].segments_sector_1 = [20480, 20481, 0]``)
+    cannot manufacture extra citation items; the text left of that cut is the reference side
+    and must itself be acceptable. An item equal to ``identity`` (the event's own
+    ``family[index]``) expands to every reference in ``allowed``, in recorded order, and
+    anything else must be one of ``allowed``. Any item that survives neither route is
+    ``INVENTED_REFERENCE``; the normalisations can only ever emit supplied references, so
+    the guarantee does not move. The right side of the ``=`` is the value of the reference
+    on its left: it is not validated, never cited and never aired.
+    Commentary that is blank after the citation is ``BLANK_TEXT``. The content rule
+    matches on a normalized view of the aired commentary -- Unicode format characters
     removed, every whitespace character made a plain space -- and refuses
     ``UNSUPPLIED_REFERENCE_IN_TEXT`` when any reference-shaped token is not one of
     ``allowed``, so a never-supplied reference cannot ride in on a bare or mid-line mention.
@@ -492,7 +529,7 @@ def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _Refu
     reason; a dotted suffix is prose and airs. Order is
     preserved, duplicates are collapsed, and an empty item between commas is dropped --
     tolerance, never an injection, because an empty item carries no reference -- so the
-    evidence tuple is exactly what was cited.
+    evidence tuple is exactly what was cited, after normalisation.
     """
     lines = raw.splitlines()
     start = next((index for index, line in enumerate(lines) if line.strip()), None)
@@ -504,21 +541,34 @@ def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _Refu
     # The reference shape is derived once, here, because the violation check needs it too:
     # a marker-shaped later line is only a citation attempt when it also names a token.
     scanner = _reference_scanner(allowed)
-    if any(_is_citation_attempt(line, scanner) for line in lines[start + 1:]):
+    if any(_is_citation_attempt(line, scanner) for line in lines[start + 1 :]):
         return _RefusedAnswer(BoothReason.MULTIPLE_CITATION_LINES)
+    cited_text = header[len(_CITATION_MARKER) :]
+    # A copied rendered value (``reference = value``) may itself carry commas, so the cut at
+    # the *first* ``=`` happens before the comma split: only the reference side is ever
+    # split, validated, cited or aired, and the value cannot manufacture citation items.
+    if "=" in cited_text:
+        cited_text = cited_text.partition("=")[0]
     cited = tuple(
-        dict.fromkeys(
-            item.strip()
-            for item in header[len(_CITATION_MARKER):].split(",")
-            if item.strip()
-        )
+        dict.fromkeys(item.strip() for item in cited_text.split(",") if item.strip())
     )
     if not cited:
         return _RefusedAnswer(BoothReason.UNCITED)
     permitted = set(allowed)
-    if any(reference not in permitted for reference in cited):
-        return _RefusedAnswer(BoothReason.INVENTED_REFERENCE)
-    text = "\n".join(lines[start + 1:]).strip()
+    expanded: list[str] = []
+    for item in cited:
+        if identity is not None and item == identity:
+            # The event's own identity names the whole event: it expands to every
+            # reference the event owns, never airs as the bare identity.
+            expanded.extend(allowed)
+        elif item in permitted:
+            expanded.append(item)
+        else:
+            return _RefusedAnswer(BoothReason.INVENTED_REFERENCE)
+    evidence = tuple(dict.fromkeys(expanded))
+    if not evidence:
+        return _RefusedAnswer(BoothReason.UNCITED)
+    text = "\n".join(lines[start + 1 :]).strip()
     if not text:
         return _RefusedAnswer(BoothReason.BLANK_TEXT)
     scanned = _scan_view(text)
@@ -528,7 +578,7 @@ def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _Refu
             if supplied and not _has_attached_bracket(scanned, match.end()):
                 continue
             return _RefusedAnswer(BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT)
-    return _AcceptedAnswer(text=text, evidence=cited)
+    return _AcceptedAnswer(text=text, evidence=evidence)
 
 
 def _normalise(text: str) -> str:
@@ -565,7 +615,9 @@ def _positive_seconds(value: object, name: str) -> float:
         raise TypeError(f"{name} must be a number, got {type(value).__name__}")
     seconds = float(value)
     if not math.isfinite(seconds) or seconds <= 0:
-        raise ValueError(f"{name} must be a positive finite number of seconds, got {value!r}")
+        raise ValueError(
+            f"{name} must be a positive finite number of seconds, got {value!r}"
+        )
     return seconds
 
 
@@ -591,8 +643,10 @@ class CommentaryBooth:
         context_window_seconds: float,
         max_output_tokens: int,
         timeout_seconds: float,
+        driver_directory: Mapping[int, tuple[str, str]],
     ) -> None:
         self._model = model
+        self._driver_directory = dict(driver_directory)
         self._events = tuple(events)
         if not self._events:
             raise ValueError(
@@ -608,14 +662,18 @@ class CommentaryBooth:
         self._settings = settings
         self._clock = clock
         self._session_key = self._events[0].session_key
-        self._max_context_turns = _bounded_int(max_context_turns, "max_context_turns", minimum=1)
+        self._max_context_turns = _bounded_int(
+            max_context_turns, "max_context_turns", minimum=1
+        )
         self._context_char_budget = _bounded_int(
             context_char_budget, "context_char_budget", minimum=0
         )
         self._context_window_seconds = _positive_seconds(
             context_window_seconds, "context_window_seconds"
         )
-        self._max_output_tokens = _bounded_int(max_output_tokens, "max_output_tokens", minimum=1)
+        self._max_output_tokens = _bounded_int(
+            max_output_tokens, "max_output_tokens", minimum=1
+        )
         self._timeout_seconds = _positive_seconds(timeout_seconds, "timeout_seconds")
 
     def __repr__(self) -> str:
@@ -685,7 +743,9 @@ class CommentaryBooth:
                     )
                 )
                 continue
-            parsed = _parse_answer(response.text, tuple(item[0] for item in citable))
+            parsed = _parse_answer(
+                response.text, tuple(item[0] for item in citable), identity=reference
+            )
             if isinstance(parsed, _RefusedAnswer):
                 outcomes.append(
                     self._outcome(
@@ -718,7 +778,9 @@ class CommentaryBooth:
                     created_at=self._clock.now(),
                 )
             )
-            outcomes.append(self._outcome(OutcomeKind.TURN, reference, event, speaker=speaker))
+            outcomes.append(
+                self._outcome(OutcomeKind.TURN, reference, event, speaker=speaker)
+            )
         return BoothResult(
             transcript=Transcript(
                 session_key=self._session_key,
@@ -771,7 +833,9 @@ class CommentaryBooth:
         """
         if newest is None or event.timestamp_value is None:
             return False
-        return newest - event.timestamp_value > dt.timedelta(seconds=self._context_window_seconds)
+        return newest - event.timestamp_value > dt.timedelta(
+            seconds=self._context_window_seconds
+        )
 
     def _bounded_context(self, turns: Sequence[Turn]) -> tuple[Turn, ...]:
         """The most recent turns within the turn count and character budget, oldest first.
@@ -805,7 +869,10 @@ class CommentaryBooth:
 
         No reference outside ``citable`` appears anywhere in it, so the prompt cannot hand
         the model a source the event does not own. Both F04 prohibitions are carried
-        verbatim in the rules block.
+        verbatim in the rules block. The EVENT block names the driver and the team from
+        the session directory when it resolves the event's number, and the declared
+        fallback otherwise; that identity is prompt material only, never citable evidence,
+        and it never enters ``event.evidence``.
         """
         lines = [
             f"You are {persona.name}, the {persona.seat.value} commentator in a two-person "
@@ -816,6 +883,8 @@ class CommentaryBooth:
             "RULES:",
             "- Cite only the references listed under EVIDENCE; never name a reference that "
             "is not listed there.",
+            "- The values under VALUES are commentary material only: they never belong on "
+            "the citation line.",
             f"- Start your answer with the citation line, exactly: {_CITATION_MARKER} "
             "<reference>[, <reference>...]",
             "- After that line, write the commentary and nothing else.",
@@ -827,10 +896,34 @@ class CommentaryBooth:
             "",
             _CITATION_MARKER,
         ]
-        lines.extend(f"- {reference} = {_render(value)}" for reference, value in citable)
-        lines.extend(["", "EVENT:", f"type: {event.event_type.value}", f"family: {event.family}"])
-        if event.driver_number is not None:
-            lines.append(f"driver_number: {event.driver_number}")
+        # A reference and its value are rendered apart, deliberately: a prompt line that
+        # prints ``reference = value`` teaches a copy of the whole line, and 55 of 206
+        # measured live answers cited the value together with the reference and were
+        # refused. Here the reference list is citable verbatim and the values live on
+        # numbered lines that carry no reference, so what a model copies is one or the
+        # other, never both.
+        lines.extend(f"- {reference}" for reference, _ in citable)
+        lines.append(
+            "VALUES, in the same order as the references above; commentary material only, "
+            "never part of the citation line:"
+        )
+        lines.extend(
+            f"{position}. {_render(value)}"
+            for position, (_, value) in enumerate(citable, start=1)
+        )
+        lines.extend(
+            ["", "EVENT:", f"type: {event.event_type.value}", f"family: {event.family}"]
+        )
+        identity = (
+            None
+            if event.driver_number is None
+            else self._driver_directory.get(event.driver_number)
+        )
+        if identity is None:
+            lines.append(_UNKNOWN_DRIVER)
+        else:
+            full_name, team_name = identity
+            lines.append(f"driver: {full_name} ({team_name}, #{event.driver_number})")
         if event.timestamp_value is not None:
             lines.append(f"timestamp: {event.timestamp_value.isoformat()}")
         else:

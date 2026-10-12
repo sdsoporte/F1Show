@@ -85,8 +85,11 @@ FABRICATED_NATIVE_RESPONSE = {
     "modelVersion": "gateway-reported-model-version",
 }
 
-#: A reference line in the assembled prompt: ``- family[record].field = value``.
-_PROMPT_REFERENCE = re.compile(r"^-\s+([a-z_]+\[\d+\]\.[a-z0-9_]+)\s*=", re.MULTILINE)
+#: A reference line in the assembled prompt: ``- family[record].field``, alone on its line.
+#: The citation-format correction prints a reference and its value on separate lines, so this
+#: is end-anchored: a numbered value line, the old ``reference = value`` line and a bulleted
+#: rule line are all left alone, and only a supplied reference is ever cited.
+_PROMPT_REFERENCE = re.compile(r"^-\s+([a-z_]+\[\d+\]\.[a-z0-9_]+)\s*$", re.MULTILINE)
 
 #: A hard test-side bound on every await, so a stall fails loudly instead of hanging.
 HAZARD_TIMEOUT_SECONDS = 30.0
@@ -97,7 +100,9 @@ async def bounded[T](awaitable: Awaitable[T], *, hazard: str) -> T:
     try:
         return await asyncio.wait_for(awaitable, timeout=HAZARD_TIMEOUT_SECONDS)
     except TimeoutError:
-        pytest.fail(f"HANG HAZARD: {hazard} did not finish within {HAZARD_TIMEOUT_SECONDS:g}s")
+        pytest.fail(
+            f"HANG HAZARD: {hazard} did not finish within {HAZARD_TIMEOUT_SECONDS:g}s"
+        )
 
 
 def load(name: str) -> list[dict[str, Any]]:
@@ -145,7 +150,9 @@ def small_events() -> tuple[DetectedEvent, ...]:
     return collect_session_events(SESSION_KEY, SMALL_PAYLOADS)
 
 
-def booth_settings(model_id: str = TEST_MODEL_ID, language: str = "en") -> BoothSettings:
+def booth_settings(
+    model_id: str = TEST_MODEL_ID, language: str = "en"
+) -> BoothSettings:
     """The booth settings every run here shares, with a fictional model id."""
     return BoothSettings(model_id=model_id, language=language)
 
@@ -198,9 +205,16 @@ def test_native_base_url_strips_only_a_trailing_version_segment() -> None:
     assert native_base_url(DECLARED_WITHOUT_VERSION) == DECLARED_WITHOUT_VERSION
     # A version segment that is not last, or a plain path segment, is left alone: a
     # derivation that always dropped the last path segment would break the second case.
-    assert native_base_url("https://gateway.invalid/v1/extra") == "https://gateway.invalid/v1/extra"
-    assert native_base_url("https://gateway.invalid/api") == "https://gateway.invalid/api"
-    assert native_base_url("https://gateway.invalid/v1beta") == "https://gateway.invalid"
+    assert (
+        native_base_url("https://gateway.invalid/v1/extra")
+        == "https://gateway.invalid/v1/extra"
+    )
+    assert (
+        native_base_url("https://gateway.invalid/api") == "https://gateway.invalid/api"
+    )
+    assert (
+        native_base_url("https://gateway.invalid/v1beta") == "https://gateway.invalid"
+    )
     assert native_base_url("https://gateway.invalid/v2") == "https://gateway.invalid"
 
 
@@ -272,7 +286,9 @@ async def test_the_native_base_url_derivation_composes_one_version_segment_on_th
 
 
 @pytest.mark.anyio
-async def test_run_session_turns_the_recorded_fixtures_into_an_evidence_carrying_transcript() -> None:
+async def test_run_session_turns_the_recorded_fixtures_into_an_evidence_carrying_transcript() -> (
+    None
+):
     model = EvidenceEchoModelClient()
 
     result = await bounded(
@@ -300,9 +316,76 @@ async def test_run_session_turns_the_recorded_fixtures_into_an_evidence_carrying
         assert turn.model_id == TEST_MODEL_ID
         assert turn.event_ref in references
         assert turn.evidence
-        assert all(reference.startswith(f"{turn.event_ref}.") for reference in turn.evidence)
+        assert all(
+            reference.startswith(f"{turn.event_ref}.") for reference in turn.evidence
+        )
         # The injected clock stamps every turn; no wall clock is read anywhere.
         assert turn.created_at == T0
+
+
+@pytest.mark.anyio
+async def test_run_session_threads_the_recorded_driver_directory_into_the_prompt() -> (
+    None
+):
+    """The loader's ``drivers`` payload reaches the booth, and only a joined line is drawn.
+
+    The loader returns the session's driver directory under its own key and ``run_session``
+    derives the ``driver_number -> (full_name, team_name)`` map from the payload it already
+    holds, so the EVENT block names the driver and the team instead of showing a bare
+    number. Every rendered identity line is exactly a directory entry; anything the
+    directory cannot resolve renders the declared fallback, never a half-join. The
+    acceptance is unchanged: every aired turn still cites only references its own event
+    supplied, so the join creates no newly citable token.
+    """
+    payloads = load_recorded_session(SESSION_KEY)
+    directory = {
+        record["driver_number"]: (record["full_name"], record["team_name"])
+        for record in payloads["drivers"]
+    }
+    model = EvidenceEchoModelClient()
+
+    result = await bounded(
+        run_session(
+            payloads=payloads,
+            session_key=SESSION_KEY,
+            model=model,
+            clock=FrozenClock(T0),
+            settings=booth_settings(),
+        ),
+        hazard="the recorded driver-directory run",
+    )
+
+    assert model.requests, "the recorded session must have produced a model call"
+    expected = {
+        f"driver: {full_name} ({team_name}, #{number})"
+        for number, (full_name, team_name) in directory.items()
+    }
+    joined_lines: list[str] = []
+    for request in model.requests:
+        driver_lines = [
+            line for line in request.prompt.splitlines() if line.startswith("driver:")
+        ]
+        assert len(driver_lines) == 1, (
+            "every prompt carries exactly one driver line; got "
+            f"{driver_lines!r} in:\n{request.prompt}"
+        )
+        (line,) = driver_lines
+        if line != "driver: unknown":
+            assert line in expected, (
+                f"a joined driver line must be a directory entry; got {line!r}"
+            )
+            joined_lines.append(line)
+    assert joined_lines, (
+        "the recorded directory must resolve at least one aired event, or the join is "
+        "never exercised through the run path"
+    )
+    references = {event_reference(event) for event in recorded_events()}
+    for turn in result.transcript.turns:
+        assert turn.event_ref in references
+        assert turn.evidence
+        assert all(
+            reference.startswith(f"{turn.event_ref}.") for reference in turn.evidence
+        )
 
 
 @pytest.mark.anyio
@@ -323,8 +406,14 @@ async def test_run_session_alternates_the_two_seats_over_a_controlled_payload() 
     )
 
     turns = result.transcript.turns
-    assert [turn.speaker for turn in turns] == [Speaker.lead, Speaker.color, Speaker.lead]
-    assert [turn.event_ref for turn in turns] == [event_reference(event) for event in events]
+    assert [turn.speaker for turn in turns] == [
+        Speaker.lead,
+        Speaker.color,
+        Speaker.lead,
+    ]
+    assert [turn.event_ref for turn in turns] == [
+        event_reference(event) for event in events
+    ]
     assert [outcome.kind for outcome in result.outcomes] == [OutcomeKind.TURN] * 3
 
 
@@ -418,7 +507,11 @@ async def test_main_runs_the_offline_fake_path_end_to_end_and_prints_the_transcr
     settings: Settings = make_settings(
         mode=Mode.replay.value,
         replay={"session_key": SESSION_KEY},
-        booth={"model_id": TEST_MODEL_ID, "language": "en", "provider": ModelProvider.fake.value},
+        booth={
+            "model_id": TEST_MODEL_ID,
+            "language": "en",
+            "provider": ModelProvider.fake.value,
+        },
     )
     events = small_events()
     responses = [
@@ -455,7 +548,9 @@ async def test_main_runs_the_offline_fake_path_end_to_end_and_prints_the_transcr
     ]
     assert result.transcript.session_key == SESSION_KEY
     for turn in result.transcript.turns:
-        assert turn.text in printed, f"{turn.text!r} is missing from the printed transcript"
+        assert turn.text in printed, (
+            f"{turn.text!r} is missing from the printed transcript"
+        )
         assert turn.speaker.value in printed
 
 
@@ -471,7 +566,11 @@ async def test_main_refuses_a_provider_that_disagrees_with_the_configuration(
     settings: Settings = make_settings(
         mode=Mode.replay.value,
         replay={"session_key": SESSION_KEY},
-        booth={"model_id": TEST_MODEL_ID, "language": "en", "provider": ModelProvider.fake.value},
+        booth={
+            "model_id": TEST_MODEL_ID,
+            "language": "en",
+            "provider": ModelProvider.fake.value,
+        },
     )
 
     # The message is asserted, not just the exception type. With the refusal removed this
@@ -514,14 +613,18 @@ def test_every_f10_name_is_exported_and_resolvable_from_the_package_root() -> No
         pytest.fail("F10_EXPORTED_NAMES must carry names for this sweep to check")
     for name in F10_EXPORTED_NAMES:
         assert name in f1show.__all__, f"{name} is missing from f1show.__all__"
-        assert getattr(f1show, name) is not None, f"{name} is not resolvable from f1show"
+        assert getattr(f1show, name) is not None, (
+            f"{name} is not resolvable from f1show"
+        )
 
 
 def test_the_run_module_names_no_real_model_id_literal() -> None:
     assert RUN_SOURCE.name == "run.py" and RUN_SOURCE.exists()
     source = RUN_SOURCE.read_text(encoding="utf-8").lower()
     for marker in ("gemini-", "gpt-", "claude", "llama"):
-        assert marker not in source, f"run.py must not name a real model ID like {marker!r}"
+        assert marker not in source, (
+            f"run.py must not name a real model ID like {marker!r}"
+        )
 
 
 def test_the_run_module_carries_no_clock_or_network_of_its_own() -> None:
@@ -543,19 +646,80 @@ def test_the_fake_provider_is_typed_as_a_model_client() -> None:
     assert isinstance(EvidenceEchoModelClient(), ModelClient)
 
 
+@pytest.mark.anyio
+async def test_the_fake_cites_only_a_reference_line_and_refuses_a_prompt_without_one() -> (
+    None
+):
+    """The double reads the reference-only prompt, and its own guard survives the change.
+
+    The booth no longer prints ``reference = value``: each citable reference stands alone
+    under ``EVIDENCE`` and its value sits on a separate numbered line. A pattern that still
+    required the ``= value`` tail matches nothing and the fake refuses every call. The
+    accepted prompt carries the real shape beside a numbered value line and a bulleted rule
+    line; the refused prompt carries every shape that is *not* a reference, the old
+    ``= value`` line included, so the end anchor is proved rather than assumed.
+    """
+
+    def request_for(prompt: str) -> ModelRequest:
+        return ModelRequest(
+            model_id=TEST_MODEL_ID,
+            prompt=prompt,
+            max_output_tokens=256,
+            timeout_seconds=30.0,
+        )
+
+    client = EvidenceEchoModelClient()
+    accepted = "\n".join(
+        [
+            "EVIDENCE:",
+            "- laps[3].lap_duration",
+            "VALUES, in the same order as the references above:",
+            "1. 105.091",
+            "- Do not repeat the previous turn.",
+        ]
+    )
+
+    response = await bounded(
+        client.generate(request_for(accepted)), hazard="the fake's read"
+    )
+
+    assert (
+        response.text
+        == "EVIDENCE: laps[3].lap_duration\nCommentary on laps[3].lap_duration."
+    )
+
+    not_a_reference = "\n".join(
+        [
+            "EVIDENCE:",
+            "1. 105.091",
+            "- laps[3].lap_duration = 105.091",
+            "- Do not repeat the previous turn.",
+        ]
+    )
+    with pytest.raises(AssertionError, match="no reference to cite"):
+        await bounded(
+            client.generate(request_for(not_a_reference)), hazard="the fake's refusal"
+        )
+
+
 # --- The recorded source: the loader that makes main one command ----------------
 
-#: The family record counts measured on the recorded session, per the provenance file.
+#: The record counts measured on the recorded session, per the provenance file. ``drivers``
+#: is the session's entry list rather than an event family: it is loaded for the booth's
+#: identity join, so it is counted here beside the five collector families.
 RECORDED_FAMILY_COUNTS = {
     "position": 403,
     "laps": 1059,
     "pit": 23,
     "stints": 43,
     "race_control": 120,
+    "drivers": 20,
 }
 
 
-def test_the_project_default_recorded_directory_resolves_to_the_recorded_corpus() -> None:
+def test_the_project_default_recorded_directory_resolves_to_the_recorded_corpus() -> (
+    None
+):
     assert DEFAULT_FIXTURE_DIR.is_dir()
     assert DEFAULT_FIXTURE_DIR.name == "openf1"
     assert DEFAULT_FIXTURE_DIR.parent.name == "fixtures"
@@ -564,30 +728,55 @@ def test_the_project_default_recorded_directory_resolves_to_the_recorded_corpus(
 def test_recorded_source_loads_the_collector_families_with_the_session_filter() -> None:
     loaded = load_recorded_session(SESSION_KEY)
 
-    assert set(loaded) == set(FAMILY_ORDER)
-    assert {family: len(records) for family, records in loaded.items()} == RECORDED_FAMILY_COUNTS
+    # F09f: the loaded contract is the five collector families plus the session's driver
+    # directory, which the booth joins to name the driver. The set is asserted exactly, so
+    # a sixth accidental family still fails here rather than riding along.
+    assert set(loaded) == set(FAMILY_ORDER) | {"drivers"}
+    assert {
+        family: len(records) for family, records in loaded.items()
+    } == RECORDED_FAMILY_COUNTS
     # The filter is explicit and proved on real records, not assumed: only this session's
     # rows come out even though sessions.json holds the whole season.
     assert all(
-        record["session_key"] == SESSION_KEY for records in loaded.values() for record in records
+        record["session_key"] == SESSION_KEY
+        for records in loaded.values()
+        for record in records
     )
     # The loader feeds the collector exactly what a direct fixture read does.
     assert collect_session_events(SESSION_KEY, loaded) == recorded_events()
 
 
-def test_recorded_source_excludes_the_families_the_collector_cannot_use() -> None:
-    """``intervals``, ``sessions`` and ``drivers`` are deliberately not loaded.
+def test_recorded_source_loads_the_driver_directory_but_derives_no_event_from_it() -> (
+    None
+):
+    """``drivers`` is loaded for the join yet stays an event-free family.
 
-    ``collect_session_events`` derives no event from any of them - ``intervals`` is only
-    normalized by the deferred F06 helper and ``sessions``/``drivers`` are not event
-    families - so loading them would add weight for zero commentary. Their recorded counts
-    are asserted here so the exclusion is visible rather than assumed.
+    F09f deliberately changed this pin rather than deleting it. The recorded ``drivers``
+    family is now part of the loaded contract - the booth names the driver and the team
+    from it - so the old ``drivers not in loaded`` assertion is no longer true. The
+    invariant that actually matters is strengthened instead: the directory is available
+    from the loader, and ``collect_session_events`` still derives **zero** extra events
+    from it, which is proved by collecting the loaded payload with and without the family.
+    ``intervals`` and ``sessions`` are still excluded, because nothing reads them.
     """
     loaded = load_recorded_session(SESSION_KEY)
 
+    assert "drivers" in loaded, (
+        "the directory must be available from the loader, because the run path derives the "
+        "driver identity map from the payload it already holds"
+    )
+    assert loaded["drivers"], (
+        "an empty directory would make the join silently fall back"
+    )
+    assert all(record["session_key"] == SESSION_KEY for record in loaded["drivers"])
+    collector_payloads = {
+        family: records for family, records in loaded.items() if family in FAMILY_ORDER
+    }
+    assert collect_session_events(SESSION_KEY, loaded) == collect_session_events(
+        SESSION_KEY, collector_payloads
+    ), "the drivers family must derive no event when it is present"
     assert "intervals" not in loaded
     assert "sessions" not in loaded
-    assert "drivers" not in loaded
     intervals = load("intervals")
     assert len(intervals) == 21041
     assert all(record["session_key"] == SESSION_KEY for record in intervals)
@@ -614,6 +803,86 @@ def test_recorded_source_refuses_a_missing_family_file(tmp_path: Path) -> None:
     assert "position" in str(caught.value)
 
 
+def _write_synthetic_corpus(
+    directory: Path, *, drivers: Sequence[Mapping[str, object]] | None
+) -> None:
+    """Write a minimal recorded corpus into ``directory``.
+
+    Every collector family holds one record whose only load-bearing property is the session
+    key, because what these tests exercise is the loader's per-family file selection and its
+    session filter, not the record shape the collector validates afterwards. ``drivers`` is
+    written only when supplied, so a caller can model a corpus that is missing exactly that
+    family. Nothing here touches the real fixtures: the corpus is built under pytest's
+    ``tmp_path`` and thrown away with it.
+    """
+    for family in FAMILY_ORDER:
+        (directory / f"{family}.json").write_text(
+            json.dumps([{"session_key": SESSION_KEY}]), encoding="utf-8"
+        )
+    if drivers is not None:
+        (directory / "drivers.json").write_text(
+            json.dumps([dict(record) for record in drivers]), encoding="utf-8"
+        )
+
+
+def test_recorded_source_refuses_a_corpus_missing_only_the_driver_directory(
+    tmp_path: Path,
+) -> None:
+    """The directory family is required, and the refusal must name it.
+
+    Honest pin, not a RED-derived test: the behaviour already exists. The empty-directory
+    test above stops on ``position`` and therefore never reaches the directory family, so
+    this path had no coverage. Every other family here is present and session-matching, so
+    the typed refusal can only come from the missing ``drivers.json``.
+    """
+    _write_synthetic_corpus(tmp_path, drivers=None)
+
+    with pytest.raises(RecordedSourceMissingError) as caught:
+        load_recorded_session(SESSION_KEY, fixtures_dir=tmp_path)
+
+    message = str(caught.value)
+    assert str(tmp_path / "drivers.json") in message, (
+        f"the typed refusal must name the missing family file; got {message!r}"
+    )
+
+
+def test_recorded_source_filters_the_driver_directory_by_session(
+    tmp_path: Path,
+) -> None:
+    """The directory is session-filtered like every other family, not merely trusted.
+
+    Honest pin, not a RED-derived test: the loader already filters every loaded family. The
+    recorded corpus holds 20 directory rows that all carry the requested session key, so a
+    loader that stopped filtering the directory would still satisfy every pin asserted
+    against the real fixtures. This synthetic corpus spans two session keys and gives the
+    clause teeth: only the requested session's directory rows may come back, and the other
+    session's row must be dropped rather than joined.
+    """
+    wanted: Mapping[str, object] = {
+        "session_key": SESSION_KEY,
+        "driver_number": 4,
+        "full_name": "Lando Norris",
+        "team_name": "McLaren",
+    }
+    other: Mapping[str, object] = {
+        "session_key": SESSION_KEY + 1,
+        "driver_number": 44,
+        "full_name": "Lewis HAMILTON",
+        "team_name": "Ferrari",
+    }
+    _write_synthetic_corpus(tmp_path, drivers=[wanted, other])
+
+    loaded = load_recorded_session(SESSION_KEY, fixtures_dir=tmp_path)
+
+    assert loaded["drivers"] == [wanted], (
+        "the loader keeps only the requested session's directory rows; got "
+        f"{loaded['drivers']!r}"
+    )
+    assert all(record["session_key"] == SESSION_KEY for record in loaded["drivers"]), (
+        "no other session's driver may survive the filter"
+    )
+
+
 @pytest.mark.anyio
 async def test_main_runs_the_full_command_from_the_recorded_source_with_a_fake_provider(
     make_settings: Any, capsys: pytest.CaptureFixture[str]
@@ -622,7 +891,11 @@ async def test_main_runs_the_full_command_from_the_recorded_source_with_a_fake_p
     settings: Settings = make_settings(
         mode=Mode.replay.value,
         replay={"session_key": SESSION_KEY},
-        booth={"model_id": TEST_MODEL_ID, "language": "en", "provider": ModelProvider.fake.value},
+        booth={
+            "model_id": TEST_MODEL_ID,
+            "language": "en",
+            "provider": ModelProvider.fake.value,
+        },
     )
     fake = EvidenceEchoModelClient()
 
@@ -634,7 +907,9 @@ async def test_main_runs_the_full_command_from_the_recorded_source_with_a_fake_p
     turns = result.transcript.turns
     printed = capsys.readouterr().out
     assert result.transcript.session_key == SESSION_KEY
-    assert fake.requests, "the recorded source must have produced at least one model call"
+    assert fake.requests, (
+        "the recorded source must have produced at least one model call"
+    )
     assert turns and turns[0].speaker is Speaker.lead
     assert [turn.speaker for turn in turns] == [
         Speaker.lead if index % 2 == 0 else Speaker.color for index in range(len(turns))

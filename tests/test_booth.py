@@ -140,11 +140,16 @@ def ref(event: DetectedEvent) -> str:
 def spoken(reference: str, text: str) -> ModelResponse:
     """A valid model answer: a citation line followed by the commentary."""
     return ModelResponse(
-        model_id=TEST_MODEL_ID, text=f"EVIDENCE: {reference}\n{text}", input_tokens=3, output_tokens=5
+        model_id=TEST_MODEL_ID,
+        text=f"EVIDENCE: {reference}\n{text}",
+        input_tokens=3,
+        output_tokens=5,
     )
 
 
-def answered(events: Sequence[DetectedEvent], texts: Sequence[str]) -> list[ModelResponse]:
+def answered(
+    events: Sequence[DetectedEvent], texts: Sequence[str]
+) -> list[ModelResponse]:
     """One valid answer per event, in order."""
     return [spoken(ref(event), text) for event, text in zip(events, texts, strict=True)]
 
@@ -182,6 +187,7 @@ def make_booth(
     context_window_seconds: float = 3600.0,
     max_output_tokens: int = 64,
     timeout_seconds: float = 3.0,
+    driver_directory: dict[int, tuple[str, str]] | None = None,
 ) -> CommentaryBooth:
     """Build the booth with the shipped frozen clock and explicit bounds."""
     if settings is None:
@@ -196,6 +202,7 @@ def make_booth(
         context_window_seconds=context_window_seconds,
         max_output_tokens=max_output_tokens,
         timeout_seconds=timeout_seconds,
+        driver_directory={} if driver_directory is None else driver_directory,
     )
 
 
@@ -226,7 +233,10 @@ async def test_each_seat_prompt_carries_only_its_own_persona() -> None:
 
     result = await bounded(booth.run(), hazard="the two-seat persona run")
 
-    assert [turn.speaker for turn in result.transcript.turns] == [Speaker.lead, Speaker.color]
+    assert [turn.speaker for turn in result.transcript.turns] == [
+        Speaker.lead,
+        Speaker.color,
+    ]
     assert LEAD_PERSONA.name in model.requests[0].prompt
     assert LEAD_PERSONA.register_instruction in model.requests[0].prompt
     assert COLOR_PERSONA.register_instruction not in model.requests[0].prompt
@@ -259,7 +269,9 @@ async def test_turn_order_is_lead_first_then_strict_alternation() -> None:
         Speaker.color,
     ]
     assert [outcome.kind for outcome in result.outcomes] == [OutcomeKind.TURN] * 4
-    assert all(outcome.event_type is EventType.POSITION_CHANGE for outcome in result.outcomes)
+    assert all(
+        outcome.event_type is EventType.POSITION_CHANGE for outcome in result.outcomes
+    )
 
 
 @pytest.mark.parametrize(
@@ -282,7 +294,9 @@ async def test_a_priority_event_lets_the_lead_take_the_next_slot(
     model = ScriptedModelClient(answered(events, ["L0.", "L1.", "L2."]))
     booth = make_booth(events, model)
 
-    order = await spoken_order(booth, hazard=f"the priority-band run for {priority_type.value}")
+    order = await spoken_order(
+        booth, hazard=f"the priority-band run for {priority_type.value}"
+    )
 
     # Plain alternation would give lead/colour/lead here; the incident pulls the lead in.
     assert order == (Speaker.lead, Speaker.lead, Speaker.color)
@@ -292,7 +306,9 @@ async def test_a_priority_event_lets_the_lead_take_the_next_slot(
 
 
 @pytest.mark.anyio
-async def test_the_bounded_window_keeps_the_previous_turn_and_drops_older_ones_whole() -> None:
+async def test_the_bounded_window_keeps_the_previous_turn_and_drops_older_ones_whole() -> (
+    None
+):
     events = [detected(index=index) for index in range(4)]
     texts = ["turn zero text", "turn one text", "turn two text", "turn three text"]
     model = ScriptedModelClient(answered(events, texts))
@@ -321,7 +337,9 @@ async def test_a_window_of_one_still_keeps_the_immediately_previous_turn() -> No
 
 
 @pytest.mark.anyio
-async def test_the_character_budget_drops_older_turns_whole_and_keeps_the_previous() -> None:
+async def test_the_character_budget_drops_older_turns_whole_and_keeps_the_previous() -> (
+    None
+):
     events = [detected(index=index) for index in range(3)]
     long_turn = "L" * 200
     brief_turn = "B" * 10
@@ -353,10 +371,16 @@ async def test_the_previous_turn_is_included_even_when_it_exceeds_the_budget() -
 
 
 @pytest.mark.anyio
-async def test_evidence_propagates_only_the_cited_references_of_the_supplied_event() -> None:
+async def test_evidence_propagates_only_the_cited_references_of_the_supplied_event() -> (
+    None
+):
     event = detected(index=2, evidence={"position": 3, "status": "TRACK"})
     model = ScriptedModelClient(
-        [spoken("position[2].status, position[2].position", "Verstappen is P3 on track.")]
+        [
+            spoken(
+                "position[2].status, position[2].position", "Verstappen is P3 on track."
+            )
+        ]
     )
     booth = make_booth([event], model)
 
@@ -365,7 +389,9 @@ async def test_evidence_propagates_only_the_cited_references_of_the_supplied_eve
     (turn,) = result.transcript.turns
     assert turn.evidence == ("position[2].status", "position[2].position")
     assert turn.event_ref == event_reference(event) == "position[2]"
-    assert all(reference.startswith(event_reference(event)) for reference in turn.evidence)
+    assert all(
+        reference.startswith(event_reference(event)) for reference in turn.evidence
+    )
     assert turn.model_id == TEST_MODEL_ID
     assert turn.text == "Verstappen is P3 on track."
 
@@ -379,8 +405,134 @@ async def test_the_prompt_offers_exactly_the_supplied_references() -> None:
     await bounded(booth.run(), hazard="the prompt-reference run")
 
     prompt = model.requests[0].prompt
-    assert "position[7].position = 3" in prompt
+    assert "- position[7].position" in prompt, (
+        "the reference is listed citable, on its own line"
+    )
+    assert "position[7].position = 3" not in prompt, (
+        "a reference and its value are never rendered together: the copied line is what "
+        "55 of 206 measured live answers turned into an invented citation"
+    )
+    assert "\n1. 3" in prompt, "the value is still shown, on a value line of its own"
     assert set(REFERENCE_TOKEN.findall(prompt)) == {"position[7].position"}
+
+
+# --- The driver-identity join (F09f) -------------------------------------------
+
+#: Driver 4 of the recorded session, the worked example the F09f scope names.
+JOINED_DRIVER_NUMBER = 4
+JOINED_DRIVER_NAME = "Lando Norris"
+JOINED_TEAM_NAME = "McLaren"
+#: The one declared fallback for a driver the directory cannot resolve. It is a single
+#: string, not a half-join: a bare number with no name and a name with no team are both
+#: refused as half-joins by rendering exactly this.
+UNKNOWN_DRIVER_LINE = "driver: unknown"
+
+
+@pytest.mark.anyio
+async def test_the_prompt_joins_the_driver_name_and_team_into_the_event_block() -> None:
+    """RED before F09f: the prompt showed ``driver_number: 4`` and named nobody.
+
+    The EVENT block must carry the joined identity so both seats can name the driver and
+    the team; the bare ``driver_number:`` line it replaces is asserted absent, because a
+    prompt that still printed it would leave the join half-done beside a raw number.
+    """
+    event = detected(index=0, driver_number=JOINED_DRIVER_NUMBER)
+    model = ScriptedModelClient([spoken(ref(event), "Norris is P3.")])
+    booth = make_booth(
+        [event],
+        model,
+        driver_directory={JOINED_DRIVER_NUMBER: (JOINED_DRIVER_NAME, JOINED_TEAM_NAME)},
+    )
+
+    await bounded(booth.run(), hazard="the driver-identity join run")
+
+    prompt = model.requests[0].prompt
+    joined = (
+        f"driver: {JOINED_DRIVER_NAME} ({JOINED_TEAM_NAME}, #{JOINED_DRIVER_NUMBER})"
+    )
+    assert joined in prompt, (
+        "the EVENT block must join the driver's name and team; the pre-F09f prompt "
+        f"carried only the bare number. Expected {joined!r} in:\n{prompt}"
+    )
+    assert "driver_number:" not in prompt, (
+        "the joined identity line replaces the bare driver number, so the prompt no "
+        "longer renders 'driver_number:' at all"
+    )
+    # No newly citable token: the identity line is prose and changes nothing about the
+    # reference set the event offers.
+    assert set(REFERENCE_TOKEN.findall(prompt)) == set(evidence_references(event))
+
+
+@pytest.mark.anyio
+async def test_the_joined_driver_identity_is_not_citable_evidence() -> None:
+    """The join is prompt material, never a source: identity cannot become a citation.
+
+    Identity is deliberately kept out of ``event.evidence`` and ``_citable_evidence``. An
+    answer that cites the identity line therefore has no reference to cite and is refused
+    as an invented reference, which is what makes the join safe to show the model.
+    """
+    event = detected(index=0, driver_number=JOINED_DRIVER_NUMBER)
+    identity = f"{JOINED_DRIVER_NAME} ({JOINED_TEAM_NAME}, #{JOINED_DRIVER_NUMBER})"
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text=f"EVIDENCE: {identity}\nNorris is P3.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth(
+        [event],
+        model,
+        driver_directory={JOINED_DRIVER_NUMBER: (JOINED_DRIVER_NAME, JOINED_TEAM_NAME)},
+    )
+
+    result = await bounded(booth.run(), hazard="the identity-citability run")
+
+    assert evidence_references(event) == ("position[0].position",), (
+        "the event's citable references never carry the joined identity"
+    )
+    assert result.transcript.turns == (), (
+        "a citation of the identity is not backed by the event and must not air"
+    )
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.INVENTED_REFERENCE
+
+
+@pytest.mark.parametrize(
+    ("driver_number", "directory"),
+    [
+        (None, {}),
+        (91, {}),
+        (91, {JOINED_DRIVER_NUMBER: (JOINED_DRIVER_NAME, JOINED_TEAM_NAME)}),
+    ],
+    ids=["null-number", "absent-from-directory", "absent-beside-another-driver"],
+)
+@pytest.mark.anyio
+async def test_an_unresolvable_driver_renders_one_declared_fallback(
+    driver_number: int | None, directory: dict[int, tuple[str, str]]
+) -> None:
+    """A null number or a number the directory lacks renders the declared fallback.
+
+    A half-join -- a name with no team, or a bare number with no name -- would tell the
+    model something the corpus does not support. Exactly one fallback line is drawn, so
+    the prompt is honest about what it does not know instead of inventing a driver.
+    """
+    event = detected(index=0, driver_number=driver_number)
+    model = ScriptedModelClient([spoken(ref(event), "Someone is P3.")])
+    booth = make_booth([event], model, driver_directory=directory)
+
+    await bounded(booth.run(), hazard="the unresolved-driver fallback run")
+
+    prompt = model.requests[0].prompt
+    driver_lines = [line for line in prompt.splitlines() if line.startswith("driver:")]
+    assert driver_lines == [UNKNOWN_DRIVER_LINE], (
+        "an unresolvable driver renders exactly the one declared fallback line, never a "
+        f"half-join and never two driver lines; got {driver_lines!r} in:\n{prompt}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -388,7 +540,10 @@ async def test_the_prompt_offers_exactly_the_supplied_references() -> None:
     [
         ("Verstappen is P3.", BoothReason.UNCITED),
         ("EVIDENCE:\nVerstappen is P3.", BoothReason.UNCITED),
-        ("EVIDENCE: position[99].position\nVerstappen is P3.", BoothReason.INVENTED_REFERENCE),
+        (
+            "EVIDENCE: position[99].position\nVerstappen is P3.",
+            BoothReason.INVENTED_REFERENCE,
+        ),
         ("EVIDENCE: position[0].position\n   ", BoothReason.BLANK_TEXT),
     ],
 )
@@ -398,7 +553,11 @@ async def test_an_answer_without_a_supplied_citation_is_refused(
 ) -> None:
     event = detected(index=0)
     model = ScriptedModelClient(
-        [ModelResponse(model_id=TEST_MODEL_ID, text=text, input_tokens=1, output_tokens=1)]
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID, text=text, input_tokens=1, output_tokens=1
+            )
+        ]
     )
     booth = make_booth([event], model)
 
@@ -494,7 +653,9 @@ async def test_any_later_line_that_opens_with_the_citation_marker_is_a_violation
     )
     booth = make_booth([event], model)
 
-    result = await bounded(booth.run(), hazard=f"the marker-drift run for {second_line!r}")
+    result = await bounded(
+        booth.run(), hazard=f"the marker-drift run for {second_line!r}"
+    )
 
     assert result.transcript.turns == ()
     (outcome,) = result.outcomes
@@ -513,11 +674,17 @@ async def test_any_later_line_that_opens_with_the_citation_marker_is_a_violation
     ],
 )
 @pytest.mark.anyio
-async def test_the_protocol_violation_is_decided_before_the_citation_content(text: str) -> None:
+async def test_the_protocol_violation_is_decided_before_the_citation_content(
+    text: str,
+) -> None:
     """Shape before content: two citation-marked lines are a violation whatever they cite."""
     event = detected(index=0)
     model = ScriptedModelClient(
-        [ModelResponse(model_id=TEST_MODEL_ID, text=text, input_tokens=1, output_tokens=1)]
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID, text=text, input_tokens=1, output_tokens=1
+            )
+        ]
     )
     booth = make_booth([event], model)
 
@@ -532,7 +699,9 @@ async def test_the_protocol_violation_is_decided_before_the_citation_content(tex
 
 
 @pytest.mark.anyio
-async def test_a_second_citation_line_is_refused_even_when_its_reference_was_supplied() -> None:
+async def test_a_second_citation_line_is_refused_even_when_its_reference_was_supplied() -> (
+    None
+):
     """A supplied reference on a second citation line is refused, never merged in.
 
     Merging was the rejected alternative: the extra line is a protocol violation whether
@@ -557,7 +726,9 @@ async def test_a_second_citation_line_is_refused_even_when_its_reference_was_sup
     )
     booth = make_booth([event], model)
 
-    result = await bounded(booth.run(), hazard="the supplied-second-citation refusal run")
+    result = await bounded(
+        booth.run(), hazard="the supplied-second-citation refusal run"
+    )
 
     assert result.transcript.turns == ()
     (outcome,) = result.outcomes
@@ -566,7 +737,9 @@ async def test_a_second_citation_line_is_refused_even_when_its_reference_was_sup
 
 
 @pytest.mark.anyio
-async def test_commentary_that_merely_mentions_the_marker_mid_sentence_still_airs() -> None:
+async def test_commentary_that_merely_mentions_the_marker_mid_sentence_still_airs() -> (
+    None
+):
     """The over-refusal boundary: only a line *opening* with the marker is a violation."""
     event = detected(index=0)
     text = "Verstappen is P3 on track; the EVIDENCE: board confirms it."
@@ -598,7 +771,9 @@ async def _marker_shaped_prose_airs(*, case: str, line: str) -> None:
     model = ScriptedModelClient([spoken(ref(event), text)])
     booth = make_booth([event], model)
 
-    result = await bounded(booth.run(), hazard=f"the F12 over-refusal run for case {case}")
+    result = await bounded(
+        booth.run(), hazard=f"the F12 over-refusal run for case {case}"
+    )
 
     assert result.transcript.turns, (
         f"case {case}: {line!r} opens with the marker word but carries no reference token, "
@@ -613,24 +788,32 @@ async def _marker_shaped_prose_airs(*, case: str, line: str) -> None:
 
 
 @pytest.mark.anyio
-async def test_case_a_an_unbulleted_mixed_case_marker_line_without_a_token_is_prose() -> None:
+async def test_case_a_an_unbulleted_mixed_case_marker_line_without_a_token_is_prose() -> (
+    None
+):
     """Case A: ``Evidence:`` with no bullet, mixed case and no reference token.
 
     This exact marker shape was already refused *before* the tolerant predicate existed, so
     it is a pre-existing false refusal rather than one F09b introduced; requiring the token
     is what corrects it.
     """
-    await _marker_shaped_prose_airs(case="A", line="Evidence: the gap closed by four tenths.")
+    await _marker_shaped_prose_airs(
+        case="A", line="Evidence: the gap closed by four tenths."
+    )
 
 
 @pytest.mark.anyio
 async def test_case_b_a_bullet_prefixed_marker_line_without_a_token_is_prose() -> None:
     """Case B: a bullet, ``Evidence:`` and no reference token, introduced by F09b's predicate."""
-    await _marker_shaped_prose_airs(case="B", line="- Evidence: the gap closed by four tenths.")
+    await _marker_shaped_prose_airs(
+        case="B", line="- Evidence: the gap closed by four tenths."
+    )
 
 
 @pytest.mark.anyio
-async def test_case_c_a_star_prefixed_lower_case_marker_line_without_a_token_is_prose() -> None:
+async def test_case_c_a_star_prefixed_lower_case_marker_line_without_a_token_is_prose() -> (
+    None
+):
     """Case C: a star bullet, lower case and no reference token, introduced by F09b's predicate."""
     await _marker_shaped_prose_airs(case="C", line="* evidence: tyres are gone")
 
@@ -642,17 +825,23 @@ async def test_case_d_an_exact_marker_line_without_a_token_is_prose() -> None:
     Like case A this was refused before the tolerant predicate; the missing reference token,
     not the spelling, is why it is not a citation attempt.
     """
-    await _marker_shaped_prose_airs(case="D", line="EVIDENCE: the gap closed by four tenths.")
+    await _marker_shaped_prose_airs(
+        case="D", line="EVIDENCE: the gap closed by four tenths."
+    )
 
 
 @pytest.mark.anyio
-async def test_case_e_a_bullet_prefixed_exact_marker_line_without_a_token_is_prose() -> None:
+async def test_case_e_a_bullet_prefixed_exact_marker_line_without_a_token_is_prose() -> (
+    None
+):
     """Case E: a bullet plus the exact marker and no reference token, introduced by F09b."""
     await _marker_shaped_prose_airs(case="E", line="- EVIDENCE: the tyres are gone.")
 
 
 @pytest.mark.anyio
-async def test_a_citation_shaped_line_stays_refused_when_the_reference_shape_cannot_be_built() -> None:
+async def test_a_citation_shaped_line_stays_refused_when_the_reference_shape_cannot_be_built() -> (
+    None
+):
     """The fail-closed branch: with no derived shape, a marker-shaped line is still a violation.
 
     ``_reference_scanner`` returns ``None`` only for references without the collector's
@@ -706,7 +895,9 @@ async def test_the_prompt_teaches_the_same_marker_the_parser_accepts() -> None:
         f"two different markers. Counted {prompt.count(marker)} occurrences of {marker!r} "
         f"in:\n{prompt}"
     )
-    assert f"- Start your answer with the citation line, exactly: {marker} " in prompt, (
+    assert (
+        f"- Start your answer with the citation line, exactly: {marker} " in prompt
+    ), (
         "the rule line must interpolate the parser's marker rather than carry its own literal"
     )
     assert f"\n{marker}\n" in prompt, (
@@ -789,6 +980,416 @@ async def test_a_supplied_reference_that_is_not_cited_is_never_attributed() -> N
     assert turn.evidence == ("position[0].position",)
 
 
+# --- The citation format (F13): the measured live round -------------------------
+# 206 live calls (round 5, Austin 2024, gemini-3.5-flash-lite by the gateway) measured
+# three fidelities: 58 cited a listed reference and aired; 93 cited the event's identity
+# and aired only because a probe normalised them; 55 copied the reference together with
+# its value, exactly as the prompt's EVIDENCE block printed it, and were refused as
+# ``invented_reference``. The two faithful-but-wrong shapes are the defect this unit
+# fixes: the block no longer renders a reference and a value in copyable company, and
+# the parser normalises both shapes to references the event actually owns.
+
+
+@pytest.mark.anyio
+async def test_a_citation_copying_the_rendered_value_cites_its_reference() -> None:
+    """The 55: ``EVIDENCE: <reference> = <value>`` must cite the reference, not be refused.
+
+    Measured red before this unit: the prompt printed ``- position[0].position = 3`` and
+    a citation copying that line was refused as ``invented_reference``. The value after
+    the ``=`` is a copy artefact of the prompt's own rendering; the reference on its left
+    is the token the event owns, so the answer airs with exactly that reference.
+    """
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text="EVIDENCE: position[0].position = 3\nVerstappen is P3.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the value-copying citation run")
+
+    (turn,) = result.transcript.turns
+    assert turn.text == "Verstappen is P3."
+    assert turn.evidence == ("position[0].position",), (
+        "the citation must normalise to the supplied reference, never carry the copied value"
+    )
+
+
+@pytest.mark.anyio
+async def test_a_citation_of_the_event_identity_maps_to_the_references_the_event_owns() -> (
+    None
+):
+    """The 93: ``EVIDENCE: <identity>`` maps to the references that identity names.
+
+    Measured red before this unit: the event's own stable identity — the ``family[index]``
+    the module itself derives — was refused as ``invented_reference``, although it is a
+    faithful name of a real event. The identity is not an evidence tuple, so the emitted
+    turn must carry the references the event owns, never the bare identity.
+    """
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text="EVIDENCE: position[0]\nVerstappen is P3.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the identity-citation run")
+
+    (turn,) = result.transcript.turns
+    assert turn.evidence == ("position[0].position", "position[0].status"), (
+        "the identity must expand to exactly the references the event owns, in recorded "
+        "order, and never air as the bare identity"
+    )
+
+
+@pytest.mark.anyio
+async def test_an_identity_citation_mixed_with_a_reference_keeps_both_without_duplicating() -> (
+    None
+):
+    """An identity next to one of its own references expands once, order preserved."""
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text="EVIDENCE: position[0], position[0].status\nVerstappen is P3.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the mixed-identity-citation run")
+
+    (turn,) = result.transcript.turns
+    assert turn.evidence == ("position[0].position", "position[0].status")
+
+
+@pytest.mark.parametrize(
+    "citation",
+    [
+        # The identity of a different event is a token this event does not own.
+        "EVIDENCE: position[1]",
+        # The ``=`` copy shape must not rescue an unsupplied reference on its left.
+        "EVIDENCE: position[0].invented = 3",
+        "EVIDENCE: position[1].position = 3",
+    ],
+)
+@pytest.mark.anyio
+async def test_the_two_normalisations_never_admit_a_token_the_event_does_not_own(
+    citation: str,
+) -> None:
+    """The invariant does not move: only supplied tokens air, under either new shape."""
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text=f"{citation}\nVerstappen is P3.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the normalisation-boundary run")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.INVENTED_REFERENCE
+
+
+# --- F09e-C1: the ``=`` cut happens before the comma split ---------------------
+# Measured refusal on the delivered revision: ``EVIDENCE: laps[4].segments_sector_1 =
+# [20480, 20481, 0]`` was refused ``invented_reference`` because the header was split on
+# commas *before* the ``=`` truncation, so the value's own commas manufactured the items
+# ``20481`` and ``0]``, which no supplied reference matches. The reference side is the
+# only thing validated; the value is never split, cited or aired. The comma-free scalar
+# control was already accepted, so the defect reached exactly the lists and dicts the
+# prompt renders with commas.
+
+
+def laps_event(value: object) -> DetectedEvent:
+    """The measured event: ``laps[4]``, alone with the field whose rendered value carries commas."""
+    return detected(
+        index=4,
+        event_type=EventType.LAP_COMPLETED,
+        family="laps",
+        evidence={"segments_sector_1": value},
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "copied"),
+    [
+        # The exact measured value.
+        ([20480, 20481, 0], "[20480, 20481, 0]"),
+        # A mapping renders with the same commas.
+        ({"position": 3, "status": "TRACK"}, '{"position": 3, "status": "TRACK"}'),
+        # A string value is rendered verbatim, so its commas are just as opaque.
+        ("P3, TRACK, on lap 12", "P3, TRACK, on lap 12"),
+    ],
+)
+@pytest.mark.anyio
+async def test_a_copied_value_with_commas_still_cites_only_its_reference(
+    value: object, copied: str
+) -> None:
+    """RED before the cut-before-split fix: a comma inside the value is part of the value.
+
+    The value after the first ``=`` belongs to the reference on its left. It must never be
+    comma-split into further citation items, so the reference is accepted, the value never
+    reaches the evidence tuple, and the aired text is only the commentary after the
+    citation line.
+    """
+    event = laps_event(value)
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text=f"EVIDENCE: laps[4].segments_sector_1 = {copied}\nVerstappen is P3.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the comma-bearing copied value run")
+
+    (turn,) = result.transcript.turns
+    assert turn.text == "Verstappen is P3."
+    assert turn.evidence == ("laps[4].segments_sector_1",), (
+        "the copied value's commas must not manufacture citation items"
+    )
+
+
+@pytest.mark.anyio
+async def test_the_comma_free_scalar_control_still_cites_its_reference() -> None:
+    """Non-regression pin, already passing: a comma-free ``reference = scalar`` is unchanged."""
+    event = detected(
+        index=4,
+        event_type=EventType.LAP_COMPLETED,
+        family="laps",
+        evidence={"lap_duration": 105.091},
+    )
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text="EVIDENCE: laps[4].lap_duration = 105.091\nVerstappen is P3.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the comma-free scalar control run")
+
+    (turn,) = result.transcript.turns
+    assert turn.evidence == ("laps[4].lap_duration",)
+
+
+@pytest.mark.anyio
+async def test_a_reference_shaped_value_right_of_the_equals_is_ignored() -> None:
+    """Non-regression pin for measured probe A, already passing: the right side is the value.
+
+    The token after the first ``=`` is treated as the copied value of the reference on its
+    left even when it is itself reference-shaped. It is not validated, never cited, and
+    never aired -- the measured boundary the module docstring now declares.
+    """
+    event = detected(index=0, evidence={"position": 3})
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text=(
+                    "EVIDENCE: position[0].position = position[99].invented\n"
+                    "Verstappen is P3."
+                ),
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the reference-shaped value run")
+
+    (turn,) = result.transcript.turns
+    assert turn.text == "Verstappen is P3."
+    assert turn.evidence == ("position[0].position",)
+
+
+@pytest.mark.anyio
+async def test_two_supplied_references_left_of_the_equals_are_both_kept() -> None:
+    """Non-regression pin for measured probe B, already passing: the cut is at the *first* ``=``.
+
+    Two supplied references both stand left of the ``=``, so both are validated and kept;
+    the value on the right is discarded whole.
+    """
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text=(
+                    "EVIDENCE: position[0].position, position[0].status = 3\n"
+                    "Verstappen is P3."
+                ),
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the two-left-references run")
+
+    (turn,) = result.transcript.turns
+    assert turn.evidence == ("position[0].position", "position[0].status")
+
+
+@pytest.mark.anyio
+async def test_an_identity_left_of_the_equals_expands_and_the_right_side_is_discarded() -> (
+    None
+):
+    """Non-regression pin for measured probe C, already passing: identity expansion is unchanged.
+
+    ``position[0] = position[1]`` expands through the left identity to every reference the
+    event owns, exactly as before; the other identity on the right is the value and is
+    discarded, never cited.
+    """
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text="EVIDENCE: position[0] = position[1]\nVerstappen is P3.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the identity-both-sides run")
+
+    (turn,) = result.transcript.turns
+    assert turn.evidence == ("position[0].position", "position[0].status")
+
+
+@pytest.mark.parametrize(
+    "citation",
+    [
+        # An unsupplied left-hand token is still refused after the cut.
+        "EVIDENCE: position[0].invented = 3",
+        # A supplied-shaped but unowned reference on the left is still refused after the cut.
+        "EVIDENCE: position[1].position = 3",
+    ],
+)
+@pytest.mark.anyio
+async def test_a_refused_left_side_stays_refused_after_the_cut(citation: str) -> None:
+    """Non-regression pin, already passing: cutting first must not rescue an unowned token."""
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text=f"{citation}\nVerstappen is P3.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the refused-left-side run")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.INVENTED_REFERENCE
+
+
+@pytest.mark.anyio
+async def test_the_comma_split_path_is_unchanged_when_no_equals_is_present() -> None:
+    """Non-regression pin, already passing: without ``=`` the header still splits on commas."""
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text=(
+                    "EVIDENCE: position[0].position, position[0].status\n"
+                    "Verstappen is P3."
+                ),
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the no-equals comma-split run")
+
+    (turn,) = result.transcript.turns
+    assert turn.evidence == ("position[0].position", "position[0].status")
+
+
+@pytest.mark.anyio
+async def test_the_prompt_never_renders_a_reference_and_its_value_on_the_same_line() -> (
+    None
+):
+    """The block the 55 copied from: a reference and its value must not be copyable together.
+
+    Measured red before this unit: the EVIDENCE block printed
+    ``- position[0].position = 3``, and 55 of 206 live answers copied that line into the
+    citation, value included. The rendering now keeps every reference on its own line and
+    every value on a value line that carries no reference, so the line a model copies is
+    either a reference or a value, never both.
+    """
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    model = ScriptedModelClient([spoken(ref(event), "Verstappen is P3.")])
+    booth = make_booth([event], model)
+
+    await bounded(booth.run(), hazard="the evidence-block-shape run")
+
+    prompt = model.requests[0].prompt
+    lines = prompt.splitlines()
+    for reference in evidence_references(event):
+        carrying = [line for line in lines if reference in line]
+        assert carrying, f"the prompt must still list {reference}"
+        assert not any("=" in line for line in carrying), (
+            f"{reference!r} must never share a line with a value or an equals sign; the "
+            "copied line is what 55 live answers turned into an invented citation"
+        )
+    for value in ("3", "TRACK"):
+        carrying = [line for line in lines if value in line]
+        assert carrying, (
+            f"the prompt must still show the value {value!r}; evidence is not dropped"
+        )
+        assert not any(
+            any(reference in line for reference in evidence_references(event))
+            for line in carrying
+        ), f"the value {value!r} must sit on a line that carries no reference"
+
+
 # --- The residual citation channels (F09b) --------------------------------------
 
 #: A never-supplied reference in the collector's own ``<family>[<index>].<field>`` form.
@@ -804,7 +1405,9 @@ NON_BREAKING_SPACE = "\u00a0"
 
 
 @pytest.mark.anyio
-async def test_a_bullet_prefixed_citation_line_carrying_a_never_supplied_reference_is_a_violation() -> None:
+async def test_a_bullet_prefixed_citation_line_carrying_a_never_supplied_reference_is_a_violation() -> (
+    None
+):
     """Channel 1: a bullet-prefixed marker line is a citation attempt, not commentary.
 
     Before F09b these bytes aired a turn whose commentary carried the never-supplied
@@ -837,7 +1440,9 @@ async def test_a_bullet_prefixed_citation_line_carrying_a_never_supplied_referen
 
 
 @pytest.mark.anyio
-async def test_a_citation_line_with_a_space_before_the_colon_and_a_never_supplied_reference_is_a_violation() -> None:
+async def test_a_citation_line_with_a_space_before_the_colon_and_a_never_supplied_reference_is_a_violation() -> (
+    None
+):
     """Channel 2: ``EVIDENCE :`` with a space before the colon is still a citation attempt.
 
     Before F09b the space made the line invisible to both checks, so it aired as
@@ -869,7 +1474,9 @@ async def test_a_citation_line_with_a_space_before_the_colon_and_a_never_supplie
 
 
 @pytest.mark.anyio
-async def test_a_never_supplied_reference_inside_the_commentary_refuses_the_turn() -> None:
+async def test_a_never_supplied_reference_inside_the_commentary_refuses_the_turn() -> (
+    None
+):
     """Channel 3: a reference-shaped token mid-line, with no citation line of its own.
 
     Before F09b this aired: the token was neither a second citation line nor a
@@ -889,7 +1496,9 @@ async def test_a_never_supplied_reference_inside_the_commentary_refuses_the_turn
 
 
 @pytest.mark.anyio
-async def test_a_bare_never_supplied_reference_with_no_marker_refuses_the_turn() -> None:
+async def test_a_bare_never_supplied_reference_with_no_marker_refuses_the_turn() -> (
+    None
+):
     """Channel 4: a bare reference token with no marker at all, as the whole commentary.
 
     Before F09b this aired with the never-supplied reference as the entire turn text.
@@ -914,7 +1523,9 @@ async def test_a_supplied_reference_named_in_the_commentary_is_never_flagged() -
     model = ScriptedModelClient([spoken("position[0].position", text)])
     booth = make_booth([event], model)
 
-    result = await bounded(booth.run(), hazard="the supplied-reference-in-commentary run")
+    result = await bounded(
+        booth.run(), hazard="the supplied-reference-in-commentary run"
+    )
 
     (turn,) = result.transcript.turns
     assert turn.text == text
@@ -924,7 +1535,9 @@ async def test_a_supplied_reference_named_in_the_commentary_is_never_flagged() -
 
 
 @pytest.mark.anyio
-async def test_the_scanned_reference_shape_is_derived_from_the_supplied_references() -> None:
+async def test_the_scanned_reference_shape_is_derived_from_the_supplied_references() -> (
+    None
+):
     """The scanner is structural, not keyed to one family or to the supplied fields.
 
     The event supplies only ``laps[4].lap_number``, so a rule built from the supplied
@@ -977,7 +1590,9 @@ async def test_a_fragment_glued_to_a_supplied_reference_refuses_the_turn(
     model = ScriptedModelClient([spoken(ref(event), text)])
     booth = make_booth([event], model)
 
-    result = await bounded(booth.run(), hazard=f"the adjacency-fragment run for {continuation!r}")
+    result = await bounded(
+        booth.run(), hazard=f"the adjacency-fragment run for {continuation!r}"
+    )
 
     assert result.transcript.turns == ()
     (outcome,) = result.outcomes
@@ -1125,7 +1740,9 @@ async def test_spaced_bracket_prose_is_refused_as_the_declared_cost_of_joint_tol
     model = ScriptedModelClient([spoken(ref(event), commentary)])
     booth = make_booth([event], model)
 
-    result = await bounded(booth.run(), hazard=f"the declared-joint-cost run for {commentary!r}")
+    result = await bounded(
+        booth.run(), hazard=f"the declared-joint-cost run for {commentary!r}"
+    )
 
     assert result.transcript.turns == ()
     (outcome,) = result.outcomes
@@ -1293,7 +1910,9 @@ async def test_every_declared_airing_shape_airs_with_its_supplied_evidence_intac
     model = ScriptedModelClient([spoken(ref(event), commentary)])
     booth = make_booth([event], model)
 
-    result = await bounded(booth.run(), hazard=f"the declared-airing-shape run for {commentary!r}")
+    result = await bounded(
+        booth.run(), hazard=f"the declared-airing-shape run for {commentary!r}"
+    )
 
     (outcome,) = result.outcomes
     assert outcome.kind is OutcomeKind.TURN
@@ -1304,7 +1923,9 @@ async def test_every_declared_airing_shape_airs_with_its_supplied_evidence_intac
 
 
 @pytest.mark.anyio
-async def test_a_fabricated_reference_split_by_a_zero_width_space_refuses_the_turn() -> None:
+async def test_a_fabricated_reference_split_by_a_zero_width_space_refuses_the_turn() -> (
+    None
+):
     """A zero-width space must not hide a fabricated reference behind invisible bytes.
 
     ``position[0]`` + ZWSP + ``.invented`` airs with text visually identical to
@@ -1325,7 +1946,9 @@ async def test_a_fabricated_reference_split_by_a_zero_width_space_refuses_the_tu
 
 
 @pytest.mark.anyio
-async def test_a_fabricated_reference_split_by_a_non_breaking_space_refuses_the_turn() -> None:
+async def test_a_fabricated_reference_split_by_a_non_breaking_space_refuses_the_turn() -> (
+    None
+):
     """A NBSP between the family and the bracket must not hide a fabricated reference.
 
     The scanner's view makes every whitespace character a plain space, and the token's
@@ -1369,7 +1992,9 @@ async def test_a_fabricated_reference_split_by_a_newline_refuses_the_turn() -> N
     ],
 )
 @pytest.mark.anyio
-async def test_the_tolerant_violation_predicate_never_widens_acceptance(first_line: str) -> None:
+async def test_the_tolerant_violation_predicate_never_widens_acceptance(
+    first_line: str,
+) -> None:
     """Widening what is *refused* must not widen what is *accepted* as the citation line.
 
     The first line is accepted only in the exact shape the prompt teaches, so a tolerant
@@ -1388,7 +2013,9 @@ async def test_the_tolerant_violation_predicate_never_widens_acceptance(first_li
     )
     booth = make_booth([event], model)
 
-    result = await bounded(booth.run(), hazard=f"the acceptance-not-widened run for {first_line!r}")
+    result = await bounded(
+        booth.run(), hazard=f"the acceptance-not-widened run for {first_line!r}"
+    )
 
     assert result.transcript.turns == ()
     (outcome,) = result.outcomes
@@ -1399,7 +2026,9 @@ async def test_the_tolerant_violation_predicate_never_widens_acceptance(first_li
 @pytest.mark.anyio
 async def test_duplicate_citations_are_collapsed_and_their_order_is_preserved() -> None:
     """A pin on the collapse ``dict.fromkeys`` already performs: order kept, repeats dropped."""
-    event = detected(index=0, evidence={"position": 3, "status": "TRACK", "driver": "VER"})
+    event = detected(
+        index=0, evidence={"position": 3, "status": "TRACK", "driver": "VER"}
+    )
     assert evidence_references(event) == (
         "position[0].position",
         "position[0].status",
@@ -1462,7 +2091,9 @@ async def test_an_empty_citation_item_is_dropped_and_the_turn_still_airs() -> No
 
 def test_the_unsupplied_reference_reason_is_typed_and_distinguishable() -> None:
     """The content rule's reason stands apart from the citation-line reasons."""
-    assert BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT.value == "unsupplied_reference_in_text"
+    assert (
+        BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT.value == "unsupplied_reference_in_text"
+    )
     assert BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT not in {
         BoothReason.UNCITED,
         BoothReason.INVENTED_REFERENCE,
@@ -1482,11 +2113,11 @@ def test_the_unsupplied_reference_reason_is_typed_and_distinguishable() -> None:
     ["The same sentence.", "  the   SAME sentence.  "],
 )
 @pytest.mark.anyio
-async def test_a_candidate_that_repeats_the_previous_turn_is_suppressed(repeat: str) -> None:
+async def test_a_candidate_that_repeats_the_previous_turn_is_suppressed(
+    repeat: str,
+) -> None:
     events = [detected(index=0), detected(index=1)]
-    model = ScriptedModelClient(
-        answered(events, ["The same sentence.", repeat])
-    )
+    model = ScriptedModelClient(answered(events, ["The same sentence.", repeat]))
     booth = make_booth(events, model)
 
     result = await bounded(booth.run(), hazard="the repetition-suppression run")
@@ -1516,7 +2147,10 @@ async def test_a_refused_turn_does_not_shift_the_alternation() -> None:
     result = await bounded(booth.run(), hazard="the drop-does-not-shift run")
 
     # The colour slot was refused, so the third event still belongs to the colour seat.
-    assert [turn.speaker for turn in result.transcript.turns] == [Speaker.lead, Speaker.color]
+    assert [turn.speaker for turn in result.transcript.turns] == [
+        Speaker.lead,
+        Speaker.color,
+    ]
     assert [outcome.kind for outcome in result.outcomes] == [
         OutcomeKind.TURN,
         OutcomeKind.REFUSED,
@@ -1534,7 +2168,10 @@ async def test_a_suppressed_turn_does_not_shift_the_alternation() -> None:
 
     result = await bounded(booth.run(), hazard="the suppression-shift run")
 
-    assert [turn.speaker for turn in result.transcript.turns] == [Speaker.lead, Speaker.color]
+    assert [turn.speaker for turn in result.transcript.turns] == [
+        Speaker.lead,
+        Speaker.color,
+    ]
     assert [outcome.kind for outcome in result.outcomes] == [
         OutcomeKind.TURN,
         OutcomeKind.SUPPRESSED,
@@ -1550,12 +2187,22 @@ async def test_a_complex_evidence_value_is_rendered_and_remains_citable() -> Non
         family="laps",
         evidence={"lap_number": 12, "segments_sector_1": [20480, 20481, 0]},
     )
-    model = ScriptedModelClient([spoken("laps[4].segments_sector_1", "Sector one is clean.")])
+    model = ScriptedModelClient(
+        [spoken("laps[4].segments_sector_1", "Sector one is clean.")]
+    )
     booth = make_booth([event], model)
 
     result = await bounded(booth.run(), hazard="the complex-evidence run")
 
-    assert "- laps[4].segments_sector_1 = [20480, 20481, 0]" in model.requests[0].prompt
+    assert "- laps[4].segments_sector_1" in model.requests[0].prompt
+    assert (
+        "laps[4].segments_sector_1 = [20480, 20481, 0]" not in model.requests[0].prompt
+    ), (
+        "the reference and its value are rendered apart, so the line cannot be copied whole"
+    )
+    assert "[20480, 20481, 0]" in model.requests[0].prompt, (
+        "the value itself is still shown"
+    )
     assert result.transcript.turns[0].evidence == ("laps[4].segments_sector_1",)
 
 
@@ -1606,13 +2253,18 @@ async def test_an_event_with_no_known_instant_is_not_treated_as_stale() -> None:
         timestamp=None,
     )
     fresh = detected(index=1, timestamp=T1)
-    model = ScriptedModelClient(answered([unknown, fresh], ["Stint begins.", "Fresh move."]))
+    model = ScriptedModelClient(
+        answered([unknown, fresh], ["Stint begins.", "Fresh move."])
+    )
     booth = make_booth([unknown, fresh], model, context_window_seconds=10.0)
 
     result = await bounded(booth.run(), hazard="the unknown-instant run")
 
     assert len(model.requests) == 2
-    assert [outcome.kind for outcome in result.outcomes] == [OutcomeKind.TURN, OutcomeKind.TURN]
+    assert [outcome.kind for outcome in result.outcomes] == [
+        OutcomeKind.TURN,
+        OutcomeKind.TURN,
+    ]
 
 
 @pytest.mark.anyio
@@ -1640,7 +2292,9 @@ async def test_the_same_input_produces_the_same_order_and_prompts_twice() -> Non
 
     first_model = ScriptedModelClient(answered(events, texts))
     second_model = ScriptedModelClient(answered(events, texts))
-    first = await bounded(make_booth(events, first_model).run(), hazard="the first determinism run")
+    first = await bounded(
+        make_booth(events, first_model).run(), hazard="the first determinism run"
+    )
     second = await bounded(
         make_booth(events, second_model).run(), hazard="the second determinism run"
     )
@@ -1751,7 +2405,9 @@ def test_the_booth_module_names_no_real_model_id_literal() -> None:
     assert BOOTH_SOURCE.name == "booth.py" and BOOTH_SOURCE.exists()
     source = BOOTH_SOURCE.read_text(encoding="utf-8").lower()
     for marker in ("gemini-", "gpt-", "claude", "llama"):
-        assert marker not in source, f"booth.py must not name a real model ID like {marker!r}"
+        assert marker not in source, (
+            f"booth.py must not name a real model ID like {marker!r}"
+        )
 
 
 def test_booth_source_names_the_marker_only_through_the_constant() -> None:
@@ -1771,7 +2427,9 @@ def test_booth_source_names_the_marker_only_through_the_constant() -> None:
     docstrings: set[int] = set()
     constant_values: set[int] = set()
     for node in ast.walk(tree):
-        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(
+            node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+        ):
             body = getattr(node, "body", [])
             if (
                 body
@@ -1846,7 +2504,9 @@ def test_every_f09_name_is_exported_and_resolvable_from_the_package_root() -> No
     )
     for name in F09_EXPORTED_NAMES:
         assert name in f1show.__all__, f"{name} is missing from f1show.__all__"
-        assert getattr(f1show, name) is not None, f"{name} is not resolvable from f1show"
+        assert getattr(f1show, name) is not None, (
+            f"{name} is not resolvable from f1show"
+        )
 
 
 # --- Construction guardrails ---------------------------------------------------
@@ -1888,6 +2548,9 @@ def test_every_bound_must_be_in_range(keyword: str, value: float) -> None:
         "context_window_seconds": 3600.0,
         "max_output_tokens": 64,
         "timeout_seconds": 3.0,
+        # Supplied so a new required keyword cannot make the guard pass vacuously through
+        # a TypeError instead of the in-range refusal this test is about.
+        "driver_directory": {},
     }
     arguments[keyword] = value
     with pytest.raises((ValueError, TypeError)):

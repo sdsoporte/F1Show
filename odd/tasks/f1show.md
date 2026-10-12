@@ -2653,6 +2653,313 @@ samples, **zero** `MULTIPLE_CITATION_LINES`.
 **No fix was applied**: the normaliser lived in the probe, the repository is untouched, and the two candidate
 fixes are registered as product decisions.
 
+### F09e — Accept measured citation shapes and integrate the prompt format
+
+- [ ] **Authorized; in progress (2026-10-12).** User: "ok retomemos como recomiendas."
+  This grant resumes the delivered citation-format correction, its mechanical test-client
+  integration, checks and local integration. Names, championship context, language changes,
+  new live/model calls and publication are outside this unit. The branch's historical
+  `f13-citation-format` name does not authorize checklist F13's separate live pilot.
+- **Delivery:** `bed049979b51f63d1e873d4d9f551f9cd54f7134`, base
+  `440b8634fbf21b2503e217d5f2b03c63ba2fe628`, tree
+  `15d802f82c0bf8ad3312a2564fd3a2b8f2dbc420`, two files, **228 additions + 12 deletions
+  = 240 authored lines**. The previously reported 228 was not total review workload.
+  Parent `9e8702e88469fd4f9298695902d4b09832767e27` and the delivery worktree are clean.
+  Main's advance to `e86593f0c574709577b3a57e5661224c1115fe32` changes none of the
+  three affected source/test paths (observed name-only diff).
+- **Goal:** separate citable references from their values in the prompt; accept the exact
+  current event identity by expanding it to that event's supplied references; preserve the
+  supplied-reference boundary and existing refusal/content channels.
+- **Three stages, one coherent work unit:**
+  1. Reproduce the reported test-client failures, adapt only `tests/test_run.py` to the
+     reference-only prompt shape, and observe focused/full GREEN with import-path proof.
+     Existing deterministic failing cases provide RED; add a narrow regex boundary pin if useful.
+  2. Independently inspect the parser's acceptance boundary and re-derive only affected
+     carried findings by subject, including current blob keys and the live citation-form row.
+     The delivery's reported 123 focused / 805 passed + 5 failed are not fresh verification.
+  3. Assess the final bounded candidate, complete the provider-offered native review and exact
+     acknowledgement under RDD on, then locally integrate with identity evidence and final
+     applicable checks. No push, PR, merge to main, credentials or external calls.
+- **Routing:** mapping delegated to `gentle-ai-explore` (`mv4p76qc-1-rrjv`, completed);
+  bounded test adaptation to one `gentle-ai-worker`; command verification to
+  `gentle-ai-verify`. Multi-file integration, preparation and verification triggers apply.
+  Peer A performs one scoped read-only acceptance-boundary challenge; peer B maps register
+  subjects/coordinates. They do not write, run tests, change Git/ODD or native authority.
+- **Allowed writer surface:** `tests/test_run.py` in
+  `/home/s/dev/projects/work/F1Show-f13`. Delivered `booth.py`/`test_booth.py` remain
+  unchanged unless a corroborated defect requires a separately bounded correction.
+  Parent owns `odd/tasks/f1show.md`, `docs/CARRIED-FINDINGS.md`, Git and review authority.
+- **Writer report, not accepted artifact:** `mv4qb5z7-2-v090` settled, reporting
+  the five deterministic RED failures repaired, 148 focused / 811 full GREEN, Ruff clean,
+  import proof under `PYTHONPATH=src`, and missing child LSP coverage. It reported
+  `tests/test_run.py` **+49/-2**, SHA256
+  `79074a10e2a8f2f7e39350d4b0c0f8dc378c7bfc911fe5c96da01b23c6001263`.
+- **F09e-I1 — active artifact-identity incident, read-only:** parent readback instead
+  observes **+127/-21**, SHA256
+  `9ed90d6e73c0ebdc89c749135fd524839c3a5c033495394b873456619b0924fd`.
+  The native settled handoff repeats the smaller artifact. Production `booth.py` and
+  `test_booth.py` remain unchanged, the index is empty, and only `test_run.py` is dirty.
+  Preserve the live file; no culprit or cause is established. Delegate a separate
+  `gentle-ai-explore` incident diagnosis. Source edits, acceptance, native freeze and
+  integration are paused; the reported GREEN does not certify different bytes.
+- **Peer B map received:** `F09E-B-REGISTER-01` is completed read-only and B is unassigned.
+  Its anchors are delivered-revision evidence, not functional closure. Exact parent
+  numstat is `booth.py` +61/-10 and `test_booth.py` +167/-2; the reported per-test-file
+  count was wrong. Peer A's `F09E-A-BOUNDARY-01` static challenge is now complete.
+- **Peer A findings, source-derived and not executed:** emitted references remain
+  current-event/supplied-only, but `item.partition("=")` ignores all RHS tokens although
+  the docstring claims both shapes refuse unsupplied tokens. Commas in copied JSON values
+  are split before value removal. A second marker carrying a bare event identity can
+  reach commentary. Identity expansion intentionally cites all event references; the
+  older test-name promise must be understood as explicit-field-only.
+  A's clean `test_run.py`/missing-F09e note is an old committed/sibling-doc snapshot,
+  not this canonical parent task file or the current dirty integration-test artifact.
+- **F09e-V1 — next, delegated read-only functional verification:** preserve source;
+  prove reflow equivalence with AST (remove only the added pin and restore only the
+  old regex), recompute fingerprints before/after, reproduce immutable HEAD's old
+  test-client RED with imports pinned to F13, then focused/full GREEN on current bytes.
+  The incident explorer's original RED-log import/census inference is not established.
+  Run scalar/header positive controls and these exact parser probes, reporting actual
+  outcomes rather than assuming that source-derived traces are execution:
+  - allowed `position[0].position`, identity `position[0]`: RHS
+    `position[99].invented`, another supplied reference, and another identity after `=`.
+  - allowed `laps[4].segments_sector_1`, identity `laps[4]`: copied value
+    `[20480, 20481, 0]`; also comma-bearing JSON strings/dicts and comma-free controls.
+  - valid first field citation followed by `EVIDENCE: position[0]` (and an unknown
+    bare identity), comparing old production acceptance when feasible to classify cause.
+  - Full-reference citation excluding uncited fields versus intentional identity expansion.
+  Use `PYTHONPATH=src`, cached offline runners, no environment installs or credentials.
+  Scratch controls/logs under `/tmp` are permitted for functional verification only;
+  no source/Git/index/ODD/config writes or native reviewer-context transport.
+  Commands: `PYTHONPATH=src uv run --offline --frozen --no-sync pytest
+  tests/test_booth.py tests/test_run.py -q`; the same runner with `pytest -q`;
+  `uvx --offline ruff==0.17.0 check --config ruff.toml src/f1show/booth.py
+  tests/test_booth.py tests/test_run.py`. Redirect bulk output to unique logs; pin imports
+  and report warning/LSP coverage separately. A reproduced parser gap is returned to
+  the parent; it does not authorize a verifier fix or a new product trade.
+- **F09e-V1 complete — verification evidence (read-only, repository unmutated):**
+  verifier `mv4scpqx-4-f4ud` re-read status and fingerprints at the end of its run. Live
+  artifact: `tests/test_run.py` modified, **+127/-21 = 148**, SHA256
+  `9ed90d6e73c0ebdc89c749135fd524839c3a5c033495394b873456619b0924fd`, HEAD `bed0499…`,
+  empty index, `diff --check` clean; `booth.py` `d5433560f…` and `test_booth.py`
+  `154c79bee…` byte-identical to the delivered revision. **AST equivalence proven, not
+  inferred:** the current file equals the committed baseline plus the single added pin
+  function and the `_PROMPT_REFERENCE` literal change, with zero differing AST nodes after
+  those two transforms, so the extra lines are comment and whitespace reflow. The old
+  regex matches **0 of 981** real recorded prompts while the new one matches **8,563**
+  reference lines across all 981 (0 unmatched prompts), and the old client's failure
+  reproduces verbatim. Focused **148**, run-only **25**, full **811**, Ruff 0.17.0 clean;
+  the pin adds exactly one collected case (24→25). Active LSP is unavailable and
+  inconclusive and is **not** reported as clean. Child Engram was unavailable; the parent
+  persisted these findings.
+- **F09e-I1 closed by measurement, cause unattributed.** The writer-reported +49/-2 and
+  SHA256 `79074a10e2a8…` **do not exist** in the worktree; the live artifact is the
+  AST-equivalent reflow above. The leading hypothesis, unverified, is a post-measurement
+  auto-format reflow; a pi-lens auto-run notice was reported but not confirmed. Method
+  rule now recorded: **a child's reported artifact hash is not evidence of the bytes it
+  delivered** — the parent recomputes fingerprints and proves equivalence.
+- **Executed acceptance-boundary probes (A–F), actual outcomes:** (A)
+  `position[0].position = position[99].invented` is **accepted** and the right-hand token
+  is ignored and never validated; (B) a second supplied reference right of the `=` is
+  **lost**; (C) `position[0] = position[1]` is **accepted** by identity expansion and the
+  other event's identity is discarded; (D) the comma-bearing copied value
+  `laps[4].segments_sector_1 = [20480, 20481, 0]` is **refused `invented_reference`**
+  while the comma-free scalar control is accepted, because the header is split on commas
+  before the `=` truncation; (E) a second line `EVIDENCE: position[0]` **airs as
+  commentary**, supplied or not, while a token-bearing second line is refused
+  `multiple_citation_lines`; (F) a supplied-shaped reference the event does not own is
+  still refused. The docstring sentence *"an unsupplied token on either shape is still
+  refused"* is **refuted by execution** for the right-hand side.
+- **F09e-C1 — in-unit correction pass, authorized here.** (1) Validate the reference side
+  of a copied value **independently of commas inside the value** by cutting at the first
+  `=` before splitting, test-first from the measured refusal; (2) replace the false
+  docstring claim with the **measured** boundary; (3) pin the measured right-hand-side
+  behaviours, labelled honestly as pins rather than RED. Surfaces:
+  `src/f1show/booth.py` plus `tests/test_booth.py`; `tests/test_run.py` must stay
+  byte-identical. Carried with owner and trigger rather than fixed here: probe E, a bare
+  event identity on a second line is not a citation attempt, and the untested
+  reference-shaped right-hand side.
+- **F09e-C1 independently verified.** Verifier `mv4sxg5q-6-0kxc`, read-only, mutated
+  nothing. Parent-measured live artifact: `booth.py` +54/-31 SHA256 `f0fde318…`,
+  `test_booth.py` +438/-64 SHA256 `7f8993bc…`, `test_run.py` unchanged `9ed90d6e…`.
+  **AST confinement observed:** `booth.py` differs from HEAD in exactly three regions, the
+  two docstrings and `_parse_answer`'s cut-at-first-`=` plus the removal of the per-item
+  partition, and `test_booth.py` keeps 120/120 original nodes identical with 8 additions
+  (7 tests and one helper), no removal and no modification; every deletion is comment or
+  reflow. **RED causality proved** on a scratch copy of HEAD's production code: the three
+  comma-value tests fail there with `invented_reference`, the zero-turn unpack explains the
+  reported `ValueError`, and the comma-free control passes. **Probes on the live bytes:**
+  comma list, dict and comma-bearing string values accepted with only the reference in the
+  evidence tuple and no value leaking into the aired text; multi-reference left side kept;
+  unsupplied and not-owned left tokens refused; reference-shaped right-hand token ignored;
+  identity expansion intact; the no-`=` path unchanged; carried probe E still airs. Commands:
+  focused **133**, run-only **25**, full **821**, Ruff 0.17.0 clean, and the correction adds
+  exactly ten cases. Active LSP remains unavailable and inconclusive, never clean. Carried
+  gap: a **supplied** reference used as the right-hand value is still unpinned.
+- **Both artifact mismatches explained, not mysterious.** pi-lens autoformat is on by
+  default with `format.mode` deferred and its documentation states that formatting for an
+  `edit` runs at `agent_end`, after the child measured its hash. So both writers' reported
+  hashes and sizes describe pre-format bytes (I1: +49/-2 versus +127/-21; I2: +32/-18 and
+  +236/-0 versus +54/-31 and +438/-64). Method rule recorded: **a child's reported artifact
+  hash is a pre-`agent_end` claim**, so the parent re-measures after the child settles and
+  binds acceptance, commits and review to the parent-measured bytes.
+- **Native review complete and burned.** `review-64713b02cce78401`: tier **medium**, one
+  `review-reliability` lens, 3 files, **921 original changed lines**, correction budget 200,
+  base tree `1a871cdb…`, candidate tree `5c1f0748…`, target `sha256:caf14bc2…`. The first
+  START attempt timed out ambiguously and one target-scoped STATUS reconciled it as `start`
+  over an empty candidate, after which the exact offered START created the lineage. The
+  reviewer run was forecast (one host-relay model run, no mutation) and then authorized; the
+  capture closed **approved** with a single non-blocking advisory finding,
+  `R3-copy-shape-truncation` (`booth.py:542-548`, SUGGESTION, informational). The
+  acknowledgement was executed unchanged: `authority: burned`, `consumed_revision
+  sha256:d663513e…`, `gentle-ai.review-acknowledged/v1`. No STATUS was issued after the
+  burn; delivery remains ordinary repository policy.
+- **Budget datum (measured):** 921 authored changed lines at **medium** returned
+  `reviewDue: true` with reason **`slice_budget_reached`** and budget 200, so the slice
+  budget fires at medium as well as high. Recorded as a third measured point; the earlier
+  threshold band is unchanged.
+- **Integrated locally, not published.** The three work units were cherry-picked onto
+  `feat/f03-source-adapters` as `e0e6089` (the peer's citation-shape delivery),
+  `c38af4e` (the offline test client) and `fe4dda3` (this correction). Committed blobs equal
+  the reviewed candidate tree exactly: `booth.py d6e56ea8…`, `test_booth.py 34ef0009…`,
+  `test_run.py 8aaa35e8…`. Post-integration checks on the integrated branch: the import path
+  resolves inside the parent worktree, focused **158 passed**, full **821 passed**. Review
+  workload note, stated honestly: of the 921 lines roughly 379 are harness formatter reflow
+  rather than authored logic.
+- **Documentation closure complete.** The re-anchoring arrived from the read-only peer at
+  `fe4dda3` and every affected row was re-derived **by subject** before it was written: twelve
+  coordinates re-anchored, the three staleness keys updated (`booth.py d6e56ea8…`,
+  `test_booth.py 34ef0009…`, `test_run.py 8aaa35e8…`), the live citation-form row **closed for
+  its deterministic half** with its live-rate half left historical and unmeasured, the
+  `R3-copy-shape-truncation` row added from the approved review, and the method rule recorded
+  that a child's artifact hash is a pre-`agent_end` claim. Landed as
+  `b556abdcc3c25520c9900fbf51de6170be3086f9`, Conventional Commit
+  `docs(odd): close F09e and re-anchor the register by subject`, which also carries this task
+  document. The parent branch is **ahead 4** and clean: three source work units plus this docs
+  commit.
+- **Unit state: closed.** Verified, natively reviewed and approved, authority burned,
+  integrated locally and documented. Nothing was pushed, and push, pull request and merge remain
+  the user's decision. The next unit — names and teams, then the championship context, then
+  salience and the two modes — is **registered as design and awaits explicit authorization**,
+  because the earlier grants do not authorize later-unit implementation.
+
+### F09f — Driver identity in the prompt: names, teams and the session directory
+
+- [ ] **Authorized 2026-10-12.** User: "si autorizo". The grant covers the driver-identity
+  join in the prompt and the local checks, independent verification, native review and local
+  integration that follow. It does **not** authorize a live or model call, credential use,
+  publication, or the later show items (championship context, salience, the two modes), which
+  stay design-only.
+- **Objective, from the registered design** ("The show", item 2): the prompt renders
+  `driver: Lando Norris (McLaren, #4)` — `full_name` with `team_name` and `driver_number`,
+  `broadcast_name` for the register and `team_colour` for flavour — joined from the recorded
+  drivers payload. Both seats currently recite telemetry and the prompt shows only
+  `driver_number: 4`, so the booth names nobody.
+- **Why it is cheap:** the recorded corpus already carries `full_name`, `name_acronym`,
+  `broadcast_name`, `team_name` and `team_colour` for 20 drivers and 10 teams; the collector
+  ignores the `drivers` family because it derives no event, so the join is offline and free.
+- **Invariants that must not move:** the acceptance emits only current-event supplied
+  references; no new airing shape and no newly citable token may appear; the four escape
+  channels stay refused; the prompt-shape pins are updated **deliberately** and never deleted;
+  a replay still reproduces the transcript deterministically.
+- **Scope guard:** no live/API/model call, no credential use, no publishing. If the join
+  cannot be confined to the booth and the run path, the extra surfaces come back to the parent
+  as a decision instead of being taken.
+- **Route:** read-only exploration `mv4v5l1d-7-o18z` maps the directory, the seam, the
+  affected tests and the register rows; one writer in a dedicated worktree implements it;
+  command verification goes to `gentle-ai-verify`; the register is re-derived by subject at
+  the final revision; the native route runs under RDD on once functional checks pass.
+- **Exploration complete** (`mv4v5l1d-7-o18z`). The directory is
+  `fixtures/openf1/drivers.json`: 20 records for session 9617, 10 distinct teams, every field
+  the join needs. Every `driver_number` appearing in the five event families is one of those 20,
+  while `race_control` rows may carry `null`, so the join must be optional. The only prompt
+  builder is `CommentaryBooth._prompt`, which renders `driver_number: {…}` today inside the
+  `EVENT:` block, and identity is **not** in `event.evidence`, so it is not citable.
+- **Decisions taken here.** (1) **Seam:** the loader gains the directory and the run path
+  threads it — `load_recorded_session` returns the session's `drivers` payload under its own
+  key, `run_session` derives a `{driver_number: (full_name, team_name)}` map from the payload it
+  already has, and the booth takes it as one new **required keyword-only** parameter. Chosen over
+  a second loader because it reads the corpus once and adds no public name; the cost is a
+  **declared-contract change**, so `load_recorded_session`'s five-family statement and its
+  `drivers`-exclusion pin are edited **deliberately**, and that pin is **strengthened** to assert
+  the invariant that actually matters: the directory is available **and the collector still
+  derives zero events from it**. (2) **Scope: `full_name`, `team_name` and `driver_number`
+  only.** Excluded and recorded as later decisions: `team_colour` (a bare hex has no declared
+  use and invites invented colour talk), `broadcast_name` as a register change (that is persona
+  text, not a join), `name_acronym`, and `country_code` (nationality is excluded by the
+  declared salience rule). (3) **Rendered line:** `driver: {full_name} ({team_name}, #{number})`,
+  bracket-free and never of the `family[index].field` shape, so no new airing shape and no newly
+  citable token; the existing net that the prompt's reference-token set is unchanged stays green.
+  (4) **Identity never enters `event.evidence` or `_citable_evidence`**, which would create a
+  citable token and move the guarantee. (5) **Unresolvable driver** — a `null` number or a number
+  absent from the directory — renders a declared fallback instead of a half-join, pinned by a test.
+- **Surfaces, one writer, dedicated worktree:** `src/f1show/booth.py`, `src/f1show/run.py`,
+  `tests/test_booth.py`, `tests/test_run.py`. Worktree
+  `/home/s/dev/projects/work/F1Show-f09f`, branch `feat/f09f-driver-identity`, base `f9ee752`.
+- **State at handoff (2026-10-12): implemented, independently verified, committed — and
+  NOT review-closed.** The work unit is
+  `bad0eba4fb7d6f8e605674ed0813f77224a156d2` in
+  `/home/s/dev/projects/work/F1Show-f09f`, range `f9ee752..bad0eba`, 4 files,
+  **+381/-24 = 405 changed lines**, and the committed blobs equal the verified live bytes
+  (`booth.py 89ff3d0a…`, `run.py 5c7c7c4e…`, `test_booth.py 3fc5d017…`,
+  `test_run.py d085944c…`).
+- **Evidence observed on those bytes.** RED first, then GREEN: focused **166** and full **829**
+  passed; Ruff 0.17.0 clean; the recorded run renders `driver: Lando NORRIS (McLaren, #4)` with
+  **1,553** joined lines and **95** declared fallbacks (the null-driver race-control events);
+  across **1,648** prompts there are **zero** reference-shaped tokens beyond the event's own
+  supplied references and zero token-set mismatches; identity is absent from `event.evidence`
+  and from `_citable_evidence` and a citation naming the driver is refused
+  `invented_reference` with no turn aired; the six declared airing shapes and the marker pin are
+  intact; a replay run twice produced byte-equal prompts; the strengthened loader pin fails
+  against two mutants (loader stops loading the directory; the directory starts deriving an
+  event); and the two coverage gaps a verifier demanded were closed with their own mutants
+  (a corpus missing only `drivers.json` is refused with a typed error naming it, and the
+  directory's session filter now has teeth against a synthetic two-session corpus).
+- **Native review blocked, and the block is inside this session.** The first `start` was
+  cancelled by a script timeout and every later native call hangs, **including plain
+  `inspect`**. Moving `.git/gentle-ai/REVIEW-MAINTENANCE.lock` aside (0 bytes, mtime 02:37,
+  copy kept at `/tmp/pi_f09f_lock_backup/`) changed nothing; no process holds the store and a
+  full `/proc` descriptor scan found none; the store received **zero writes** across four
+  attempts and holds no artifact naming the lineage `review-1383183dff9c8a08`. Provisioning the
+  worktree `.venv` (`uv sync --frozen --offline`) did not change it either, though that fix
+  stands on its own merits.
+- **Review approved, authority burned, integrated (2026-10-12).** After the restart the facade
+  answered again. The preflight first returned a **`managed_assets_outdated` stop**, resolved by
+  running the emitted sync command (`gentle-ai sync --agent pi`, 3 files changed); the bound route
+  then created `review-1383183dff9c8a08`: tier **medium**, one `review-reliability` lens,
+  **6 changed files**, **1,558 original changed lines**, correction budget 200, candidate tree
+  `442552a9…`. The reviewer run was forecast (one host-relay model run, no mutation) and then
+  authorized; the capture closed **approved** with **three non-blocking advisory findings**, all
+  informational: `R3-001` (`booth.py:546-551`, WARNING), `R3-002` (`booth.py:646`, WARNING) and
+  `R3-003` (`booth.py:550-551`, SUGGESTION). The exact acknowledgement was executed unchanged:
+  **authority burned**, `consumed_revision sha256:4297a9c7…`, `gentle-ai.review-acknowledged/v1`.
+  No STATUS was issued after the burn, and the wedge was cleared by the session restart exactly as
+  predicted — the moved lock copy was never needed.
+- **Integrated locally by fast-forward.** `bad0eba`'s parent is `f9ee752`, the tip, so
+  `git merge --ff-only` preserved the **reviewed commit identity** instead of rewriting it. The
+  branch is now **ahead 6** with only this tracking document dirty. The four source blobs equal the
+  reviewed work unit exactly (`booth.py 89ff3d0a…`, `run.py 5c7c7c4e…`, `test_booth.py 3fc5d017…`,
+  `test_run.py d085944c…`), and post-integration checks in the parent worktree show the import
+  resolving there with focused **166** and full **829** passed.
+- **Documentation closure.** The register was re-anchored **by subject** at `bad0eba`: twelve
+  `booth.py`/`tests/test_booth.py` coordinates re-derived row by row, the four `run.py` F10 rows and
+  their subject block moved with the *"unchanged since its review, so the coordinates are current"*
+  claim marked **superseded**, and four staleness keys updated — including `run.py`, which had read
+  *current* and is now stale. Three advisory rows were added from the approved review: `R3-001` (the
+  `cited_text` cut block), `R3-003` (the partition line inside it) and `R3-002` (the new required
+  `driver_directory` parameter). The live citation-form row's live half stays **open**, because this
+  unit touched `_prompt` and its trigger re-fired; the declared airing shapes are confirmed **six** and
+  unmoved. Landed as `66a725b67dc2c1181b2643316f2833dcc10baa4a`, Conventional Commit
+  `docs(odd): re-anchor the register at bad0eba and close F09f`, which also carries this document.
+- **Unit state: closed.** Evaluated, independently verified, natively reviewed and approved with its
+  authority burned, integrated by fast-forward and documented. Push, pull request and merge remain the
+  user's decision; the next show items (championship context, salience, the two modes) are registered as
+  design and await explicit authorization.
+- **Carried risk, stated rather than hidden:** the register's measured finding is that the model
+  **copies what the prompt shows**, so a prompt-visible name could be echoed into a citation
+  header and add `invented_reference` refusals. No deterministic test can see that; it belongs to
+  the next live trial and is recorded in the live citation-form row's open half.
+
 ### The show: what the profession says, what the data says, and the design
 
 **Research, 2026-10-11, first-party sources read.** The rules below are the practitioners' own words, and the
