@@ -324,6 +324,52 @@ async def test_run_session_turns_the_recorded_fixtures_into_an_evidence_carrying
 
 
 @pytest.mark.anyio
+async def test_run_session_carries_the_recorded_windows_story_into_the_prompt() -> None:
+    """RED before F09g U1: the recorded end-to-end prompt carried telemetry, no story.
+
+    The recorded session's start-to-lap-5 window is the design's measured one, so at least
+    one prompt of the run must carry it: Zhou's gain, the two tied losses, Albon's thirteen
+    position changes and long stop, the sector-3 double yellow and Sainz's fastest lap.
+    """
+    model = EvidenceEchoModelClient()
+
+    await bounded(
+        run_session(
+            payloads=load_recorded_session(SESSION_KEY),
+            session_key=SESSION_KEY,
+            model=model,
+            clock=FrozenClock(T0),
+            settings=booth_settings(),
+        ),
+        hazard="the recorded window-story run",
+    )
+
+    stories = [
+        request.prompt
+        for request in model.requests
+        if "ZHOU Guanyu, Kick Sauber, from P19 to P14" in request.prompt
+    ]
+    assert stories, (
+        "the recorded run must carry the window's story into at least one prompt; no "
+        "prompt named the design's measured biggest gain"
+    )
+    complete = [
+        prompt
+        for prompt in stories
+        if "34.983" in prompt and "99.923" in prompt and "DOUBLE YELLOW" in prompt
+    ]
+    assert complete, (
+        "the design's measured window has one prompt carrying all of its story items"
+    )
+    block = complete[0].split("CONTEXT", 1)[1].split("\n\n", 1)[0]
+    assert "Alexander ALBON" in block and "13 position changes" in block, block
+    assert "Esteban OCON" in block, block
+    assert "sector 3" in block, block
+    assert not any(character in block for character in "[](){}"), block
+    assert re.search(r"[a-z_]+\[\d+\]\.[a-z0-9_]+", block) is None, block
+
+
+@pytest.mark.anyio
 async def test_run_session_threads_the_recorded_driver_directory_into_the_prompt() -> (
     None
 ):
