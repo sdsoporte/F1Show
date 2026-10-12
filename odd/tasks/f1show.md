@@ -2653,6 +2653,79 @@ samples, **zero** `MULTIPLE_CITATION_LINES`.
 **No fix was applied**: the normaliser lived in the probe, the repository is untouched, and the two candidate
 fixes are registered as product decisions.
 
+### The show: what the profession says, what the data says, and the design
+
+**Research, 2026-10-11, first-party sources read.** The rules below are the practitioners' own words, and the
+academic work confirms the structure rather than replacing it.
+
+- **The two roles, defined by F1 TV's own lead commentator (Alex Jacques).** *"My job is to inform the viewer
+  what is happening in real time — **identifying cars, calling overtakes**… The narrative part involves
+  **distilling the elements of each driver and team's weekend into short segments**… aided by my
+  co-commentators telling us **why** the action is happening whilst they weave in their personal experience."*
+  The booth already has the two seats; **it does not have the division of labour** — both seats currently
+  recite telemetry.
+- **The climax rule, from F1 TV's executive producer (Anthony Ellis).** *"It's about breaking down stories…
+  and, when there's an **overtake or a magic moment, we've got to make it look epic**."*
+- **Economy, from Jacques on Barry Davies.** *"His **economy of words to impact ratio**… a narrative-led
+  commentator."*
+- **Tone, from Jacques on Murray Walker.** *"Peerless ability to convey information with such clarity and
+  emotion… his attitude to **emphasise the positive and not to score points or punch down**."*
+- **Pacing, from F1 TV's lead presenter (Laura Winter).** *"I have to know **when to let it breathe**… and then
+  when to bring it back."*
+- **The two-mode structure, from the prosody research.** Live radio football commentary uses two speech styles
+  with distinct prosodic features — **"building up suspense"** and **"presenting a climax"**
+  (*The prosody of live radio commentary of football matches*). So narration has **two modes**, not one.
+- **Salience is measurable — and biassed unless declared.** Broadcast studies measure salience as **clock-time
+  and name mentions** (NBC Olympic telecasts), and the same studies show networks favour the local or star
+  athlete **without saying so**. A salience rule is therefore something this project must **state**.
+
+**What the data already carries, free and offline.** The recorded corpus holds the 20 drivers with
+`full_name`, `name_acronym`, `broadcast_name`, `team_name` and `team_colour` (10 teams). The collector ignores
+`drivers` because it derives no event, and the prompt shows only `driver_number: 4`. **The join is available
+offline**: `4` → `Lando Norris (McLaren, #4)`.
+
+**The salience of the window we ran, measured** (start → lap 5, Austin 2024):
+
+| reason to mention | who, and the datum |
+| --- | --- |
+| biggest gain | **ZHOU Guanyu** (Kick Sauber) 19 → 14, **+5** |
+| biggest losses | **Fernando ALONSO** 5 → 10 (**−5**), **Esteban OCON** 13 → 18 (**−5**) |
+| busiest, with a long stop | **Alexander ALBON**: **13 position changes** and a **34.9 s stop on lap 3** |
+| next busiest | Lewis HAMILTON (10 changes) |
+| the start's drama | a **DOUBLE YELLOW in sector 3** at 19:04:04 → yellow → clear |
+| the turn at the end | **on lap 5 the whole field drops ~66 s** (100 s → 166-168 s): a safety car period |
+| fastest lap | Carlos SAINZ 99.923 (lap 2), VERSTAPPEN 99.991, LECLERC 100.341 |
+
+**The window's story in one sentence**: *a start with an incident in sector 3; Alonso and Ocon lose five places
+while Zhou gains five; Albon, damaged, changes position thirteen times and stops for 34.9 s; and on lap 5 the
+safety car freezes the race.* That is what the commentary should be **about**, instead of reciting twenty
+drivers' sector times.
+
+**The declared salience rule** (a decision taken here and reversible, recorded so it is not inherited): a driver
+or moment is salient by **magnitude of position change**, **involvement in a flagged sector or a race-control
+message**, **a pit stop**, and **a lap-time outlier either way** — and the rule **excludes nationality, team
+affiliation and championship standing**, which this project has no data for and will not invent. The
+alternative considered and **not** chosen: prioritise the front of the field (leader and podium). Both are
+defensible; what is not defensible is leaving it unsaid.
+
+**The design, in units, sequenced by what unblocks what.**
+
+1. **The citation format — must go first, because until it lands nothing airs** (measured: only 28% of events
+   could air). Two parts, both with the measured basis: **(a) render the `EVIDENCE` block unambiguously**, since
+   the prompt teaches `- <reference> = <value>` while the instruction says *exactly* `EVIDENCE: <reference>`, and
+   55 of 206 calls copied the value too; and **(b) normalise a cited event identity to that event's supplied
+   references**, since 93 calls cited `laps[3]` — a faithful name for a real event, admitted by mapping it to the
+   references the event owns, so the evidence tuple stays valid and no unsupplied token can air.
+2. **Names and teams in the prompt**: `driver: Lando Norris (McLaren, #4)`, with `broadcast_name` for the
+   register and `team_colour` for flavour, joined from the recorded drivers payload.
+3. **Salience as context**: the prompt receives the window's **stories** — who is gaining, who is losing, who
+   stopped, which sector is flagged, who set the fastest lap — so the colour seat can answer *why*.
+4. **Two modes, declared per turn**: a routine lap is **build** (one line, context); a position change of two or
+   more places, a flag, or a pit stop is **climax** (short, emphatic) — the prosody structure and Ellis's rule.
+5. **The start aggregation**: the twenty lap-1 events become **one "start" turn**, with the individual laps
+   summarised per lap afterwards, because twenty near-identical sentences are not a start.
+6. **Economy and tone**: the lead one or two sentences, the colour the detail; emphasise the positive.
+
 **Implementation, verification and native review (observed).**
 
 - **The decision, and why (a) rather than (b)**: shape 5 is declared as a **fifth shape described by its
