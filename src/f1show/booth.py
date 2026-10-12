@@ -64,12 +64,18 @@ drawn from that one event's own references.
 rendered value* (``EVIDENCE: laps[6].lap_duration = 105.091``), because the prompt's
 EVIDENCE block printed that line, and 93 cited the event's **identity**
 (``EVIDENCE: laps[3]``), a faithful name of a real event that is not itself a reference.
-Both are now admitted by normalisation: an item whose text before an ``=`` is a supplied
-reference cites that reference and drops the copied value, and an item naming the event's
-own identity expands to every reference the event owns, in recorded order. Neither
-normalisation moves the invariant: the emitted tuple still contains only supplied
-references, an unsupplied token on either shape is still refused, and the EVIDENCE block is
-rendered so a reference and its value can no longer be copied together in the first place.
+Both are now admitted by normalisation, and each has a **measured** boundary rather than a
+claimed one. A header that carries an ``=`` is cut at its **first** ``=`` *before* any
+comma split, so only the reference side is ever split, validated, cited or aired: the left
+side of the ``=`` is validated as references -- an unsupplied token there is still refused
+-- while the right side is treated as that reference's copied value, is not validated at
+all, and is never cited or aired, even when it is itself reference-shaped. That boundary is
+what execution measured, and it refutes the earlier claim that an unsupplied token on
+either shape is still refused: that claim never held for the right-hand side. A
+reference-side item naming the event's own identity expands to every reference the event
+owns, in recorded order. Neither normalisation moves the invariant that the emitted tuple
+contains only supplied references, and the EVIDENCE block is rendered so a reference and
+its value can no longer be copied together in the first place.
 
 **The boundary of that guarantee, stated plainly.** The rule holds over reference-shaped
 tokens *as they appear after normalization* -- Unicode format characters removed and every
@@ -497,13 +503,16 @@ def _parse_answer(
     missing or empty citation is ``UNCITED`` only once no later line opens with the
     marker.
 
-    Each cited item is then normalised against the event's own tokens, in this order: an
-    item carrying ``=`` is read as the text before the first ``=`` -- a copy artefact of a
-    rendered ``reference = value`` line, whose left side must itself be acceptable -- then
-    an item equal to ``identity`` (the event's own ``family[index]``) expands to every
-    reference in ``allowed``, in recorded order, and anything else must be one of
-    ``allowed``. Any cited item that survives neither route is ``INVENTED_REFERENCE``; the
-    normalisations can only ever emit supplied references, so the guarantee does not move.
+    The reference side is then normalised against the event's own tokens, in this order: a
+    header carrying ``=`` is cut at its first ``=`` *before* the comma split, so a copied
+    value whose own text carries commas (``laps[4].segments_sector_1 = [20480, 20481, 0]``)
+    cannot manufacture extra citation items; the text left of that cut is the reference side
+    and must itself be acceptable. An item equal to ``identity`` (the event's own
+    ``family[index]``) expands to every reference in ``allowed``, in recorded order, and
+    anything else must be one of ``allowed``. Any item that survives neither route is
+    ``INVENTED_REFERENCE``; the normalisations can only ever emit supplied references, so
+    the guarantee does not move. The right side of the ``=`` is the value of the reference
+    on its left: it is not validated, never cited and never aired.
     Commentary that is blank after the citation is ``BLANK_TEXT``. The content rule
     matches on a normalized view of the aired commentary -- Unicode format characters
     removed, every whitespace character made a plain space -- and refuses
@@ -526,33 +535,34 @@ def _parse_answer(
     # The reference shape is derived once, here, because the violation check needs it too:
     # a marker-shaped later line is only a citation attempt when it also names a token.
     scanner = _reference_scanner(allowed)
-    if any(_is_citation_attempt(line, scanner) for line in lines[start + 1:]):
+    if any(_is_citation_attempt(line, scanner) for line in lines[start + 1 :]):
         return _RefusedAnswer(BoothReason.MULTIPLE_CITATION_LINES)
+    cited_text = header[len(_CITATION_MARKER) :]
+    # A copied rendered value (``reference = value``) may itself carry commas, so the cut at
+    # the *first* ``=`` happens before the comma split: only the reference side is ever
+    # split, validated, cited or aired, and the value cannot manufacture citation items.
+    if "=" in cited_text:
+        cited_text = cited_text.partition("=")[0]
     cited = tuple(
-        dict.fromkeys(
-            item.strip()
-            for item in header[len(_CITATION_MARKER):].split(",")
-            if item.strip()
-        )
+        dict.fromkeys(item.strip() for item in cited_text.split(",") if item.strip())
     )
     if not cited:
         return _RefusedAnswer(BoothReason.UNCITED)
     permitted = set(allowed)
     expanded: list[str] = []
     for item in cited:
-        candidate = item.partition("=")[0].strip() if "=" in item else item
-        if identity is not None and candidate == identity:
+        if identity is not None and item == identity:
             # The event's own identity names the whole event: it expands to every
             # reference the event owns, never airs as the bare identity.
             expanded.extend(allowed)
-        elif candidate in permitted:
-            expanded.append(candidate)
+        elif item in permitted:
+            expanded.append(item)
         else:
             return _RefusedAnswer(BoothReason.INVENTED_REFERENCE)
     evidence = tuple(dict.fromkeys(expanded))
     if not evidence:
         return _RefusedAnswer(BoothReason.UNCITED)
-    text = "\n".join(lines[start + 1:]).strip()
+    text = "\n".join(lines[start + 1 :]).strip()
     if not text:
         return _RefusedAnswer(BoothReason.BLANK_TEXT)
     scanned = _scan_view(text)
@@ -599,7 +609,9 @@ def _positive_seconds(value: object, name: str) -> float:
         raise TypeError(f"{name} must be a number, got {type(value).__name__}")
     seconds = float(value)
     if not math.isfinite(seconds) or seconds <= 0:
-        raise ValueError(f"{name} must be a positive finite number of seconds, got {value!r}")
+        raise ValueError(
+            f"{name} must be a positive finite number of seconds, got {value!r}"
+        )
     return seconds
 
 
@@ -642,14 +654,18 @@ class CommentaryBooth:
         self._settings = settings
         self._clock = clock
         self._session_key = self._events[0].session_key
-        self._max_context_turns = _bounded_int(max_context_turns, "max_context_turns", minimum=1)
+        self._max_context_turns = _bounded_int(
+            max_context_turns, "max_context_turns", minimum=1
+        )
         self._context_char_budget = _bounded_int(
             context_char_budget, "context_char_budget", minimum=0
         )
         self._context_window_seconds = _positive_seconds(
             context_window_seconds, "context_window_seconds"
         )
-        self._max_output_tokens = _bounded_int(max_output_tokens, "max_output_tokens", minimum=1)
+        self._max_output_tokens = _bounded_int(
+            max_output_tokens, "max_output_tokens", minimum=1
+        )
         self._timeout_seconds = _positive_seconds(timeout_seconds, "timeout_seconds")
 
     def __repr__(self) -> str:
@@ -754,7 +770,9 @@ class CommentaryBooth:
                     created_at=self._clock.now(),
                 )
             )
-            outcomes.append(self._outcome(OutcomeKind.TURN, reference, event, speaker=speaker))
+            outcomes.append(
+                self._outcome(OutcomeKind.TURN, reference, event, speaker=speaker)
+            )
         return BoothResult(
             transcript=Transcript(
                 session_key=self._session_key,
@@ -807,7 +825,9 @@ class CommentaryBooth:
         """
         if newest is None or event.timestamp_value is None:
             return False
-        return newest - event.timestamp_value > dt.timedelta(seconds=self._context_window_seconds)
+        return newest - event.timestamp_value > dt.timedelta(
+            seconds=self._context_window_seconds
+        )
 
     def _bounded_context(self, turns: Sequence[Turn]) -> tuple[Turn, ...]:
         """The most recent turns within the turn count and character budget, oldest first.
@@ -877,9 +897,12 @@ class CommentaryBooth:
             "never part of the citation line:"
         )
         lines.extend(
-            f"{position}. {_render(value)}" for position, (_, value) in enumerate(citable, start=1)
+            f"{position}. {_render(value)}"
+            for position, (_, value) in enumerate(citable, start=1)
         )
-        lines.extend(["", "EVENT:", f"type: {event.event_type.value}", f"family: {event.family}"])
+        lines.extend(
+            ["", "EVENT:", f"type: {event.event_type.value}", f"family: {event.family}"]
+        )
         if event.driver_number is not None:
             lines.append(f"driver_number: {event.driver_number}")
         if event.timestamp_value is not None:
