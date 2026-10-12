@@ -2951,10 +2951,25 @@ fixes are registered as product decisions.
   unit touched `_prompt` and its trigger re-fired; the declared airing shapes are confirmed **six** and
   unmoved. Landed as `66a725b67dc2c1181b2643316f2833dcc10baa4a`, Conventional Commit
   `docs(odd): re-anchor the register at bad0eba and close F09f`, which also carries this document.
+- **Delivery closed (2026-10-12).** Authorized by the user: *"procede a push/PR/merge con las tareas
+  necesario para quedar sin pendientes."* Issue **#38** was created and closed by **PR #39**
+  (`feat/f03-source-adapters` → `main`), merged as
+  **`2d2c15fa2492fcb81f810b74fe4b2c94a808b468`** with a **merge commit**, which is this repository's own
+  convention — never squash, never rebase, so every reviewed hash keeps its identity. Required CI on the
+  PR was green: `pytest on Python 3.12`, `pytest on Python 3.14`, `ruff on the committed selection`, and
+  `every ignored rule has a register row`. Local checks on the delivered tip: `pytest -q` **829 passed**,
+  `ruff@0.17.0 check --no-cache src tests` **All checks passed!**, and the Python floor
+  `--python 3.12 pytest -q` **829 passed**. The delivery-range assessment before the push read **1,699
+  changed lines across 6 files, medium risk, `reviewDue: false` (`under_budget`)**, and the repository
+  template's native-review box was left **unchecked on purpose**, because the branch carries documentation
+  commits *after* both approvals even though every delivered source blob is one of the bytes those
+  approvals covered. The feature branch and its worktrees are deliberately left in place.
 - **Unit state: closed.** Evaluated, independently verified, natively reviewed and approved with its
-  authority burned, integrated by fast-forward and documented. Push, pull request and merge remain the
-  user's decision; the next show items (championship context, salience, the two modes) are registered as
-  design and await explicit authorization.
+  authority burned, integrated by fast-forward, documented and **delivered**. Still carried, each with an
+  owner and a trigger: a **supplied** reference used as the right-hand value of `=` is unpinned, a second
+  bare-identity `EVIDENCE:` line still airs as commentary, and the live citation-form row's live half
+  remains historical and unmeasured. The next show items (championship context, salience, the two modes)
+  are registered as design and await explicit authorization.
 - **Carried risk, stated rather than hidden:** the register's measured finding is that the model
   **copies what the prompt shows**, so a prompt-visible name could be echoed into a citation
   header and add `invented_reference` refusals. No deterministic test can see that; it belongs to
