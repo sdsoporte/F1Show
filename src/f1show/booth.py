@@ -59,6 +59,18 @@ of the supplied references -- or a matched reference with a bracket glued direct
 mid-line mention. Every emitted ``Turn`` therefore carries a non-empty ``evidence`` tuple
 drawn from that one event's own references.
 
+**Two faithful-but-wrong citation shapes are normalised, both measured in a live round**
+(206 calls, round 5 Austin 2024): 55 answers copied the reference *together with its
+rendered value* (``EVIDENCE: laps[6].lap_duration = 105.091``), because the prompt's
+EVIDENCE block printed that line, and 93 cited the event's **identity**
+(``EVIDENCE: laps[3]``), a faithful name of a real event that is not itself a reference.
+Both are now admitted by normalisation: an item whose text before an ``=`` is a supplied
+reference cites that reference and drops the copied value, and an item naming the event's
+own identity expands to every reference the event owns, in recorded order. Neither
+normalisation moves the invariant: the emitted tuple still contains only supplied
+references, an unsupplied token on either shape is still refused, and the EVIDENCE block is
+rendered so a reference and its value can no longer be copied together in the first place.
+
 **The boundary of that guarantee, stated plainly.** The rule holds over reference-shaped
 tokens *as they appear after normalization* -- Unicode format characters removed and every
 whitespace character made a plain space -- and not over arbitrary obfuscation: an
@@ -465,7 +477,9 @@ def _is_citation_attempt(line: str, scanner: re.Pattern[str] | None) -> bool:
     return scanner.search(_scan_view(line)) is not None
 
 
-def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _RefusedAnswer:
+def _parse_answer(
+    raw: str, allowed: tuple[str, ...], identity: str | None = None
+) -> _AcceptedAnswer | _RefusedAnswer:
     """Parse the citation-first protocol, refusing anything not backed by ``allowed``.
 
     The first non-empty line must be the citation line, and it must be the only one: a
@@ -481,9 +495,17 @@ def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _Refu
     refuses a citation-shaped line. What *accepts* the first line stays
     the exact marker the prompt teaches. The shape is decided before the content, so a
     missing or empty citation is ``UNCITED`` only once no later line opens with the
-    marker; any cited reference absent from ``allowed`` is ``INVENTED_REFERENCE``; and
-    commentary that is blank after the citation is ``BLANK_TEXT``. Finally the content
-    rule matches on a normalized view of the aired commentary -- Unicode format characters
+    marker.
+
+    Each cited item is then normalised against the event's own tokens, in this order: an
+    item carrying ``=`` is read as the text before the first ``=`` -- a copy artefact of a
+    rendered ``reference = value`` line, whose left side must itself be acceptable -- then
+    an item equal to ``identity`` (the event's own ``family[index]``) expands to every
+    reference in ``allowed``, in recorded order, and anything else must be one of
+    ``allowed``. Any cited item that survives neither route is ``INVENTED_REFERENCE``; the
+    normalisations can only ever emit supplied references, so the guarantee does not move.
+    Commentary that is blank after the citation is ``BLANK_TEXT``. The content rule
+    matches on a normalized view of the aired commentary -- Unicode format characters
     removed, every whitespace character made a plain space -- and refuses
     ``UNSUPPLIED_REFERENCE_IN_TEXT`` when any reference-shaped token is not one of
     ``allowed``, so a never-supplied reference cannot ride in on a bare or mid-line mention.
@@ -492,7 +514,7 @@ def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _Refu
     reason; a dotted suffix is prose and airs. Order is
     preserved, duplicates are collapsed, and an empty item between commas is dropped --
     tolerance, never an injection, because an empty item carries no reference -- so the
-    evidence tuple is exactly what was cited.
+    evidence tuple is exactly what was cited, after normalisation.
     """
     lines = raw.splitlines()
     start = next((index for index, line in enumerate(lines) if line.strip()), None)
@@ -516,8 +538,20 @@ def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _Refu
     if not cited:
         return _RefusedAnswer(BoothReason.UNCITED)
     permitted = set(allowed)
-    if any(reference not in permitted for reference in cited):
-        return _RefusedAnswer(BoothReason.INVENTED_REFERENCE)
+    expanded: list[str] = []
+    for item in cited:
+        candidate = item.partition("=")[0].strip() if "=" in item else item
+        if identity is not None and candidate == identity:
+            # The event's own identity names the whole event: it expands to every
+            # reference the event owns, never airs as the bare identity.
+            expanded.extend(allowed)
+        elif candidate in permitted:
+            expanded.append(candidate)
+        else:
+            return _RefusedAnswer(BoothReason.INVENTED_REFERENCE)
+    evidence = tuple(dict.fromkeys(expanded))
+    if not evidence:
+        return _RefusedAnswer(BoothReason.UNCITED)
     text = "\n".join(lines[start + 1:]).strip()
     if not text:
         return _RefusedAnswer(BoothReason.BLANK_TEXT)
@@ -528,7 +562,7 @@ def _parse_answer(raw: str, allowed: tuple[str, ...]) -> _AcceptedAnswer | _Refu
             if supplied and not _has_attached_bracket(scanned, match.end()):
                 continue
             return _RefusedAnswer(BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT)
-    return _AcceptedAnswer(text=text, evidence=cited)
+    return _AcceptedAnswer(text=text, evidence=evidence)
 
 
 def _normalise(text: str) -> str:
@@ -685,7 +719,9 @@ class CommentaryBooth:
                     )
                 )
                 continue
-            parsed = _parse_answer(response.text, tuple(item[0] for item in citable))
+            parsed = _parse_answer(
+                response.text, tuple(item[0] for item in citable), identity=reference
+            )
             if isinstance(parsed, _RefusedAnswer):
                 outcomes.append(
                     self._outcome(
@@ -816,6 +852,8 @@ class CommentaryBooth:
             "RULES:",
             "- Cite only the references listed under EVIDENCE; never name a reference that "
             "is not listed there.",
+            "- The values under VALUES are commentary material only: they never belong on "
+            "the citation line.",
             f"- Start your answer with the citation line, exactly: {_CITATION_MARKER} "
             "<reference>[, <reference>...]",
             "- After that line, write the commentary and nothing else.",
@@ -827,7 +865,20 @@ class CommentaryBooth:
             "",
             _CITATION_MARKER,
         ]
-        lines.extend(f"- {reference} = {_render(value)}" for reference, value in citable)
+        # A reference and its value are rendered apart, deliberately: a prompt line that
+        # prints ``reference = value`` teaches a copy of the whole line, and 55 of 206
+        # measured live answers cited the value together with the reference and were
+        # refused. Here the reference list is citable verbatim and the values live on
+        # numbered lines that carry no reference, so what a model copies is one or the
+        # other, never both.
+        lines.extend(f"- {reference}" for reference, _ in citable)
+        lines.append(
+            "VALUES, in the same order as the references above; commentary material only, "
+            "never part of the citation line:"
+        )
+        lines.extend(
+            f"{position}. {_render(value)}" for position, (_, value) in enumerate(citable, start=1)
+        )
         lines.extend(["", "EVENT:", f"type: {event.event_type.value}", f"family: {event.family}"])
         if event.driver_number is not None:
             lines.append(f"driver_number: {event.driver_number}")

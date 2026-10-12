@@ -379,7 +379,12 @@ async def test_the_prompt_offers_exactly_the_supplied_references() -> None:
     await bounded(booth.run(), hazard="the prompt-reference run")
 
     prompt = model.requests[0].prompt
-    assert "position[7].position = 3" in prompt
+    assert "- position[7].position" in prompt, "the reference is listed citable, on its own line"
+    assert "position[7].position = 3" not in prompt, (
+        "a reference and its value are never rendered together: the copied line is what "
+        "55 of 206 measured live answers turned into an invented citation"
+    )
+    assert "\n1. 3" in prompt, "the value is still shown, on a value line of its own"
     assert set(REFERENCE_TOKEN.findall(prompt)) == {"position[7].position"}
 
 
@@ -787,6 +792,162 @@ async def test_a_supplied_reference_that_is_not_cited_is_never_attributed() -> N
 
     (turn,) = result.transcript.turns
     assert turn.evidence == ("position[0].position",)
+
+
+# --- The citation format (F13): the measured live round -------------------------
+# 206 live calls (round 5, Austin 2024, gemini-3.5-flash-lite by the gateway) measured
+# three fidelities: 58 cited a listed reference and aired; 93 cited the event's identity
+# and aired only because a probe normalised them; 55 copied the reference together with
+# its value, exactly as the prompt's EVIDENCE block printed it, and were refused as
+# ``invented_reference``. The two faithful-but-wrong shapes are the defect this unit
+# fixes: the block no longer renders a reference and a value in copyable company, and
+# the parser normalises both shapes to references the event actually owns.
+
+
+@pytest.mark.anyio
+async def test_a_citation_copying_the_rendered_value_cites_its_reference() -> None:
+    """The 55: ``EVIDENCE: <reference> = <value>`` must cite the reference, not be refused.
+
+    Measured red before this unit: the prompt printed ``- position[0].position = 3`` and
+    a citation copying that line was refused as ``invented_reference``. The value after
+    the ``=`` is a copy artefact of the prompt's own rendering; the reference on its left
+    is the token the event owns, so the answer airs with exactly that reference.
+    """
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text="EVIDENCE: position[0].position = 3\nVerstappen is P3.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the value-copying citation run")
+
+    (turn,) = result.transcript.turns
+    assert turn.text == "Verstappen is P3."
+    assert turn.evidence == ("position[0].position",), (
+        "the citation must normalise to the supplied reference, never carry the copied value"
+    )
+
+
+@pytest.mark.anyio
+async def test_a_citation_of_the_event_identity_maps_to_the_references_the_event_owns() -> None:
+    """The 93: ``EVIDENCE: <identity>`` maps to the references that identity names.
+
+    Measured red before this unit: the event's own stable identity — the ``family[index]``
+    the module itself derives — was refused as ``invented_reference``, although it is a
+    faithful name of a real event. The identity is not an evidence tuple, so the emitted
+    turn must carry the references the event owns, never the bare identity.
+    """
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text="EVIDENCE: position[0]\nVerstappen is P3.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the identity-citation run")
+
+    (turn,) = result.transcript.turns
+    assert turn.evidence == ("position[0].position", "position[0].status"), (
+        "the identity must expand to exactly the references the event owns, in recorded "
+        "order, and never air as the bare identity"
+    )
+
+
+@pytest.mark.anyio
+async def test_an_identity_citation_mixed_with_a_reference_keeps_both_without_duplicating() -> None:
+    """An identity next to one of its own references expands once, order preserved."""
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    model = ScriptedModelClient(
+        [
+            ModelResponse(
+                model_id=TEST_MODEL_ID,
+                text="EVIDENCE: position[0], position[0].status\nVerstappen is P3.",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        ]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the mixed-identity-citation run")
+
+    (turn,) = result.transcript.turns
+    assert turn.evidence == ("position[0].position", "position[0].status")
+
+
+@pytest.mark.parametrize(
+    "citation",
+    [
+        # The identity of a different event is a token this event does not own.
+        "EVIDENCE: position[1]",
+        # The ``=`` copy shape must not rescue an unsupplied reference on its left.
+        "EVIDENCE: position[0].invented = 3",
+        "EVIDENCE: position[1].position = 3",
+    ],
+)
+@pytest.mark.anyio
+async def test_the_two_normalisations_never_admit_a_token_the_event_does_not_own(
+    citation: str,
+) -> None:
+    """The invariant does not move: only supplied tokens air, under either new shape."""
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    model = ScriptedModelClient(
+        [ModelResponse(model_id=TEST_MODEL_ID, text=f"{citation}\nVerstappen is P3.", input_tokens=1, output_tokens=1)]
+    )
+    booth = make_booth([event], model)
+
+    result = await bounded(booth.run(), hazard="the normalisation-boundary run")
+
+    assert result.transcript.turns == ()
+    (outcome,) = result.outcomes
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.reason is BoothReason.INVENTED_REFERENCE
+
+
+@pytest.mark.anyio
+async def test_the_prompt_never_renders_a_reference_and_its_value_on_the_same_line() -> None:
+    """The block the 55 copied from: a reference and its value must not be copyable together.
+
+    Measured red before this unit: the EVIDENCE block printed
+    ``- position[0].position = 3``, and 55 of 206 live answers copied that line into the
+    citation, value included. The rendering now keeps every reference on its own line and
+    every value on a value line that carries no reference, so the line a model copies is
+    either a reference or a value, never both.
+    """
+    event = detected(index=0, evidence={"position": 3, "status": "TRACK"})
+    model = ScriptedModelClient([spoken(ref(event), "Verstappen is P3.")])
+    booth = make_booth([event], model)
+
+    await bounded(booth.run(), hazard="the evidence-block-shape run")
+
+    prompt = model.requests[0].prompt
+    lines = prompt.splitlines()
+    for reference in evidence_references(event):
+        carrying = [line for line in lines if reference in line]
+        assert carrying, f"the prompt must still list {reference}"
+        assert not any("=" in line for line in carrying), (
+            f"{reference!r} must never share a line with a value or an equals sign; the "
+            "copied line is what 55 live answers turned into an invented citation"
+        )
+    for value in ("3", "TRACK"):
+        carrying = [line for line in lines if value in line]
+        assert carrying, f"the prompt must still show the value {value!r}; evidence is not dropped"
+        assert not any(
+            any(reference in line for reference in evidence_references(event)) for line in carrying
+        ), f"the value {value!r} must sit on a line that carries no reference"
 
 
 # --- The residual citation channels (F09b) --------------------------------------
@@ -1555,7 +1716,11 @@ async def test_a_complex_evidence_value_is_rendered_and_remains_citable() -> Non
 
     result = await bounded(booth.run(), hazard="the complex-evidence run")
 
-    assert "- laps[4].segments_sector_1 = [20480, 20481, 0]" in model.requests[0].prompt
+    assert "- laps[4].segments_sector_1" in model.requests[0].prompt
+    assert "laps[4].segments_sector_1 = [20480, 20481, 0]" not in model.requests[0].prompt, (
+        "the reference and its value are rendered apart, so the line cannot be copied whole"
+    )
+    assert "[20480, 20481, 0]" in model.requests[0].prompt, "the value itself is still shown"
     assert result.transcript.turns[0].evidence == ("laps[4].segments_sector_1",)
 
 
