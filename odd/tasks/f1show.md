@@ -2843,6 +2843,122 @@ fixes are registered as product decisions.
   salience and the two modes — is **registered as design and awaits explicit authorization**,
   because the earlier grants do not authorize later-unit implementation.
 
+### F09f — Driver identity in the prompt: names, teams and the session directory
+
+- [ ] **Authorized 2026-10-12.** User: "si autorizo". The grant covers the driver-identity
+  join in the prompt and the local checks, independent verification, native review and local
+  integration that follow. It does **not** authorize a live or model call, credential use,
+  publication, or the later show items (championship context, salience, the two modes), which
+  stay design-only.
+- **Objective, from the registered design** ("The show", item 2): the prompt renders
+  `driver: Lando Norris (McLaren, #4)` — `full_name` with `team_name` and `driver_number`,
+  `broadcast_name` for the register and `team_colour` for flavour — joined from the recorded
+  drivers payload. Both seats currently recite telemetry and the prompt shows only
+  `driver_number: 4`, so the booth names nobody.
+- **Why it is cheap:** the recorded corpus already carries `full_name`, `name_acronym`,
+  `broadcast_name`, `team_name` and `team_colour` for 20 drivers and 10 teams; the collector
+  ignores the `drivers` family because it derives no event, so the join is offline and free.
+- **Invariants that must not move:** the acceptance emits only current-event supplied
+  references; no new airing shape and no newly citable token may appear; the four escape
+  channels stay refused; the prompt-shape pins are updated **deliberately** and never deleted;
+  a replay still reproduces the transcript deterministically.
+- **Scope guard:** no live/API/model call, no credential use, no publishing. If the join
+  cannot be confined to the booth and the run path, the extra surfaces come back to the parent
+  as a decision instead of being taken.
+- **Route:** read-only exploration `mv4v5l1d-7-o18z` maps the directory, the seam, the
+  affected tests and the register rows; one writer in a dedicated worktree implements it;
+  command verification goes to `gentle-ai-verify`; the register is re-derived by subject at
+  the final revision; the native route runs under RDD on once functional checks pass.
+- **Exploration complete** (`mv4v5l1d-7-o18z`). The directory is
+  `fixtures/openf1/drivers.json`: 20 records for session 9617, 10 distinct teams, every field
+  the join needs. Every `driver_number` appearing in the five event families is one of those 20,
+  while `race_control` rows may carry `null`, so the join must be optional. The only prompt
+  builder is `CommentaryBooth._prompt`, which renders `driver_number: {…}` today inside the
+  `EVENT:` block, and identity is **not** in `event.evidence`, so it is not citable.
+- **Decisions taken here.** (1) **Seam:** the loader gains the directory and the run path
+  threads it — `load_recorded_session` returns the session's `drivers` payload under its own
+  key, `run_session` derives a `{driver_number: (full_name, team_name)}` map from the payload it
+  already has, and the booth takes it as one new **required keyword-only** parameter. Chosen over
+  a second loader because it reads the corpus once and adds no public name; the cost is a
+  **declared-contract change**, so `load_recorded_session`'s five-family statement and its
+  `drivers`-exclusion pin are edited **deliberately**, and that pin is **strengthened** to assert
+  the invariant that actually matters: the directory is available **and the collector still
+  derives zero events from it**. (2) **Scope: `full_name`, `team_name` and `driver_number`
+  only.** Excluded and recorded as later decisions: `team_colour` (a bare hex has no declared
+  use and invites invented colour talk), `broadcast_name` as a register change (that is persona
+  text, not a join), `name_acronym`, and `country_code` (nationality is excluded by the
+  declared salience rule). (3) **Rendered line:** `driver: {full_name} ({team_name}, #{number})`,
+  bracket-free and never of the `family[index].field` shape, so no new airing shape and no newly
+  citable token; the existing net that the prompt's reference-token set is unchanged stays green.
+  (4) **Identity never enters `event.evidence` or `_citable_evidence`**, which would create a
+  citable token and move the guarantee. (5) **Unresolvable driver** — a `null` number or a number
+  absent from the directory — renders a declared fallback instead of a half-join, pinned by a test.
+- **Surfaces, one writer, dedicated worktree:** `src/f1show/booth.py`, `src/f1show/run.py`,
+  `tests/test_booth.py`, `tests/test_run.py`. Worktree
+  `/home/s/dev/projects/work/F1Show-f09f`, branch `feat/f09f-driver-identity`, base `f9ee752`.
+- **State at handoff (2026-10-12): implemented, independently verified, committed — and
+  NOT review-closed.** The work unit is
+  `bad0eba4fb7d6f8e605674ed0813f77224a156d2` in
+  `/home/s/dev/projects/work/F1Show-f09f`, range `f9ee752..bad0eba`, 4 files,
+  **+381/-24 = 405 changed lines**, and the committed blobs equal the verified live bytes
+  (`booth.py 89ff3d0a…`, `run.py 5c7c7c4e…`, `test_booth.py 3fc5d017…`,
+  `test_run.py d085944c…`).
+- **Evidence observed on those bytes.** RED first, then GREEN: focused **166** and full **829**
+  passed; Ruff 0.17.0 clean; the recorded run renders `driver: Lando NORRIS (McLaren, #4)` with
+  **1,553** joined lines and **95** declared fallbacks (the null-driver race-control events);
+  across **1,648** prompts there are **zero** reference-shaped tokens beyond the event's own
+  supplied references and zero token-set mismatches; identity is absent from `event.evidence`
+  and from `_citable_evidence` and a citation naming the driver is refused
+  `invented_reference` with no turn aired; the six declared airing shapes and the marker pin are
+  intact; a replay run twice produced byte-equal prompts; the strengthened loader pin fails
+  against two mutants (loader stops loading the directory; the directory starts deriving an
+  event); and the two coverage gaps a verifier demanded were closed with their own mutants
+  (a corpus missing only `drivers.json` is refused with a typed error naming it, and the
+  directory's session filter now has teeth against a synthetic two-session corpus).
+- **Native review blocked, and the block is inside this session.** The first `start` was
+  cancelled by a script timeout and every later native call hangs, **including plain
+  `inspect`**. Moving `.git/gentle-ai/REVIEW-MAINTENANCE.lock` aside (0 bytes, mtime 02:37,
+  copy kept at `/tmp/pi_f09f_lock_backup/`) changed nothing; no process holds the store and a
+  full `/proc` descriptor scan found none; the store received **zero writes** across four
+  attempts and holds no artifact naming the lineage `review-1383183dff9c8a08`. Provisioning the
+  worktree `.venv` (`uv sync --frozen --offline`) did not change it either, though that fix
+  stands on its own merits.
+- **Review approved, authority burned, integrated (2026-10-12).** After the restart the facade
+  answered again. The preflight first returned a **`managed_assets_outdated` stop**, resolved by
+  running the emitted sync command (`gentle-ai sync --agent pi`, 3 files changed); the bound route
+  then created `review-1383183dff9c8a08`: tier **medium**, one `review-reliability` lens,
+  **6 changed files**, **1,558 original changed lines**, correction budget 200, candidate tree
+  `442552a9…`. The reviewer run was forecast (one host-relay model run, no mutation) and then
+  authorized; the capture closed **approved** with **three non-blocking advisory findings**, all
+  informational: `R3-001` (`booth.py:546-551`, WARNING), `R3-002` (`booth.py:646`, WARNING) and
+  `R3-003` (`booth.py:550-551`, SUGGESTION). The exact acknowledgement was executed unchanged:
+  **authority burned**, `consumed_revision sha256:4297a9c7…`, `gentle-ai.review-acknowledged/v1`.
+  No STATUS was issued after the burn, and the wedge was cleared by the session restart exactly as
+  predicted — the moved lock copy was never needed.
+- **Integrated locally by fast-forward.** `bad0eba`'s parent is `f9ee752`, the tip, so
+  `git merge --ff-only` preserved the **reviewed commit identity** instead of rewriting it. The
+  branch is now **ahead 6** with only this tracking document dirty. The four source blobs equal the
+  reviewed work unit exactly (`booth.py 89ff3d0a…`, `run.py 5c7c7c4e…`, `test_booth.py 3fc5d017…`,
+  `test_run.py d085944c…`), and post-integration checks in the parent worktree show the import
+  resolving there with focused **166** and full **829** passed.
+- **Documentation closure.** The register was re-anchored **by subject** at `bad0eba`: twelve
+  `booth.py`/`tests/test_booth.py` coordinates re-derived row by row, the four `run.py` F10 rows and
+  their subject block moved with the *"unchanged since its review, so the coordinates are current"*
+  claim marked **superseded**, and four staleness keys updated — including `run.py`, which had read
+  *current* and is now stale. Three advisory rows were added from the approved review: `R3-001` (the
+  `cited_text` cut block), `R3-003` (the partition line inside it) and `R3-002` (the new required
+  `driver_directory` parameter). The live citation-form row's live half stays **open**, because this
+  unit touched `_prompt` and its trigger re-fired; the declared airing shapes are confirmed **six** and
+  unmoved. Landed as a `docs(odd)` closure commit that also carries this document.
+- **Unit state: closed.** Evaluated, independently verified, natively reviewed and approved with its
+  authority burned, integrated by fast-forward and documented. Push, pull request and merge remain the
+  user's decision; the next show items (championship context, salience, the two modes) are registered as
+  design and await explicit authorization.
+- **Carried risk, stated rather than hidden:** the register's measured finding is that the model
+  **copies what the prompt shows**, so a prompt-visible name could be echoed into a citation
+  header and add `invented_reference` refusals. No deterministic test can see that; it belongs to
+  the next live trial and is recorded in the live citation-form row's open half.
+
 ### The show: what the profession says, what the data says, and the design
 
 **Research, 2026-10-11, first-party sources read.** The rules below are the practitioners' own words, and the
