@@ -104,6 +104,36 @@ asserted as **observed** rather than only documented. The remaining paths — `c
 `weather`, `championship_drivers` and `championship_teams` — remain documented-only and are
 **not** asserted here.
 
+**Later still, exercised (2026-10-11).** Three more paths were probed unauthenticated against the
+recorded session (`session_key` 9617, Austin 2024, the race) and are now **observed**:
+
+| path (session 9617) | status | rows | fields observed |
+| --- | --- | --- | --- |
+| `/v1/championship_drivers` | **200** | 23 | `driver_number`, `position_start`, `points_start`, `position_current`, `points_current`, `meeting_key`, `session_key` |
+| `/v1/championship_teams` | **200** | 10 | `team_name`, `position_start`, `points_start`, `position_current`, `points_current` |
+| `/v1/session_result` | **200** | 20 | `position`, `driver_number`, `number_of_laps`, `points`, `dnf`, `dns`, `dsq`, `duration`, `gap_to_leader` |
+
+Two consequences follow, and both matter to the design:
+
+- **The championship endpoints carry BOTH checkpoints in one call.** `position_start`/`points_start`
+  are the standings **before** the session and `position_current`/`points_current` the standings
+  **after** it — so a "before and after every race" cadence is served by **one request per race
+  session**, and it is the source's own shape rather than a job this project has to construct.
+- **Both are race-session-only** (as documented above), so a practice or qualifying session has no
+  standings to cite, and an **in-race provisional** table still has to be **derived** from the live
+  positions plus the season's points rules — the endpoint is a per-session snapshot, not a live one.
+
+**And one documented path that did not answer.** `/v1/starting_grid?session_key=9617` returned
+**404** with an empty body. The path is documented, so this is an **observed absence for this
+session**, not a claim that the endpoint never works: `starting_grid` stays **unasserted**, and a
+future unit that needs it must probe the sessions it actually uses rather than assume the documented
+name answers everywhere.
+
+**Where the standings can also come from.** The [Jolpica section](#jolpica--ergast-compatible-archive)
+remains the archive fallback with its Ergast-compatible endpoints, which is what F07 is for; nothing
+above changes that split — OpenF1 for the session the pipeline is running, Jolpica for history this
+API does not carry.
+
 ### Documented cadence and availability
 
 **VERIFIED (first-party)** — behaviours that constrain what the pipeline can assume:
