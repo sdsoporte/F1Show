@@ -3090,6 +3090,66 @@ fixes are registered as product decisions.
   key for it**, which is the state the blob rule exists to prevent. One defect the pass introduced and this
   record fixes: an edit closed a table row early, leaving it with five cells instead of four; a Markdown
   column-count check caught it and the row was repaired before the commit.
+- **U2 — the two modes and the revived priority band: implemented, verified, reviewed and integrated.**
+  Commit `3908df4b`, branch `feat/f09g-modes` (based on `2b52519`), **PR #45** merged as
+  **`b325770ed8bddad028484a3aa72ad5de616d0b58`**.
+  - **What it does:** a new pure module `src/f1show/mode.py` (248 lines) declares the caution signal, the
+    per-turn `TurnMode` and the `MODE` instruction text; `_prompt` renders the mode beside the persona
+    register; and the priority band now consults the derived signal instead of
+    `PRIORITY_EVENT_TYPES = {FLAG, SAFETY_CAR, VIRTUAL_SAFETY_CAR}`, which **matched no recorded event** and
+    was therefore **dead over the corpus**.
+  - **The trigger basis is a recorded decision.** A climax is **the moment**: a pit stop, a position step of
+    **two or more** places against the driver's **previous observed position**, or a race-control row that
+    **announces or escalates** a caution. The cumulative first-observed-versus-latest quantity stays U1's
+    window salience and is **not** the mode trigger. Measured contrast: **46** climax turns on the step basis
+    against **271** on the cumulative one, so the two readings are **235 turns apart**; **two pins** hold the
+    basis and **both fail** under a cumulative mutant.
+  - **Measured numbers:** climax **46** = **23 pit stops + 9 caution rows + 14 position steps of two or
+    more**; build **1,602**. The caution set is measured from the corpus rather than intuited: of 120
+    `race_control` rows, **9 are climax** (YELLOW 4, DOUBLE YELLOW 3, SafetyCar category 2) against **111
+    build** (CLEAR 7, GREEN 2, BLUE 20, BLACK AND WHITE 5, CHEQUERED 1, and 76 flag-less non-safety-car
+    rows), so **a clearing row never takes the priority slot**.
+  - **The band revival, measured old against new.** Running the recorded session under the base booth gives
+    seats **equal to strict alternation** — which is what proves the band was dead — and against this revision
+    **1,023 of 1,648** seats change while texts, evidence, event references, order and timestamps stay
+    **identical**. The mechanism is measured rather than inferred: the lead takes the next slot
+    **unconditionally** on a band event and the non-priority seat follows the last turn that actually aired,
+    so the offset is piecewise constant and changes only at band events (indexes 57, 146, 179, 230, 355,
+    1238), with **six of the nine** caution rows landing where alternation would not already have given the
+    lead the turn. The **insertion alternative** — a band event inserting a lead turn without flipping the
+    phase — was offered to the user as a small declared change and is **not implemented**.
+  - **Invariants verified on the live bytes:** across all **1,648** prompts the `MODE` block carries **no
+    bracket** and no `family[index].field` token; the marker still appears **exactly 2** times; the scanner and
+    the six declared airing shapes are untouched; two `run_session` executions are byte-identical; and **no
+    aired text or evidence tuple carries a mode value**.
+  - **One assertion was replaced deliberately, and the replacement is stronger:** the strict-alternation
+    equality became the measured 1,023 changed seats plus non-alternation plus a lead-lead-at-caution case,
+    and an AST comparison over the three test files confirms **no other assertion was deleted or weakened**.
+  - **Native review `review-4bfd2fcf3ea2e4f2`:** tier medium, one `review-reliability` lens, 5 files, **996**
+    lines, candidate tree `7eeaf198…` — **approved**, authority **burned** (`consumed_revision
+    sha256:48bbad8a…`). Three `SUGGESTION`-level advisories, carried with owner and trigger and their subjects
+    **located in the source** because the harness returns no bodies: `R3-case-handling-asymmetry`
+    (`mode.py:177-184`), `R3-unstripped-text-helper` (`mode.py:157-161`) and `R3-stale-band-export`
+    (`booth.py:213`, where the old public name survives as an alias of the new one).
+  - **Budget anomaly, third measured point:** **996** lines returned `reviewDue: false` (`under_budget`),
+    joining **1,461** (also false) against **921** and **405** (both true, `slice_budget_reached`). Size alone
+    does not explain the gate, and the review ran anyway because the bytes were new code no review had covered.
+  - **Checks:** focused **234**, full **897**, Ruff 0.17.0 clean, CI green on the PR (`pytest` on 3.12 and
+    3.14, `ruff`, register-row guard), and the full suite costs **18.13 s** against U1's 18.35 s.
+  - **Refuted rather than repeated:** the LSP marker claiming `f1show.mode` cannot be resolved is a **stale
+    index** (the literal import proof and all 897 tests disprove it), and the `ALO` spelling advisory is
+    Alonso's **recorded acronym** inside a corpus message.
+  - **Next: U3a** — the provisional championship derivation — and then **U3b**, the recorded rows in the
+    prompt.
+  - **The register is re-anchored by subject at `b325770`.** Twenty-three blocks in one pass: fourteen
+    coordinates re-derived row by row, the live citation-form row and the three F09f advisory rows moved with
+    them, four staleness keys updated, and **one verdict corrected rather than carried** —
+    `tests/test_run.py` was claimed UNMOVED through two derivations and **did move** this time (`:92` → `:94`),
+    which is the measured demonstration that a blob key says only that the **file** changed and never whether a
+    **row** did. Three new rows carry U2's advisories with their subjects located in source; the dead-band row
+    is marked **SUPERSEDED as a defect** and the surviving **stale public alias** is carried as its own row;
+    and a **third** staleness key was added, for `mode.py` — the **second** module in one feature to enter the
+    tree with no key at all, which is the omission the register names rather than quietly repairing.
 - **Checks pending for the remaining units:** RED/GREEN per unit, focused and full suite on the delivered
   bytes, Ruff 0.17.0, determinism, deliberate prompt-pin updates, the register rows re-derived **by subject**
   at each revision, independent verification and the provider-offered native route.
