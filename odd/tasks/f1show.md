@@ -2726,6 +2726,42 @@ defensible; what is not defensible is leaving it unsaid.
    summarised per lap afterwards, because twenty near-identical sentences are not a start.
 6. **Economy and tone**: the lead one or two sentences, the colour the detail; emphasise the positive.
 
+**The championship context, measured (2026-10-11), and it is light.** Three paths the contract had listed as
+documented-only now answer, and the whole championship picture of a race weekend is **53 rows**: 23 in
+`championship_drivers`, 10 in `championship_teams` and 20 in `session_result`. The first two carry **both
+checkpoints in one call** — `position_start`/`points_start` before the session and `position_current`/
+`points_current` after it — so the "before and after every race" cadence is the **source's own shape**. Both are
+**race-session-only**, so a practice or qualifying session has none, and an **in-race provisional** table still
+has to be **derived** from the live positions plus the season's points rules, which are a small **declared
+per-season** dataset (the fastest-lap point existed in 2024 and does not in 2025; sprints award their own points).
+**Nationality and team need no separate job at all**: `drivers?session_key=X` is the **session's entry list** and
+already carries `country_code`, `team_name` and `team_colour`, so the join refreshes itself at every race
+weekend — a yearly refresh would name the wrong team for the rest of the season the moment a seat changes.
+
+**The language variant, researched (2026-10-11), and it is a product decision.** The booth already **requires**
+a language with no default, so the variant is the natural extension of a decision the product already makes.
+
+- **The market is split, and measurably so.** ESPN holds F1 rights through **2028** for **18 Spanish-speaking
+  countries** (South America, Central America and the Caribbean), and that deal **excludes Mexico**, which has
+  its own broadcaster. **Spain** is exclusive to **DAZN F1**, with a long-running, strongly characterised team
+  (Lobato narrating, de la Rosa and Cuquerella analysing).
+- **The industry convention for a pan-regional product is `español neutro`** — the exportable variant born in
+  Mexican and Puerto Rican dubbing studios — and the literature is explicit that its value is **portability**,
+  with the cost that it sounds **artificial everywhere**. That is a real trade, not a synonym for "generic".
+- **And F1 is a particular case**: the **Argentine relato was the regional voice** for decades. Fernando
+  Tornello narrated the category *"para Hispanoamérica"* with iconic greetings of his own, so `es-AR` is **not a
+  niche in this sport** — it has regional F1 pedigree that most markets do not.
+- **Therefore**: the variant is a **first-class setting with a declared default and a declared lexicon**.
+  Recommendation: default **`es-419` (neutral)** for a pan-regional product, with **`es-AR`**, **`es-MX`** and
+  **`es-ES`** selectable, and each variant **declaring its register** rather than leaving it to the model:
+  voseo for `es-AR`; the lexical pairs that actually differ in motorsport (coche / auto / carro, neumáticos /
+  llantas, gasolina / nafta, boxes / pits, *safety car* vs *auto de seguridad*); and how each variant renders a
+  driver's name.
+- **It is an audience claim, so it is testable** — the pilot can run **the same window in two variants** and
+  compare. Until then the choice is **declared, not assumed**, which is this project's own rule.
+- **And it cannot touch the guarantee**: the citation protocol is **language-independent** — the evidence is a
+  list of references, not prose — so the variant can change the words and never what is allowed to air.
+
 **Implementation, verification and native review (observed).**
 
 - **The decision, and why (a) rather than (b)**: shape 5 is declared as a **fifth shape described by its
