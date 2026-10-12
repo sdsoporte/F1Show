@@ -85,8 +85,11 @@ FABRICATED_NATIVE_RESPONSE = {
     "modelVersion": "gateway-reported-model-version",
 }
 
-#: A reference line in the assembled prompt: ``- family[record].field = value``.
-_PROMPT_REFERENCE = re.compile(r"^-\s+([a-z_]+\[\d+\]\.[a-z0-9_]+)\s*=", re.MULTILINE)
+#: A reference line in the assembled prompt: ``- family[record].field``, alone on its line.
+#: The citation-format correction prints a reference and its value on separate lines, so this
+#: is end-anchored: a numbered value line, the old ``reference = value`` line and a bulleted
+#: rule line are all left alone, and only a supplied reference is ever cited.
+_PROMPT_REFERENCE = re.compile(r"^-\s+([a-z_]+\[\d+\]\.[a-z0-9_]+)\s*$", re.MULTILINE)
 
 #: A hard test-side bound on every await, so a stall fails loudly instead of hanging.
 HAZARD_TIMEOUT_SECONDS = 30.0
@@ -97,7 +100,9 @@ async def bounded[T](awaitable: Awaitable[T], *, hazard: str) -> T:
     try:
         return await asyncio.wait_for(awaitable, timeout=HAZARD_TIMEOUT_SECONDS)
     except TimeoutError:
-        pytest.fail(f"HANG HAZARD: {hazard} did not finish within {HAZARD_TIMEOUT_SECONDS:g}s")
+        pytest.fail(
+            f"HANG HAZARD: {hazard} did not finish within {HAZARD_TIMEOUT_SECONDS:g}s"
+        )
 
 
 def load(name: str) -> list[dict[str, Any]]:
@@ -145,7 +150,9 @@ def small_events() -> tuple[DetectedEvent, ...]:
     return collect_session_events(SESSION_KEY, SMALL_PAYLOADS)
 
 
-def booth_settings(model_id: str = TEST_MODEL_ID, language: str = "en") -> BoothSettings:
+def booth_settings(
+    model_id: str = TEST_MODEL_ID, language: str = "en"
+) -> BoothSettings:
     """The booth settings every run here shares, with a fictional model id."""
     return BoothSettings(model_id=model_id, language=language)
 
@@ -198,9 +205,16 @@ def test_native_base_url_strips_only_a_trailing_version_segment() -> None:
     assert native_base_url(DECLARED_WITHOUT_VERSION) == DECLARED_WITHOUT_VERSION
     # A version segment that is not last, or a plain path segment, is left alone: a
     # derivation that always dropped the last path segment would break the second case.
-    assert native_base_url("https://gateway.invalid/v1/extra") == "https://gateway.invalid/v1/extra"
-    assert native_base_url("https://gateway.invalid/api") == "https://gateway.invalid/api"
-    assert native_base_url("https://gateway.invalid/v1beta") == "https://gateway.invalid"
+    assert (
+        native_base_url("https://gateway.invalid/v1/extra")
+        == "https://gateway.invalid/v1/extra"
+    )
+    assert (
+        native_base_url("https://gateway.invalid/api") == "https://gateway.invalid/api"
+    )
+    assert (
+        native_base_url("https://gateway.invalid/v1beta") == "https://gateway.invalid"
+    )
     assert native_base_url("https://gateway.invalid/v2") == "https://gateway.invalid"
 
 
@@ -272,7 +286,9 @@ async def test_the_native_base_url_derivation_composes_one_version_segment_on_th
 
 
 @pytest.mark.anyio
-async def test_run_session_turns_the_recorded_fixtures_into_an_evidence_carrying_transcript() -> None:
+async def test_run_session_turns_the_recorded_fixtures_into_an_evidence_carrying_transcript() -> (
+    None
+):
     model = EvidenceEchoModelClient()
 
     result = await bounded(
@@ -300,7 +316,9 @@ async def test_run_session_turns_the_recorded_fixtures_into_an_evidence_carrying
         assert turn.model_id == TEST_MODEL_ID
         assert turn.event_ref in references
         assert turn.evidence
-        assert all(reference.startswith(f"{turn.event_ref}.") for reference in turn.evidence)
+        assert all(
+            reference.startswith(f"{turn.event_ref}.") for reference in turn.evidence
+        )
         # The injected clock stamps every turn; no wall clock is read anywhere.
         assert turn.created_at == T0
 
@@ -323,8 +341,14 @@ async def test_run_session_alternates_the_two_seats_over_a_controlled_payload() 
     )
 
     turns = result.transcript.turns
-    assert [turn.speaker for turn in turns] == [Speaker.lead, Speaker.color, Speaker.lead]
-    assert [turn.event_ref for turn in turns] == [event_reference(event) for event in events]
+    assert [turn.speaker for turn in turns] == [
+        Speaker.lead,
+        Speaker.color,
+        Speaker.lead,
+    ]
+    assert [turn.event_ref for turn in turns] == [
+        event_reference(event) for event in events
+    ]
     assert [outcome.kind for outcome in result.outcomes] == [OutcomeKind.TURN] * 3
 
 
@@ -418,7 +442,11 @@ async def test_main_runs_the_offline_fake_path_end_to_end_and_prints_the_transcr
     settings: Settings = make_settings(
         mode=Mode.replay.value,
         replay={"session_key": SESSION_KEY},
-        booth={"model_id": TEST_MODEL_ID, "language": "en", "provider": ModelProvider.fake.value},
+        booth={
+            "model_id": TEST_MODEL_ID,
+            "language": "en",
+            "provider": ModelProvider.fake.value,
+        },
     )
     events = small_events()
     responses = [
@@ -455,7 +483,9 @@ async def test_main_runs_the_offline_fake_path_end_to_end_and_prints_the_transcr
     ]
     assert result.transcript.session_key == SESSION_KEY
     for turn in result.transcript.turns:
-        assert turn.text in printed, f"{turn.text!r} is missing from the printed transcript"
+        assert turn.text in printed, (
+            f"{turn.text!r} is missing from the printed transcript"
+        )
         assert turn.speaker.value in printed
 
 
@@ -471,7 +501,11 @@ async def test_main_refuses_a_provider_that_disagrees_with_the_configuration(
     settings: Settings = make_settings(
         mode=Mode.replay.value,
         replay={"session_key": SESSION_KEY},
-        booth={"model_id": TEST_MODEL_ID, "language": "en", "provider": ModelProvider.fake.value},
+        booth={
+            "model_id": TEST_MODEL_ID,
+            "language": "en",
+            "provider": ModelProvider.fake.value,
+        },
     )
 
     # The message is asserted, not just the exception type. With the refusal removed this
@@ -514,14 +548,18 @@ def test_every_f10_name_is_exported_and_resolvable_from_the_package_root() -> No
         pytest.fail("F10_EXPORTED_NAMES must carry names for this sweep to check")
     for name in F10_EXPORTED_NAMES:
         assert name in f1show.__all__, f"{name} is missing from f1show.__all__"
-        assert getattr(f1show, name) is not None, f"{name} is not resolvable from f1show"
+        assert getattr(f1show, name) is not None, (
+            f"{name} is not resolvable from f1show"
+        )
 
 
 def test_the_run_module_names_no_real_model_id_literal() -> None:
     assert RUN_SOURCE.name == "run.py" and RUN_SOURCE.exists()
     source = RUN_SOURCE.read_text(encoding="utf-8").lower()
     for marker in ("gemini-", "gpt-", "claude", "llama"):
-        assert marker not in source, f"run.py must not name a real model ID like {marker!r}"
+        assert marker not in source, (
+            f"run.py must not name a real model ID like {marker!r}"
+        )
 
 
 def test_the_run_module_carries_no_clock_or_network_of_its_own() -> None:
@@ -543,6 +581,62 @@ def test_the_fake_provider_is_typed_as_a_model_client() -> None:
     assert isinstance(EvidenceEchoModelClient(), ModelClient)
 
 
+@pytest.mark.anyio
+async def test_the_fake_cites_only_a_reference_line_and_refuses_a_prompt_without_one() -> (
+    None
+):
+    """The double reads the reference-only prompt, and its own guard survives the change.
+
+    The booth no longer prints ``reference = value``: each citable reference stands alone
+    under ``EVIDENCE`` and its value sits on a separate numbered line. A pattern that still
+    required the ``= value`` tail matches nothing and the fake refuses every call. The
+    accepted prompt carries the real shape beside a numbered value line and a bulleted rule
+    line; the refused prompt carries every shape that is *not* a reference, the old
+    ``= value`` line included, so the end anchor is proved rather than assumed.
+    """
+
+    def request_for(prompt: str) -> ModelRequest:
+        return ModelRequest(
+            model_id=TEST_MODEL_ID,
+            prompt=prompt,
+            max_output_tokens=256,
+            timeout_seconds=30.0,
+        )
+
+    client = EvidenceEchoModelClient()
+    accepted = "\n".join(
+        [
+            "EVIDENCE:",
+            "- laps[3].lap_duration",
+            "VALUES, in the same order as the references above:",
+            "1. 105.091",
+            "- Do not repeat the previous turn.",
+        ]
+    )
+
+    response = await bounded(
+        client.generate(request_for(accepted)), hazard="the fake's read"
+    )
+
+    assert (
+        response.text
+        == "EVIDENCE: laps[3].lap_duration\nCommentary on laps[3].lap_duration."
+    )
+
+    not_a_reference = "\n".join(
+        [
+            "EVIDENCE:",
+            "1. 105.091",
+            "- laps[3].lap_duration = 105.091",
+            "- Do not repeat the previous turn.",
+        ]
+    )
+    with pytest.raises(AssertionError, match="no reference to cite"):
+        await bounded(
+            client.generate(request_for(not_a_reference)), hazard="the fake's refusal"
+        )
+
+
 # --- The recorded source: the loader that makes main one command ----------------
 
 #: The family record counts measured on the recorded session, per the provenance file.
@@ -555,7 +649,9 @@ RECORDED_FAMILY_COUNTS = {
 }
 
 
-def test_the_project_default_recorded_directory_resolves_to_the_recorded_corpus() -> None:
+def test_the_project_default_recorded_directory_resolves_to_the_recorded_corpus() -> (
+    None
+):
     assert DEFAULT_FIXTURE_DIR.is_dir()
     assert DEFAULT_FIXTURE_DIR.name == "openf1"
     assert DEFAULT_FIXTURE_DIR.parent.name == "fixtures"
@@ -565,11 +661,15 @@ def test_recorded_source_loads_the_collector_families_with_the_session_filter() 
     loaded = load_recorded_session(SESSION_KEY)
 
     assert set(loaded) == set(FAMILY_ORDER)
-    assert {family: len(records) for family, records in loaded.items()} == RECORDED_FAMILY_COUNTS
+    assert {
+        family: len(records) for family, records in loaded.items()
+    } == RECORDED_FAMILY_COUNTS
     # The filter is explicit and proved on real records, not assumed: only this session's
     # rows come out even though sessions.json holds the whole season.
     assert all(
-        record["session_key"] == SESSION_KEY for records in loaded.values() for record in records
+        record["session_key"] == SESSION_KEY
+        for records in loaded.values()
+        for record in records
     )
     # The loader feeds the collector exactly what a direct fixture read does.
     assert collect_session_events(SESSION_KEY, loaded) == recorded_events()
@@ -622,7 +722,11 @@ async def test_main_runs_the_full_command_from_the_recorded_source_with_a_fake_p
     settings: Settings = make_settings(
         mode=Mode.replay.value,
         replay={"session_key": SESSION_KEY},
-        booth={"model_id": TEST_MODEL_ID, "language": "en", "provider": ModelProvider.fake.value},
+        booth={
+            "model_id": TEST_MODEL_ID,
+            "language": "en",
+            "provider": ModelProvider.fake.value,
+        },
     )
     fake = EvidenceEchoModelClient()
 
@@ -634,7 +738,9 @@ async def test_main_runs_the_full_command_from_the_recorded_source_with_a_fake_p
     turns = result.transcript.turns
     printed = capsys.readouterr().out
     assert result.transcript.session_key == SESSION_KEY
-    assert fake.requests, "the recorded source must have produced at least one model call"
+    assert fake.requests, (
+        "the recorded source must have produced at least one model call"
+    )
     assert turns and turns[0].speaker is Speaker.lead
     assert [turn.speaker for turn in turns] == [
         Speaker.lead if index % 2 == 0 else Speaker.color for index in range(len(turns))
