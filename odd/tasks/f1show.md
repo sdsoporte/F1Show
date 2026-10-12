@@ -2653,6 +2653,185 @@ samples, **zero** `MULTIPLE_CITATION_LINES`.
 **No fix was applied**: the normaliser lived in the probe, the repository is untouched, and the two candidate
 fixes are registered as product decisions.
 
+### F09e — Accept measured citation shapes and integrate the prompt format
+
+- [ ] **Authorized; in progress (2026-10-12).** User: "ok retomemos como recomiendas."
+  This grant resumes the delivered citation-format correction, its mechanical test-client
+  integration, checks and local integration. Names, championship context, language changes,
+  new live/model calls and publication are outside this unit. The branch's historical
+  `f13-citation-format` name does not authorize checklist F13's separate live pilot.
+- **Delivery:** `bed049979b51f63d1e873d4d9f551f9cd54f7134`, base
+  `440b8634fbf21b2503e217d5f2b03c63ba2fe628`, tree
+  `15d802f82c0bf8ad3312a2564fd3a2b8f2dbc420`, two files, **228 additions + 12 deletions
+  = 240 authored lines**. The previously reported 228 was not total review workload.
+  Parent `9e8702e88469fd4f9298695902d4b09832767e27` and the delivery worktree are clean.
+  Main's advance to `e86593f0c574709577b3a57e5661224c1115fe32` changes none of the
+  three affected source/test paths (observed name-only diff).
+- **Goal:** separate citable references from their values in the prompt; accept the exact
+  current event identity by expanding it to that event's supplied references; preserve the
+  supplied-reference boundary and existing refusal/content channels.
+- **Three stages, one coherent work unit:**
+  1. Reproduce the reported test-client failures, adapt only `tests/test_run.py` to the
+     reference-only prompt shape, and observe focused/full GREEN with import-path proof.
+     Existing deterministic failing cases provide RED; add a narrow regex boundary pin if useful.
+  2. Independently inspect the parser's acceptance boundary and re-derive only affected
+     carried findings by subject, including current blob keys and the live citation-form row.
+     The delivery's reported 123 focused / 805 passed + 5 failed are not fresh verification.
+  3. Assess the final bounded candidate, complete the provider-offered native review and exact
+     acknowledgement under RDD on, then locally integrate with identity evidence and final
+     applicable checks. No push, PR, merge to main, credentials or external calls.
+- **Routing:** mapping delegated to `gentle-ai-explore` (`mv4p76qc-1-rrjv`, completed);
+  bounded test adaptation to one `gentle-ai-worker`; command verification to
+  `gentle-ai-verify`. Multi-file integration, preparation and verification triggers apply.
+  Peer A performs one scoped read-only acceptance-boundary challenge; peer B maps register
+  subjects/coordinates. They do not write, run tests, change Git/ODD or native authority.
+- **Allowed writer surface:** `tests/test_run.py` in
+  `/home/s/dev/projects/work/F1Show-f13`. Delivered `booth.py`/`test_booth.py` remain
+  unchanged unless a corroborated defect requires a separately bounded correction.
+  Parent owns `odd/tasks/f1show.md`, `docs/CARRIED-FINDINGS.md`, Git and review authority.
+- **Writer report, not accepted artifact:** `mv4qb5z7-2-v090` settled, reporting
+  the five deterministic RED failures repaired, 148 focused / 811 full GREEN, Ruff clean,
+  import proof under `PYTHONPATH=src`, and missing child LSP coverage. It reported
+  `tests/test_run.py` **+49/-2**, SHA256
+  `79074a10e2a8f2f7e39350d4b0c0f8dc378c7bfc911fe5c96da01b23c6001263`.
+- **F09e-I1 — active artifact-identity incident, read-only:** parent readback instead
+  observes **+127/-21**, SHA256
+  `9ed90d6e73c0ebdc89c749135fd524839c3a5c033495394b873456619b0924fd`.
+  The native settled handoff repeats the smaller artifact. Production `booth.py` and
+  `test_booth.py` remain unchanged, the index is empty, and only `test_run.py` is dirty.
+  Preserve the live file; no culprit or cause is established. Delegate a separate
+  `gentle-ai-explore` incident diagnosis. Source edits, acceptance, native freeze and
+  integration are paused; the reported GREEN does not certify different bytes.
+- **Peer B map received:** `F09E-B-REGISTER-01` is completed read-only and B is unassigned.
+  Its anchors are delivered-revision evidence, not functional closure. Exact parent
+  numstat is `booth.py` +61/-10 and `test_booth.py` +167/-2; the reported per-test-file
+  count was wrong. Peer A's `F09E-A-BOUNDARY-01` static challenge is now complete.
+- **Peer A findings, source-derived and not executed:** emitted references remain
+  current-event/supplied-only, but `item.partition("=")` ignores all RHS tokens although
+  the docstring claims both shapes refuse unsupplied tokens. Commas in copied JSON values
+  are split before value removal. A second marker carrying a bare event identity can
+  reach commentary. Identity expansion intentionally cites all event references; the
+  older test-name promise must be understood as explicit-field-only.
+  A's clean `test_run.py`/missing-F09e note is an old committed/sibling-doc snapshot,
+  not this canonical parent task file or the current dirty integration-test artifact.
+- **F09e-V1 — next, delegated read-only functional verification:** preserve source;
+  prove reflow equivalence with AST (remove only the added pin and restore only the
+  old regex), recompute fingerprints before/after, reproduce immutable HEAD's old
+  test-client RED with imports pinned to F13, then focused/full GREEN on current bytes.
+  The incident explorer's original RED-log import/census inference is not established.
+  Run scalar/header positive controls and these exact parser probes, reporting actual
+  outcomes rather than assuming that source-derived traces are execution:
+  - allowed `position[0].position`, identity `position[0]`: RHS
+    `position[99].invented`, another supplied reference, and another identity after `=`.
+  - allowed `laps[4].segments_sector_1`, identity `laps[4]`: copied value
+    `[20480, 20481, 0]`; also comma-bearing JSON strings/dicts and comma-free controls.
+  - valid first field citation followed by `EVIDENCE: position[0]` (and an unknown
+    bare identity), comparing old production acceptance when feasible to classify cause.
+  - Full-reference citation excluding uncited fields versus intentional identity expansion.
+  Use `PYTHONPATH=src`, cached offline runners, no environment installs or credentials.
+  Scratch controls/logs under `/tmp` are permitted for functional verification only;
+  no source/Git/index/ODD/config writes or native reviewer-context transport.
+  Commands: `PYTHONPATH=src uv run --offline --frozen --no-sync pytest
+  tests/test_booth.py tests/test_run.py -q`; the same runner with `pytest -q`;
+  `uvx --offline ruff==0.17.0 check --config ruff.toml src/f1show/booth.py
+  tests/test_booth.py tests/test_run.py`. Redirect bulk output to unique logs; pin imports
+  and report warning/LSP coverage separately. A reproduced parser gap is returned to
+  the parent; it does not authorize a verifier fix or a new product trade.
+- **F09e-V1 complete — verification evidence (read-only, repository unmutated):**
+  verifier `mv4scpqx-4-f4ud` re-read status and fingerprints at the end of its run. Live
+  artifact: `tests/test_run.py` modified, **+127/-21 = 148**, SHA256
+  `9ed90d6e73c0ebdc89c749135fd524839c3a5c033495394b873456619b0924fd`, HEAD `bed0499…`,
+  empty index, `diff --check` clean; `booth.py` `d5433560f…` and `test_booth.py`
+  `154c79bee…` byte-identical to the delivered revision. **AST equivalence proven, not
+  inferred:** the current file equals the committed baseline plus the single added pin
+  function and the `_PROMPT_REFERENCE` literal change, with zero differing AST nodes after
+  those two transforms, so the extra lines are comment and whitespace reflow. The old
+  regex matches **0 of 981** real recorded prompts while the new one matches **8,563**
+  reference lines across all 981 (0 unmatched prompts), and the old client's failure
+  reproduces verbatim. Focused **148**, run-only **25**, full **811**, Ruff 0.17.0 clean;
+  the pin adds exactly one collected case (24→25). Active LSP is unavailable and
+  inconclusive and is **not** reported as clean. Child Engram was unavailable; the parent
+  persisted these findings.
+- **F09e-I1 closed by measurement, cause unattributed.** The writer-reported +49/-2 and
+  SHA256 `79074a10e2a8…` **do not exist** in the worktree; the live artifact is the
+  AST-equivalent reflow above. The leading hypothesis, unverified, is a post-measurement
+  auto-format reflow; a pi-lens auto-run notice was reported but not confirmed. Method
+  rule now recorded: **a child's reported artifact hash is not evidence of the bytes it
+  delivered** — the parent recomputes fingerprints and proves equivalence.
+- **Executed acceptance-boundary probes (A–F), actual outcomes:** (A)
+  `position[0].position = position[99].invented` is **accepted** and the right-hand token
+  is ignored and never validated; (B) a second supplied reference right of the `=` is
+  **lost**; (C) `position[0] = position[1]` is **accepted** by identity expansion and the
+  other event's identity is discarded; (D) the comma-bearing copied value
+  `laps[4].segments_sector_1 = [20480, 20481, 0]` is **refused `invented_reference`**
+  while the comma-free scalar control is accepted, because the header is split on commas
+  before the `=` truncation; (E) a second line `EVIDENCE: position[0]` **airs as
+  commentary**, supplied or not, while a token-bearing second line is refused
+  `multiple_citation_lines`; (F) a supplied-shaped reference the event does not own is
+  still refused. The docstring sentence *"an unsupplied token on either shape is still
+  refused"* is **refuted by execution** for the right-hand side.
+- **F09e-C1 — in-unit correction pass, authorized here.** (1) Validate the reference side
+  of a copied value **independently of commas inside the value** by cutting at the first
+  `=` before splitting, test-first from the measured refusal; (2) replace the false
+  docstring claim with the **measured** boundary; (3) pin the measured right-hand-side
+  behaviours, labelled honestly as pins rather than RED. Surfaces:
+  `src/f1show/booth.py` plus `tests/test_booth.py`; `tests/test_run.py` must stay
+  byte-identical. Carried with owner and trigger rather than fixed here: probe E, a bare
+  event identity on a second line is not a citation attempt, and the untested
+  reference-shaped right-hand side.
+- **F09e-C1 independently verified.** Verifier `mv4sxg5q-6-0kxc`, read-only, mutated
+  nothing. Parent-measured live artifact: `booth.py` +54/-31 SHA256 `f0fde318…`,
+  `test_booth.py` +438/-64 SHA256 `7f8993bc…`, `test_run.py` unchanged `9ed90d6e…`.
+  **AST confinement observed:** `booth.py` differs from HEAD in exactly three regions, the
+  two docstrings and `_parse_answer`'s cut-at-first-`=` plus the removal of the per-item
+  partition, and `test_booth.py` keeps 120/120 original nodes identical with 8 additions
+  (7 tests and one helper), no removal and no modification; every deletion is comment or
+  reflow. **RED causality proved** on a scratch copy of HEAD's production code: the three
+  comma-value tests fail there with `invented_reference`, the zero-turn unpack explains the
+  reported `ValueError`, and the comma-free control passes. **Probes on the live bytes:**
+  comma list, dict and comma-bearing string values accepted with only the reference in the
+  evidence tuple and no value leaking into the aired text; multi-reference left side kept;
+  unsupplied and not-owned left tokens refused; reference-shaped right-hand token ignored;
+  identity expansion intact; the no-`=` path unchanged; carried probe E still airs. Commands:
+  focused **133**, run-only **25**, full **821**, Ruff 0.17.0 clean, and the correction adds
+  exactly ten cases. Active LSP remains unavailable and inconclusive, never clean. Carried
+  gap: a **supplied** reference used as the right-hand value is still unpinned.
+- **Both artifact mismatches explained, not mysterious.** pi-lens autoformat is on by
+  default with `format.mode` deferred and its documentation states that formatting for an
+  `edit` runs at `agent_end`, after the child measured its hash. So both writers' reported
+  hashes and sizes describe pre-format bytes (I1: +49/-2 versus +127/-21; I2: +32/-18 and
+  +236/-0 versus +54/-31 and +438/-64). Method rule recorded: **a child's reported artifact
+  hash is a pre-`agent_end` claim**, so the parent re-measures after the child settles and
+  binds acceptance, commits and review to the parent-measured bytes.
+- **Native review complete and burned.** `review-64713b02cce78401`: tier **medium**, one
+  `review-reliability` lens, 3 files, **921 original changed lines**, correction budget 200,
+  base tree `1a871cdb…`, candidate tree `5c1f0748…`, target `sha256:caf14bc2…`. The first
+  START attempt timed out ambiguously and one target-scoped STATUS reconciled it as `start`
+  over an empty candidate, after which the exact offered START created the lineage. The
+  reviewer run was forecast (one host-relay model run, no mutation) and then authorized; the
+  capture closed **approved** with a single non-blocking advisory finding,
+  `R3-copy-shape-truncation` (`booth.py:542-548`, SUGGESTION, informational). The
+  acknowledgement was executed unchanged: `authority: burned`, `consumed_revision
+  sha256:d663513e…`, `gentle-ai.review-acknowledged/v1`. No STATUS was issued after the
+  burn; delivery remains ordinary repository policy.
+- **Budget datum (measured):** 921 authored changed lines at **medium** returned
+  `reviewDue: true` with reason **`slice_budget_reached`** and budget 200, so the slice
+  budget fires at medium as well as high. Recorded as a third measured point; the earlier
+  threshold band is unchanged.
+- **Integrated locally, not published.** The three work units were cherry-picked onto
+  `feat/f03-source-adapters` as `e0e6089` (the peer's citation-shape delivery),
+  `c38af4e` (the offline test client) and `fe4dda3` (this correction). Committed blobs equal
+  the reviewed candidate tree exactly: `booth.py d6e56ea8…`, `test_booth.py 34ef0009…`,
+  `test_run.py 8aaa35e8…`. Post-integration checks on the integrated branch: the import path
+  resolves inside the parent worktree, focused **158 passed**, full **821 passed**. Review
+  workload note, stated honestly: of the 921 lines roughly 379 are harness formatter reflow
+  rather than authored logic.
+- **Next step:** re-anchor the affected register rows by subject against `fe4dda3` (delegated
+  to a read-only peer), add the `R3-copy-shape-truncation` row, close the live citation-form
+  row for its deterministic mechanism while leaving the live-rate measurement historical, and
+  land one parent-owned `docs(odd)` closure commit. Push, pull request and merge remain the
+  user's decision.
+
 ### The show: what the profession says, what the data says, and the design
 
 **Research, 2026-10-11, first-party sources read.** The rules below are the practitioners' own words, and the
