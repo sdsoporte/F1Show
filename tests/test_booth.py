@@ -86,6 +86,21 @@ BOOTH_SOURCE = Path(inspect.getsourcefile(f1show.booth) or "").resolve()
 #: exactly the supplied references and no other.
 REFERENCE_TOKEN = re.compile(r"[a-z_]+\[\d+\]\.[a-z0-9_]+")
 
+#: Every bracket character. The CONTEXT block is declared to carry none of them, so a
+#: hostile recorded message cannot smuggle a reference-shaped token into the prompt.
+BRACKETS = "[](){}"
+
+
+def context_block(prompt: str) -> str:
+    """The CONTEXT block of an assembled prompt, from its header to the next blank line.
+
+    Splitting on the header fails loudly when the block is absent, which is the RED this
+    section needs: a prompt without the block must not quietly pass a membership check.
+    """
+    _, after = prompt.split("CONTEXT", 1)
+    block, _ = after.split("\n\n", 1)
+    return block
+
 
 async def bounded[T](
     awaitable: Awaitable[T], *, hazard: str, timeout: float = HAZARD_TIMEOUT_SECONDS
@@ -414,6 +429,70 @@ async def test_the_prompt_offers_exactly_the_supplied_references() -> None:
     )
     assert "\n1. 3" in prompt, "the value is still shown, on a value line of its own"
     assert set(REFERENCE_TOKEN.findall(prompt)) == {"position[7].position"}
+
+
+# --- The window's story: the CONTEXT block (F09g U1) ----------------------------
+
+
+@pytest.mark.anyio
+async def test_the_prompt_carries_the_windows_story_in_a_context_block() -> None:
+    """RED before F09g U1: both seats saw one event plus prior turns, never the story.
+
+    The CONTEXT block must name who gained, who lost, who was busiest and set the fastest
+    lap, so the colour seat can answer *why*. It is plain prose: no bracket and no
+    reference-shaped token, because the prompt's reference net is the guarantee that
+    nothing new becomes citable.
+    """
+    events = (
+        detected(
+            index=0,
+            event_type=EventType.LAP_COMPLETED,
+            family="laps",
+            evidence={"lap_number": 1, "lap_duration": 109.752},
+            driver_number=24,
+        ),
+        detected(index=1, evidence={"position": 19}, driver_number=24),
+        detected(index=2, evidence={"position": 14}, driver_number=24),
+        detected(index=3, evidence={"position": 5}, driver_number=14),
+        detected(index=4, evidence={"position": 10}, driver_number=14),
+    )
+    model = ScriptedModelClient(answered(events, ["L0.", "L1.", "L2.", "L3.", "L4."]))
+    booth = make_booth(
+        events,
+        model,
+        driver_directory={
+            24: ("ZHOU Guanyu", "Kick Sauber"),
+            14: ("Fernando ALONSO", "Aston Martin"),
+        },
+    )
+
+    await bounded(booth.run(), hazard="the window-story context run")
+
+    prompt = model.requests[-1].prompt
+    block = context_block(prompt)
+    assert "ZHOU Guanyu, Kick Sauber, from P19 to P14, up 5 places" in block, block
+    assert "Fernando ALONSO, Aston Martin, from P5 to P10, down 5 places" in block, (
+        block
+    )
+    assert not any(character in block for character in BRACKETS), block
+    assert REFERENCE_TOKEN.search(block) is None, block
+    assert set(REFERENCE_TOKEN.findall(prompt)) == set(
+        evidence_references(events[-1])
+    ), "the story is prose: it must not add a reference the current event does not own"
+
+
+@pytest.mark.anyio
+async def test_a_story_less_window_still_renders_an_explicit_context_block() -> None:
+    """A window with no story is stated, never invented from the single supplied event."""
+    event = detected(index=0, evidence={"position": 3})
+    model = ScriptedModelClient([spoken(ref(event), "Verstappen is P3.")])
+    booth = make_booth([event], model)
+
+    await bounded(booth.run(), hazard="the story-less context run")
+
+    block = context_block(model.requests[0].prompt)
+    assert "no story" in block.lower(), block
+    assert not any(character in block for character in BRACKETS), block
 
 
 # --- The driver-identity join (F09f) -------------------------------------------

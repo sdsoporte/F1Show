@@ -25,6 +25,14 @@ is stale and never reaches the model at all. An event with no known instant (the
 emits ``stint_start`` with no timestamp field by design) is not invented into one and is
 never treated as stale.
 
+**The window's story.** The prompt also carries a ``CONTEXT`` block: the salience
+projection of the window from the race start through the current event - who gained, who
+lost, who was busiest, who stopped, which sectors are flagged, the derived fastest lap and
+the declared lap-time fences. It is computed here from ``self._events``, the booth's own
+prefix, never from a collaborator, and rendered by :func:`f1show.salience.render_salience`.
+It is **background, never a source**: the block carries no bracket and no reference-shaped
+token, so it cannot add a citable reference and the acceptance below is unchanged.
+
 **Evidence-only sourcing, structurally enforced.** Each event exposes a stable identity and
 one reference per recorded, non-null evidence field. The prompt lists exactly those
 references; the answer protocol requires a first line of
@@ -162,6 +170,7 @@ from f1show.dialogue import Speaker, Transcript, Turn
 from f1show.events import EventType
 from f1show.gemini import ModelError
 from f1show.ports import Clock, ModelClient, ModelRequest
+from f1show.salience import SalienceSummary, render_salience, salience_summary
 
 __all__ = [
     "COLOR_PERSONA",
@@ -696,7 +705,7 @@ class CommentaryBooth:
             ),
             default=None,
         )
-        for event in self._events:
+        for index, event in enumerate(self._events):
             reference = event_reference(event)
             citable = _citable_evidence(event)
             if self._is_stale(event, newest):
@@ -723,7 +732,11 @@ class CommentaryBooth:
             request = ModelRequest(
                 model_id=self._settings.model_id,
                 prompt=self._prompt(
-                    event, _PERSONAS[speaker], citable, self._bounded_context(turns)
+                    event,
+                    _PERSONAS[speaker],
+                    citable,
+                    self._bounded_context(turns),
+                    salience_summary(self._events[: index + 1]),
                 ),
                 max_output_tokens=self._max_output_tokens,
                 timeout_seconds=self._timeout_seconds,
@@ -864,15 +877,18 @@ class CommentaryBooth:
         persona: Persona,
         citable: tuple[tuple[str, object], ...],
         prior_turns: tuple[Turn, ...],
+        salience: SalienceSummary,
     ) -> str:
-        """Assemble the whole prompt from the supplied references and the bounded history.
+        """Assemble the whole prompt from the supplied references, history and window story.
 
         No reference outside ``citable`` appears anywhere in it, so the prompt cannot hand
         the model a source the event does not own. Both F04 prohibitions are carried
         verbatim in the rules block. The EVENT block names the driver and the team from
         the session directory when it resolves the event's number, and the declared
         fallback otherwise; that identity is prompt material only, never citable evidence,
-        and it never enters ``event.evidence``.
+        and it never enters ``event.evidence``. The CONTEXT block narrates the window's
+        salience projection as plain prose; it carries no bracket and no reference-shaped
+        token, so it adds no citable reference either.
         """
         lines = [
             f"You are {persona.name}, the {persona.seat.value} commentator in a two-person "
@@ -910,6 +926,9 @@ class CommentaryBooth:
         lines.extend(
             f"{position}. {_render(value)}"
             for position, (_, value) in enumerate(citable, start=1)
+        )
+        lines.extend(
+            ["", *render_salience(salience, self._driver_directory).splitlines()]
         )
         lines.extend(
             ["", "EVENT:", f"type: {event.event_type.value}", f"family: {event.family}"]
