@@ -24,8 +24,9 @@ unauthenticated free tier returned for these query strings, with hashes and coun
 
 It says nothing about live, real-time, authenticated or rate-limit-exempt behaviour, and it makes no claim
 about whether the same shapes hold for other sessions, seasons or times. The upstream data for a past
-session can be revised after this snapshot; these files record the bytes seen on 2026-10-10, not an
-evergreen truth.
+session can be revised after this snapshot: the eight families below capture the bytes seen on
+**2026-10-10**, and the three championship and session-result files added afterwards capture the bytes seen
+on **2026-10-12** (see the section at the end). Neither capture is an evergreen truth.
 
 ## Session selection
 
