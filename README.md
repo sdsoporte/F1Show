@@ -39,18 +39,29 @@ explicit scope boundaries.
 
 ## Current status
 
-**Repository bootstrap only — no application code exists yet.**
+**A replayable commentary pipeline runs today, entirely offline, and the CI enforces it.**
 
-This repository currently contains project documentation and the archived original
-design documents. There is:
+Snapshot at `c7727f9` (the close of F09g): **957 tests passing** on Python 3.12 and 3.14, Ruff 0.17.0
+pinned, and the register-row guard green.
 
-- no application code;
-- no tests, Docker files or dependency manifests;
-- no working pipeline, and no live or replay data flowing.
+What exists, all of it offline from recorded fixtures with fake providers and an injected clock:
 
-The target architecture below is a plan, not a description of what runs today. The
-first delivery is scoped to a text/CLI transcript; audio, dashboards, social posting,
-multi-session operation and cloud deployment are deliberately out of scope for it.
+- a **deterministic collector** that turns recorded OpenF1 payloads into events across five families;
+- a **two-person booth** — lead and colour, explicit turns — whose citation protocol admits only the
+  references an event actually supplies, with every airing shape declared and pinned;
+- a prompt that carries the **window's stories** (biggest gain and loss, the busiest driver, pit stops,
+  flags, a derived fastest lap), a declared **mode** per turn (build or climax), the **driver's name,
+  team and number**, and a bounded **championship context**;
+- a **standings derivation** validated against the source's own before-and-after checkpoints;
+- `f1show.run.main`, which runs one replay session and prints its transcript reproducibly.
+
+What is **not** here, and why: Redis delivery and Docker packaging (deferred as a pair), tactical
+analysis and historical enrichment, the start aggregation, economy and tone, and the language variant —
+all registered as design rather than missing. The live pilot is gated on a purchased subscription and has
+made zero calls. [`docs/PROJECT-STATE.md`](docs/PROJECT-STATE.md) draws the whole picture in one map.
+
+Audio, dashboards, social posting, multi-session operation and cloud deployment remain deliberately out
+of scope for this delivery.
 
 ## Repository layout
 
@@ -58,6 +69,8 @@ multi-session operation and cloud deployment are deliberately out of scope for i
 | --- | --- |
 | [`docs/`](docs/) | Current project documentation. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) is the target design; [`docs/SOURCE-REVIEW.md`](docs/SOURCE-REVIEW.md) assesses the original corpus against it. |
 | [`docs/EXTERNAL-CONTRACTS.md`](docs/EXTERNAL-CONTRACTS.md) | Validated external contracts: OpenF1 tiers, prices, quotas and observed schemas, Jolpica, `google-genai`, the identity mapping and the open unknowns. |
+| [`docs/PROJECT-STATE.md`](docs/PROJECT-STATE.md) | The project state map: what is built and delivered, what remains and why, what is carried with an owner and a trigger, and the workflow every unit goes through. |
+| [`docs/CARRIED-FINDINGS.md`](docs/CARRIED-FINDINGS.md) | The register of carried findings — location, owner, trigger — and the staleness keys that decide when a row must be re-derived. |
 | [`origis/`](origis/) | The ten original Word documents, archived byte-for-byte with [provenance and integrity hashes](origis/README.md). Historical evidence, not specifications and not executable source. |
 | [`odd/`](odd/) | The ODD plan and task backlog. [`odd/tasks/f1show.md`](odd/tasks/f1show.md) is the authoritative scope and task list. |
 
