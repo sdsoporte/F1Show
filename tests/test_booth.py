@@ -285,6 +285,115 @@ async def test_each_seat_prompt_carries_only_its_own_persona() -> None:
     assert LEAD_PERSONA.register_instruction not in model.requests[1].prompt
 
 
+# --- Commentary language -------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("language", "label", "address", "terms"),
+    [
+        (
+            None,
+            "Argentine Spanish",
+            "vos, tenés, podés",
+            ("auto", "neumáticos", "nafta", "boxes", "auto de seguridad"),
+        ),
+        (
+            "es-AR",
+            "Argentine Spanish",
+            "vos, tenés, podés",
+            ("auto", "neumáticos", "nafta", "boxes", "auto de seguridad"),
+        ),
+        (
+            "es-419",
+            "neutral Latin American Spanish",
+            "tú",
+            ("auto", "neumáticos", "gasolina", "pits", "auto de seguridad"),
+        ),
+        (
+            "es-MX",
+            "Mexican Spanish",
+            "tú",
+            ("auto", "llantas", "gasolina", "pits", "auto de seguridad"),
+        ),
+        (
+            "es-ES",
+            "Spanish from Spain",
+            "vosotros",
+            ("coche", "neumáticos", "gasolina", "boxes", "coche de seguridad"),
+        ),
+    ],
+)
+@pytest.mark.anyio
+async def test_spanish_variant_reaches_both_seats_without_changing_citations(
+    language: str | None, label: str, address: str, terms: tuple[str, ...]
+) -> None:
+    events = [detected(index=0, driver_number=4), detected(index=1, driver_number=4)]
+    texts = ["Norris está tercero.", "McLaren mantiene esa posición."]
+    model = ScriptedModelClient(answered(events, texts))
+    settings = (
+        BoothSettings(model_id=TEST_MODEL_ID)
+        if language is None
+        else BoothSettings(model_id=TEST_MODEL_ID, language=language)
+    )
+    booth = make_booth(
+        events,
+        model,
+        settings=settings,
+        driver_directory={4: ("Lando NORRIS", "McLaren")},
+    )
+
+    result = await bounded(booth.run(), hazard="the Spanish-variant run")
+
+    selected = "es-AR" if language is None else language
+    assert result.transcript.language == selected
+    assert [turn.speaker for turn in result.transcript.turns] == [
+        Speaker.lead,
+        Speaker.color,
+    ]
+    assert [turn.text for turn in result.transcript.turns] == texts
+    assert [turn.evidence for turn in result.transcript.turns] == [
+        (ref(event),) for event in events
+    ]
+    assert [outcome.kind for outcome in result.outcomes] == [
+        OutcomeKind.TURN,
+        OutcomeKind.TURN,
+    ]
+    assert len(model.requests) == 2
+    for request, event in zip(model.requests, events, strict=True):
+        prompt = request.prompt
+        assert f"Commentate the one event below in {selected}." in prompt
+        _, block = prompt.split("\nLANGUAGE:\n", 1)
+        block, _ = block.split("\n\n", 1)
+        assert label in block
+        assert address in block
+        assert all(term in block for term in terms)
+        assert "Keep driver and team names as supplied" in block
+        assert not any(bracket in block for bracket in BRACKETS)
+        assert not REFERENCE_TOKEN.findall(block)
+        assert set(REFERENCE_TOKEN.findall(prompt)) == set(evidence_references(event))
+        assert prompt.count("EVIDENCE:") == 2
+        assert "driver: Lando NORRIS (McLaren, #4)" in prompt
+
+
+@pytest.mark.anyio
+async def test_explicit_english_keeps_the_previous_language_prompt() -> None:
+    event = detected(index=0)
+    model = ScriptedModelClient([spoken(ref(event), "The driver is third.")])
+    booth = make_booth(
+        [event], model, settings=BoothSettings(model_id=TEST_MODEL_ID, language="en")
+    )
+
+    result = await bounded(booth.run(), hazard="the explicit-English run")
+
+    assert result.transcript.language == "en"
+    assert result.transcript.turns[0].text == "The driver is third."
+    assert result.transcript.turns[0].evidence == (ref(event),)
+    assert result.outcomes[0].kind is OutcomeKind.TURN
+    assert len(model.requests) == 1
+    assert "Commentate the one event below in en." in model.requests[0].prompt
+    assert "LANGUAGE:" not in model.requests[0].prompt
+
+
 # --- Turn order and the priority band -----------------------------------------
 
 

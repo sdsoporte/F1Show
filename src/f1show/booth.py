@@ -233,6 +233,32 @@ PRIORITY_EVENT_TYPES: frozenset[EventType] = CAUTION_EVENT_TYPES
 #: bare number standing in for a name -- and never renders two driver lines.
 _UNKNOWN_DRIVER = "driver: unknown"
 
+#: Declared Spanish registers, not model-selected regional guesses. These are
+#: instruction prose only: no bracket, reference token or citation marker. Languages
+#: outside this table keep their existing free-form instruction unchanged.
+_SPANISH_LANGUAGE_PROFILES: dict[str, tuple[str, str, str]] = {
+    "es-AR": (
+        "Use Argentine Spanish; do not mix regional variants.",
+        "Use voseo when addressing the audience: vos, tenés, podés; avoid tú and vosotros.",
+        "Motorsport vocabulary: auto, neumáticos, nafta, boxes, auto de seguridad.",
+    ),
+    "es-419": (
+        "Use neutral Latin American Spanish; do not mix regional variants.",
+        "Use tuteo when addressing the audience: tú; avoid voseo and vosotros.",
+        "Motorsport vocabulary: auto, neumáticos, gasolina, pits, auto de seguridad.",
+    ),
+    "es-MX": (
+        "Use Mexican Spanish; do not mix regional variants.",
+        "Use tuteo when addressing the audience: tú; avoid voseo and vosotros.",
+        "Motorsport vocabulary: auto, llantas, gasolina, pits, auto de seguridad.",
+    ),
+    "es-ES": (
+        "Use Spanish from Spain; do not mix regional variants.",
+        "Use tú for singular address and vosotros for plural address; avoid voseo.",
+        "Motorsport vocabulary: coche, neumáticos, gasolina, boxes, coche de seguridad.",
+    ),
+}
+
 
 class _Record(BaseModel):
     """Internal contract: strict and frozen, like every other record in this project."""
@@ -943,14 +969,29 @@ class CommentaryBooth:
         moment's bounded championship picture as plain prose under the same no-bracket,
         no-token rule, so it too is context and never a source. The MODE block declares
         this turn's prosody as instruction text, beside the persona register and under the
-        same no-bracket, no-token rule.
+        same no-bracket, no-token rule. A declared Spanish variant adds a LANGUAGE
+        block with its address forms and motorsport vocabulary; other languages keep
+        their original instruction. Dialectal compliance by a real model is not proved
+        by an offline scripted response.
         """
+        profile = _SPANISH_LANGUAGE_PROFILES.get(self._settings.language)
+        language_instruction = (
+            ()
+            if profile is None
+            else (
+                "",
+                "LANGUAGE:",
+                *profile,
+                "Keep driver and team names as supplied; do not translate them.",
+            )
+        )
         lines = [
             f"You are {persona.name}, the {persona.seat.value} commentator in a two-person "
             "Formula 1 booth.",
             persona.register_instruction,
             *render_mode_instruction(mode).splitlines(),
             f"Commentate the one event below in {self._settings.language}.",
+            *language_instruction,
             "",
             "RULES:",
             "- Cite only the references listed under EVIDENCE; never name a reference that "

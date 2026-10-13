@@ -1,8 +1,8 @@
 """Offline acceptance tests for typed configuration.
 
 Every case here is deterministic and touches no network, no model and no
-credential. The point of the module is that an unset or malformed setting is a
-loud configuration error, never a silent fallback.
+credential. Required or malformed settings fail loudly; the commentary language
+has a declared, overridable default.
 """
 
 from __future__ import annotations
@@ -47,17 +47,23 @@ def test_malformed_mode_is_a_validation_error(make_settings: Any) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_source_base_url_defaults_to_the_documented_endpoint(make_settings: Any) -> None:
+def test_source_base_url_defaults_to_the_documented_endpoint(
+    make_settings: Any,
+) -> None:
     settings = make_settings(**REPLAY)
     assert settings.source.base_url == "https://api.openf1.org/v1"
 
 
 def test_source_base_url_is_overridable(make_settings: Any) -> None:
-    settings = make_settings(**{**REPLAY, "source": {"base_url": "http://127.0.0.1:8080/v1"}})
+    settings = make_settings(
+        **{**REPLAY, "source": {"base_url": "http://127.0.0.1:8080/v1"}}
+    )
     assert settings.source.base_url == "http://127.0.0.1:8080/v1"
 
 
-def test_request_timeout_has_a_sane_default_and_is_overridable(make_settings: Any) -> None:
+def test_request_timeout_has_a_sane_default_and_is_overridable(
+    make_settings: Any,
+) -> None:
     assert make_settings(**REPLAY).source.timeout_seconds == 10.0
     overridden = make_settings(**{**REPLAY, "source": {"timeout_seconds": 2.5}})
     assert overridden.source.timeout_seconds == 2.5
@@ -88,7 +94,9 @@ def test_replay_rejects_the_latest_magic_value(make_settings: Any) -> None:
 
 
 @pytest.mark.parametrize("selector", [0, -1, -9462, "0", "-42"])
-def test_replay_rejects_zero_and_negative_selectors(make_settings: Any, selector: object) -> None:
+def test_replay_rejects_zero_and_negative_selectors(
+    make_settings: Any, selector: object
+) -> None:
     with pytest.raises(ValidationError) as excinfo:
         make_settings(**{**REPLAY, "replay": {"session_key": selector}})
     assert "positive integer" in str(excinfo.value)
@@ -139,7 +147,9 @@ def test_live_mode_with_credentials_is_accepted(make_settings: Any) -> None:
     assert settings.mode is Mode.live
 
 
-def test_replay_with_the_fake_provider_requires_no_credentials(make_settings: Any) -> None:
+def test_replay_with_the_fake_provider_requires_no_credentials(
+    make_settings: Any,
+) -> None:
     settings = make_settings(**REPLAY)
     assert settings.booth.provider is ModelProvider.fake
     assert settings.credentials.openf1_username is None
@@ -149,7 +159,16 @@ def test_replay_with_the_fake_provider_requires_no_credentials(make_settings: An
 
 def test_gemini_provider_requires_an_api_key(make_settings: Any) -> None:
     with pytest.raises(ValidationError) as excinfo:
-        make_settings(**{**REPLAY, "booth": {"model_id": TEST_MODEL_ID, "language": "en", "provider": "gemini"}})
+        make_settings(
+            **{
+                **REPLAY,
+                "booth": {
+                    "model_id": TEST_MODEL_ID,
+                    "language": "en",
+                    "provider": "gemini",
+                },
+            }
+        )
     message = str(excinfo.value)
     assert "gemini" in message
     assert "gemini_api_key" in message
@@ -157,7 +176,11 @@ def test_gemini_provider_requires_an_api_key(make_settings: Any) -> None:
     settings = make_settings(
         **{
             **REPLAY,
-            "booth": {"model_id": TEST_MODEL_ID, "language": "en", "provider": "gemini"},
+            "booth": {
+                "model_id": TEST_MODEL_ID,
+                "language": "en",
+                "provider": "gemini",
+            },
             "credentials": {"gemini_api_key": "fake-key"},
         }
     )
@@ -170,7 +193,7 @@ def test_model_provider_defaults_to_fake(make_settings: Any) -> None:
 
 
 # --------------------------------------------------------------------------
-# Booth settings: no defaults for model ID and language
+# Booth settings: required model ID and declared language default
 # --------------------------------------------------------------------------
 
 
@@ -180,10 +203,30 @@ def test_model_id_is_required(make_settings: Any) -> None:
     assert "model_id" in str(excinfo.value)
 
 
-def test_commentary_language_is_required(make_settings: Any) -> None:
+def test_commentary_language_defaults_to_argentine_spanish(make_settings: Any) -> None:
+    settings = make_settings(**{**REPLAY, "booth": {"model_id": TEST_MODEL_ID}})
+    assert settings.booth.language == "es-AR"
+    assert settings.booth.model_id == TEST_MODEL_ID
+    assert settings.booth.provider is ModelProvider.fake
+    assert settings.credentials.gemini_api_key is None
+
+
+@pytest.mark.parametrize("language", ["es-AR", "es-419", "es-MX", "es-ES", "en"])
+def test_language_override_preserves_the_explicit_value(
+    make_settings: Any, language: str
+) -> None:
+    settings = make_settings(
+        **{**REPLAY, "booth": {"model_id": TEST_MODEL_ID, "language": f" {language} "}}
+    )
+    assert settings.booth.language == language
+    assert settings.booth.model_id == TEST_MODEL_ID
+    assert settings.booth.provider is ModelProvider.fake
+
+
+def test_default_language_does_not_supply_a_model_id(make_settings: Any) -> None:
     with pytest.raises(ValidationError) as excinfo:
-        make_settings(**{**REPLAY, "booth": {"model_id": TEST_MODEL_ID}})
-    assert "language" in str(excinfo.value)
+        make_settings(**{**REPLAY, "booth": {}})
+    assert [error["loc"] for error in excinfo.value.errors()] == [("booth", "model_id")]
 
 
 def test_blank_model_id_is_rejected(make_settings: Any) -> None:
@@ -194,7 +237,9 @@ def test_blank_model_id_is_rejected(make_settings: Any) -> None:
 
 def test_blank_language_is_rejected(make_settings: Any) -> None:
     with pytest.raises(ValidationError) as excinfo:
-        make_settings(**{**REPLAY, "booth": {"model_id": TEST_MODEL_ID, "language": ""}})
+        make_settings(
+            **{**REPLAY, "booth": {"model_id": TEST_MODEL_ID, "language": ""}}
+        )
     assert "language" in str(excinfo.value)
 
 
@@ -205,7 +250,9 @@ def test_blank_language_is_rejected(make_settings: Any) -> None:
 
 def test_naive_since_is_rejected(make_settings: Any) -> None:
     with pytest.raises(ValidationError) as excinfo:
-        make_settings(**{**REPLAY, "window": {"since": dt.datetime(2024, 3, 2, 15, 0, 0)}})
+        make_settings(
+            **{**REPLAY, "window": {"since": dt.datetime(2024, 3, 2, 15, 0, 0)}}
+        )
     message = str(excinfo.value)
     assert "since" in message
     assert "timezone-aware" in message
@@ -213,7 +260,9 @@ def test_naive_since_is_rejected(make_settings: Any) -> None:
 
 def test_naive_until_is_rejected(make_settings: Any) -> None:
     with pytest.raises(ValidationError) as excinfo:
-        make_settings(**{**REPLAY, "window": {"until": dt.datetime(2024, 3, 2, 17, 0, 0)}})
+        make_settings(
+            **{**REPLAY, "window": {"until": dt.datetime(2024, 3, 2, 17, 0, 0)}}
+        )
     assert "timezone-aware" in str(excinfo.value)
 
 
@@ -257,7 +306,11 @@ def test_secrets_are_usable_but_never_exposed(make_settings: Any) -> None:
     settings = make_settings(
         **{
             **REPLAY,
-            "booth": {"model_id": TEST_MODEL_ID, "language": "en", "provider": "gemini"},
+            "booth": {
+                "model_id": TEST_MODEL_ID,
+                "language": "en",
+                "provider": "gemini",
+            },
             "credentials": secrets,
         }
     )
@@ -273,7 +326,9 @@ def test_secrets_are_usable_but_never_exposed(make_settings: Any) -> None:
             assert value not in rendered, f"{name} leaked through {surface}"
 
     # The values are still readable through the explicit accessor.
-    assert settings.credentials.openf1_password.get_secret_value() == "openf1-pass-secret"
+    assert (
+        settings.credentials.openf1_password.get_secret_value() == "openf1-pass-secret"
+    )
     assert settings.credentials.gemini_api_key.get_secret_value() == "gemini-key-secret"
 
 
