@@ -2,7 +2,7 @@
 
 One page for the question *what exists, what does not, and what is merely carried*. It is a **snapshot**, and it names the revision it was drawn at: `odd/tasks/f1show.md` stays the authority.
 
-**Snapshot:** `c7727f9` (the merge of PR #50), the close of F09g - suite **957 passing** - CI on **3.12 and 3.14** with **Ruff 0.17.0** pinned - **no open pull requests**.
+**Snapshot:** `b0f5f32` (the merge of PR #55), the close of **F09i** and **F09h** — the start aggregation and the commentary language — suite **986 passing** - CI on **3.12 and 3.14** with **Ruff 0.17.0** pinned - **no open pull requests**.
 
 ## The map
 
@@ -22,11 +22,15 @@ flowchart TB
     GW["F08 gateway Gemini"]
     RUN["F10 run offline"]
     CI["F12 CI y guardas"]
+    LANG["F09h idioma es-AR"]
+    STARTAGG["F09i largada"]
     FIX --> COL --> STORE --> SNAP --> BOOTH
     ID --> BOOTH
     SAL --> BOOTH
     MODE --> BOOTH
     CHAMP --> BOOTH
+    LANG --> BOOTH
+    STARTAGG --> BOOTH
     BOOTH --> GW
     RUN --> BOOTH
     CI -. vigila .-> RUN
@@ -38,9 +42,7 @@ flowchart TB
     F11["F11 packaging Compose"]
     F06["F06 tactico"]
     F07["F07 historico"]
-    START["largada"]
     ECON["economia y tono"]
-    LANG["idioma es-419"]
     F13["F13 piloto en vivo"]
     LIVE["mitad EN VIVO de citas"]
     F06 --> F07
@@ -55,6 +57,8 @@ flowchart TB
     C4["presupuesto: 5 puntos"]
     C5["empates + alias"]
     C6["3 avisos de U3b"]
+    C7["fragmento pegado"]
+    C8["2 archivos sin clave"]
   end
 
   subgraph WF["WORKFLOW ODD - una unidad por vuelta"]
@@ -69,9 +73,9 @@ flowchart TB
   classDef todo fill:#8a6d00,stroke:#5c4800,color:#ffffff
   classDef carry fill:#1f4e79,stroke:#123a5a,color:#ffffff
   classDef wf fill:#4b2e83,stroke:#2f1c52,color:#ffffff
-  class FIX,COL,STORE,SNAP,ID,SAL,MODE,CHAMP,BOOTH,GW,RUN,CI built
-  class F05,F11,F06,F07,START,ECON,LANG,F13,LIVE todo
-  class C1,C2,C3,C4,C5,C6 carry
+  class FIX,COL,STORE,SNAP,ID,SAL,MODE,CHAMP,LANG,STARTAGG,BOOTH,GW,RUN,CI built
+  class F05,F11,F06,F07,ECON,F13,LIVE todo
+  class C1,C2,C3,C4,C5,C6,C7,C8 carry
   class W1,W2,W3,W4,W5,W6,W7,W8,W9,W10 wf
 ```
 
@@ -97,6 +101,8 @@ Exports for readers who cannot render Mermaid: [`project-state.svg`](assets/proj
 | F08 | the Gemini gateway | bounds, cost accounting and typed degradation |
 | F10 | one command, one process | offline by construction: recorded fixtures, fake providers, injected clock |
 | F12 | CI and guards | the lint standard committed with its version pinned, the declared floor enforced, and a register-row guard |
+| F09h | the commentary language | Argentine Spanish (`es-AR`) by default, with `es-419`, `es-MX` and `es-ES` selectable and each declaring its address forms and motorsport vocabulary; an omitted language takes the default, an explicit blank is still an error, and the prompt's citation protocol is unchanged |
+| F09i | the start aggregation | the twenty lap-1 events air as **one start turn** instead of twenty near-identical ones, with one identity per member citable and every absorbed row recording `covered_by_start` — and, when the group's own turn does not air, mirroring its fate instead of claiming coverage |
 
 ## Remaining, and why
 
@@ -106,9 +112,6 @@ Exports for readers who cannot render Mermaid: [`project-state.svg`](assets/proj
 | F11 packaging (Docker Compose) | the pair with F05 |
 | F06 tactical analysis | precedes F07 |
 | F07 historical enrichment | follows F06 |
-| Start aggregation | registered design, not authorized |
-| Economy and tone | registered design, not authorized |
-| Language variant (`es-419`, with `es-AR`, `es-MX` and `es-ES`) | registered design, not authorized |
 | F13 live pilot | gated on a purchased subscription; zero calls made |
 | The **live** half of the citation-form row | needs a live run; the deterministic half is fixed, reviewed and delivered |
 
@@ -123,6 +126,8 @@ Everything below lives in `docs/CARRIED-FINDINGS.md` with its location, owner an
 - The **tie order is not derivable**, so the prompt states ties instead of asserting a settled position.
 - The priority band's **stale public alias** survives its own refactor.
 - **Three advisories** from U3b, with their subjects located in the source because the harness returns no bodies.
+- A **bare token glued to a letter** (`position[0][99].evil`) **airs on a field-reference surface**; measured on both the pre-change and the post-change bytes, so it is pre-existing, and closing it would also close the declared tolerance for a bare non-empty bracket — a product trade the module reserves to the user.
+- **Two files with no register row and no staleness key at all**: `src/f1show/config.py` and `tests/test_config.py`, named in the register as a gap rather than repaired by ceremony.
 
 ## The workflow every unit goes through
 
