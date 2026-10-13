@@ -1,8 +1,18 @@
 # F1Show target architecture
 
-> **Not implemented.** This document describes the architecture F1Show is being built
-> toward. No application code, service, container or pipeline exists yet. Nothing here
-> describes something that currently runs. See the [project status](../README.md#current-status).
+> **Partly built, and marked as such.** This document states the architecture F1Show
+> is built toward and, element by element, whether it is **delivered in `main` today**
+> or **still target**. A replayable commentary pipeline runs today, entirely offline;
+> the services, the bus and the live mode do not. The authority on *what exists* is
+> [`PROJECT-STATE.md`](PROJECT-STATE.md), which names the revision it was drawn at; the
+> authority on *what is planned* is `odd/tasks/f1show.md`. Where this document and the
+> task document disagree, the task document wins. See also the
+> [project status](../README.md#current-status).
+>
+> **Status markers.** `[built]` means the element runs in `main`, and the section says
+> how far. `[target]` means it is designed, not implemented, with the owning unit
+> named. Nothing here is a measurement of the live path: the live tier has never been
+> exercised, and no purchase is authorized by this document.
 
 This is the **target** design. Where it makes a commitment, it is a decision the
 project has taken; where it describes something external, it is stated as a
@@ -11,7 +21,7 @@ endpoint schemas and package versions — were validated on 2026-10-09 and are r
 with their sources in [`EXTERNAL-CONTRACTS.md`](EXTERNAL-CONTRACTS.md). This document
 states the decisions taken on that evidence.
 
-## Design principle: facts and talk are separate
+## Design principle: facts and talk are separate [built]
 
 The system splits into two halves that are never mixed:
 
@@ -24,22 +34,54 @@ The purpose of the split is evidence discipline. If a commentator states a fact,
 fact must already exist in a deterministic event or an attributed historical record.
 The models add language, turn-taking and tone — never data.
 
+## The data path, layer by layer
+
+Five layers, in order. The first four are a pipeline over data at rest; the fifth is a
+**mode**, not a fifth stage — see [Modes: replay and live](#modes-replay-and-live).
+
+| # | Layer | What it owns | The seam it has to satisfy | Status |
+| --- | --- | --- | --- | --- |
+| 1 | **Data at rest** | The source connection, the recorded bodies, the local store. One writer talks to the provider. | A recorded session is addressable by `session_key`, with bytes, counts and SHA256 in `fixtures/openf1/PROVENANCE.md`. | `[built]` — SQLite WAL store, per-session snapshots, two recorded sessions |
+| 2 | **Normalization** | Validation, deduplication, provenance and source timestamps: *is this a well-formed record of our events?* | Every record becomes an `EventEnvelope` carrying a source timestamp and its provenance: strict toward our own vocabulary, tolerant toward the provider's fields. | `[built]` — the collector, across the recorded families |
+| 3 | **Interpretation** | What the data *means* for the race: gaps, pace, stints, pit windows; identity, records, historical context. | Interpretation emits **facts with their source fields**, and an estimate is labelled an assumption rather than a fact. | `[partial]` — salience, the championship context and driver identity exist; the tactical analyst (F06) and the historian (F07) do not |
+| 4 | **Commentary** | Deciding how to say it: turns, register, tone, language. | Every claim rests on a reference layer 3 supplied; the model adds language, never data. | `[built]` — the two-person booth and the model gateway |
+| 5 | **The mode** | Not a stage: **how the pipeline obtains its data, and what rate it is consumed at**. | Both sources sit behind one adapter boundary, so layers 2-4 cannot tell them apart. | `[partial]` — replay is built; live is deferred to F13, and **wall-clock playback** is the one piece neither mode has today |
+
+**Two contracts hold the path together**, and both are contracts rather than code:
+
+- **The event contract (layers 1/2 to 3).** A new series is a new adapter that emits
+  `EventEnvelope`s, and layers 3-5 must not branch on which series produced the record.
+  The taxonomy names comparable race facts, deliberately not a provider's vocabulary.
+  That is what makes the product multi-source, and it is why a provider-specific concept
+  belongs in its adapter and never in the taxonomy.
+- **The citation contract (layer 3 to 4).** A persona may cite only the references the
+  deterministic half supplied for that turn. This is the single gate every source
+  passes, and it is what keeps a claim traceable to session evidence whichever provider
+  or series produced it.
+
+**Cleaning is layer 2, never layer 3.** Validation and normalization belong to ingestion
+because they are what makes the rest of the path source-independent; if a series' cleanup
+lived beside its interpretation, layers 3 and 4 would diverge per series and the
+multi-source promise would be lost at exactly the seam it depends on. Interpretation
+varies by series too — a second, honest problem, owned by F06.
+
 ## The five logical roles
 
-| # | Role | LLM calls | Responsibility |
-| --- | --- | --- | --- |
-| 1 | **Collector** (deterministic) | **Zero** | Normalizes timing/laps/positions/intervals/race-control into schema-validated events, deduplicates updates, preserves source timestamps and provenance, and publishes to the bus. It reads the data source **through the local store**, which is filled by the dedicated sync writer — the only component that talks to OpenF1. |
-| 2 | **Tactical analyst** (deterministic) | **Zero** | Turns normalized events into tactical signals — contextual gaps, pace trends, stint and tyre state, pit-window candidates, qualifying cutoffs. Estimates (tyre life, pit loss) are labeled as assumptions, not facts, and circuit/session parameters are configuration, not hardcoded. |
-| 3 | **Historian** (deterministic) | **Zero** | Resolves driver and circuit identity and retrieves attributed historical records for the current event, with bounded caching and explicit source/as-of attribution. Unknown records stay absent; a failed lookup skips trivia rather than inventing it. |
-| 4 | **Lead play-by-play persona** (Gemini) | Yes | Calls the current action in short, high-tempo turns and hands off to the analyst. |
-| 5 | **Color analyst persona** (Gemini) | Yes | Responds with tactical and historical depth drawn only from the enrichment it is given. |
+| # | Role | LLM calls | Responsibility | Status |
+| --- | --- | --- | --- | --- |
+| 1 | **Collector** (deterministic) | **Zero** | Normalizes timing/laps/positions/intervals/race-control into schema-validated events, deduplicates updates, preserves source timestamps and provenance, and publishes to the bus. It reads the data source **through the local store**, which is filled by the dedicated sync writer — the only component that talks to OpenF1. | `[built]` except the bus: it feeds the booth in one process today, and **publishing to Redis Streams is F05** |
+| 2 | **Tactical analyst** (deterministic) | **Zero** | Turns normalized events into tactical signals — contextual gaps, pace trends, stint and tyre state, pit-window candidates, qualifying cutoffs. Estimates (tyre life, pit loss) are labeled as assumptions, not facts, and circuit/session parameters are configuration, not hardcoded. | `[target]` — **F06** |
+| 3 | **Historian** (deterministic) | **Zero** | Resolves driver and circuit identity and retrieves attributed historical records for the current event, with bounded caching and explicit source/as-of attribution. Unknown records stay absent; a failed lookup skips trivia rather than inventing it. | `[partial]` — driver identity and a declared standings dataset exist; **historical enrichment is F07** |
+| 4 | **Lead play-by-play persona** (Gemini) | Yes | Calls the current action in short, high-tempo turns and hands off to the analyst. | `[built]` |
+| 5 | **Color analyst persona** (Gemini) | Yes | Responds with tactical and historical depth drawn only from the enrichment it is given. | `[built]` |
 
 Roles 1–3 are deterministic and must remain so. Roles 4–5 are **the only components
 in the system permitted to call an LLM.**
 
-## Services and bus
+## Services and bus [target — F05 and F11]
 
-The five logical roles run as **four role services plus a sync writer and Redis**:
+**None of this is built.** Today the pipeline runs as a single process (F10). The five
+logical roles are designed to run as **four role services plus a sync writer and Redis**:
 
 | Service | Contains | Notes |
 | --- | --- | --- |
@@ -60,7 +102,10 @@ event independently, and one of them being slow or down must not stop the other 
 stall fresh factual calls. Service startup uses readiness/health state, not a bare
 `depends_on` ordering assumption.
 
-## Local store and the sync role
+## Local store and the sync role [partly built]
+
+The store, the immutable snapshots and the one-writer discipline are built; the Redis
+transport and the live cadence are target (F05, F13).
 
 **The local store replaces direct per-agent API access.** A single sync process is the
 only component that talks to OpenF1; every other service reads locally.
@@ -72,8 +117,8 @@ only component that talks to OpenF1; every other service reads locally.
 - **Event transport is unchanged.** Agents keep consuming events over **Redis
   Streams**; the local store serves **state, context and history**. This is not a
   switch from push to polling.
-- **Live sync cadence is approximately 3 seconds**, matching the documented source
-  update delay.
+- **Live sync cadence is approximately 3 seconds** `[target]`, matching the documented
+  source update delay. It has never been measured live.
 - DuckDB may additionally attach the SQLite file read-only through its official
   `sqlite` extension (`INSTALL sqlite; ATTACH 'file.db' (TYPE sqlite)`, documented at
   <https://duckdb.org/docs/current/core_extensions/sqlite.html>), with the honest
@@ -101,13 +146,25 @@ data, describing it as "the recommended method" (<https://openf1.org/auth.html>)
 recorded in
 [`EXTERNAL-CONTRACTS.md`](EXTERNAL-CONTRACTS.md#why-the-rate-limits-force-a-single-sync-writer).
 
-## Replay first
+## Modes: replay and live
+
+**Live is a mode, not a layer.** The pipeline obtains its data in one of two modes, and
+this is already the project's own vocabulary: `Mode.replay` and `Mode.live` in
+`src/f1show/config.py`, whose docstring is *"How the pipeline obtains its data."* A mode
+changes where records come from and how fast they arrive — never what the pipeline does
+with them.
+
+> **Two senses of "mode", both in use.** A **mode of operation** is `replay` or `live`
+> (`config.Mode`): where the data comes from. A **turn mode** is `build` or `climax`
+> (`mode.TurnMode`): the register of one commentary turn. They are independent — a
+> replay run has turn modes — and this document says *mode of operation* whenever the
+> first sense is meant.
 
 OpenF1 states the free/paid split verbatim: **"Historical data (from 2023 onwards) is
 free and accessible without authentication. Real-time data requires a paid
 subscription."** (<https://openf1.org/docs/>) Free, unauthenticated historical access
 from the 2023 season onwards is what makes offline development possible, and it is the
-mode the system is built and regression-tested in first.
+mode of operation the system is built and regression-tested in first.
 
 - A **replay source** and a **live source** sit behind the same adapter boundary, so
   the rest of the pipeline cannot tell them apart.
@@ -119,6 +176,17 @@ mode the system is built and regression-tested in first.
   Parquet snapshots are both the analytical input and the recorded fixtures the
   regression suite replays, so a live session and a replayed session are the same
   shape of data.
+- **What the live mode still needs is wall-clock playback**, and it is not the same
+  thing as request pacing. `request_policy.py` already paces the **outbound requests**
+  to the provider; playback cadence is how fast the pipeline **consumes** records once
+  it has them. Replay today is deterministic and **unpaced**: records come back in a
+  total order and are consumed as fast as they are read, which is exactly what makes a
+  replay reproduce byte for byte. Real-time operation reads the same source at
+  wall-clock rate — start at the lights and reach 1:34:23.754 in 1:34:23.754 — and the
+  seam for it exists, because the clock is injectable. The cadence itself is unbuilt,
+  and this document leaves its placement open rather than inventing an owner: live
+  access and the ≤ 8 second measurement are F13's, and a wall-clock replay is a third
+  thing no unit claims yet.
 
 ### Live data is not free
 
@@ -136,7 +204,7 @@ as part of development, and treats live operation as a separately authorized mil
 with its own access, quota, cost and time ceilings. Historical free access must never be
 presented as if it extended to the live feed.
 
-## The commentary booth
+## The commentary booth [built]
 
 - **Two personas with explicit turns**: the lead calls the action, then hands to the
   analyst. Turn order is deterministic even though the text is generated.
@@ -148,15 +216,20 @@ presented as if it extended to the live feed.
 - **Degradation is neutral**: a model outage, timeout or rate limit produces a
   restrained fallback or a gap in commentary — never fabricated excitement.
 
-## Output
+**The citation contract** (layer 3 to 4) is enforced here: a persona may cite only the
+references the turn supplied, every airing shape is declared and pinned, and the gaps
+that remain are carried with an owner in
+[`CARRIED-FINDINGS.md`](CARRIED-FINDINGS.md) rather than claimed closed.
+
+## Output [built]
 
 The first delivery produces a **plain text/CLI transcript**: the commentary stream,
 sourced, written to standard output or a file. This is the only output the first
-delivery targets.
+delivery targets, and it is what F10's single-process run emits today.
 
-## Out of scope for the first delivery
+## Out of scope
 
-These are deliberately excluded and are separate future scope, not incomplete work:
+Deliberately excluded, and separate future scope rather than incomplete work:
 
 - **Audio and TTS** — no speech synthesis or multi-speaker voice output.
 - **Dashboards and web UI** — no graphical or real-time visual interface.
@@ -164,8 +237,6 @@ These are deliberately excluded and are separate future scope, not incomplete wo
 - **Multi-session operation** — one session at a time; concurrent sessions are not
   supported.
 - **Cloud deployment** — local Compose only; no hosted or managed deployment.
-- **Application implementation itself** — this document is design, and the repository
-  contains no code.
 
 ## Latency, audience and cost policy
 
@@ -206,8 +277,11 @@ that still gate this architecture are:
   its token flow has not been exercised. No purchase is authorized by this document.
 - **Live cadence and latency** — the documented ~3 second source update delay was not
   measured live; the ≤ 8 second target is confirmed at F12 and measured at F13.
-- **Per-endpoint OpenF1 schemas** — only `sessions` and `drivers` were observed; the
-  other endpoints' fields and incremental-update semantics are unverified.
+- **Per-endpoint OpenF1 schemas** — partly resolved since: the recorded corpus now
+  holds **eleven families**, each with bytes, counts and SHA256 in
+  `fixtures/openf1/PROVENANCE.md`, and the collector derives events from them. What is
+  still unverified is the **incremental-update semantics** of an endpoint observed in a
+  single snapshot, and any endpoint outside the corpus.
 - **Jolpica coverage** — coverage boundaries, and object schemas beyond the observed
   driver record and results envelope, were not sampled. The driver record itself was
   observed and **does** expose `dateOfBirth`; an earlier revision of this design
