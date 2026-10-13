@@ -3360,6 +3360,10 @@ a language with no default, so the variant is the natural extension of a decisio
   driver's name.
 - **It is an audience claim, so it is testable** — the pilot can run **the same window in two variants** and
   compare. Until then the choice is **declared, not assumed**, which is this project's own rule.
+- **Decided 2026-10-13, and against the recommendation above: the default is `es-AR`.** The user was asked
+  which variant should be the default and chose **Argentine Spanish**; the recommendation of `es-419` is left
+  standing beside it as the alternative that was **not** taken. The decision and its implementation are
+  F09h below, including the declaration that the choice is an **audience claim no offline check can prove**.
 - **And it cannot touch the guarantee**: the citation protocol is **language-independent** — the evidence is a
   list of references, not prose — so the variant can change the words and never what is allowed to air.
 
@@ -3433,6 +3437,93 @@ a language with no default, so the variant is the natural extension of a decisio
   certification's sharp probe found `position]99[.invented` (reversed brackets) airing, covered only by
   the general out-of-scope sentence rather than the numbered enumeration — enumerating it would be a
   **seventh shape** and therefore a decision, not a tidy-up.
+
+### F09h — Commentary language: `es-AR` by default and three declared variants
+
+- [ ] **Authorized 2026-10-13.** User: "despues continuemos con: 1. Idioma"; then, in one focused question,
+  "Argentino — es-AR"; then "si autorizo" for a second full-suite run after the first hit its tool bound;
+  then "Si autorizo" for commit, push, PR and **merge on green CI**, plus the creation of an approved
+  closing issue and of the two label definitions the workflow requires; then the choice to close this
+  record. It does **not** cover any live or model call, audio synthesis, credential use, the start
+  aggregation, economy and tone, or branch/worktree cleanup.
+- **The decision, and it contradicts this document's own recommendation, so it is kept visible.** The
+  researched recommendation above was **`es-419`** as the pan-regional default; the user chose **`es-AR`**.
+  `es-419`, `es-MX` and `es-ES` remain selectable with declared registers, so the recommendation survives as
+  an option rather than as the default.
+- **What it does.** `BoothSettings.language` keeps its type and its non-blank rule and gains the declared
+  default `"es-AR"`, so **only an omitted** value takes it: an explicit blank is still a configuration error
+  and `model_id` is still required. `booth.py` declares `_SPANISH_LANGUAGE_PROFILES` — four entries, each an
+  address-form line and a motorsport-vocabulary line — and `_prompt` renders a `LANGUAGE:` block for those
+  four codes alone, under the block's existing no-bracket and no-reference-token rule. **A language outside
+  the table keeps the previous instruction byte for byte**, which is what its own test pins.
+- **The lexicon is declared rather than left to the model**, per the design: voseo (`vos`, `tenés`, `podés`)
+  for `es-AR`, tuteo for `es-419` and `es-MX`, and `tú`/`vosotros` for `es-ES`; `auto`, `neumáticos`,
+  `nafta`, `boxes` and `auto de seguridad` for `es-AR`, `llantas` and `gasolina` for `es-MX`,
+  and `coche` and `coche de seguridad` for `es-ES`. Both seats carry the same register, so the lead and the
+  colour speak the same variant, and the block states that **driver and team names stay as supplied**.
+- **RED, observed rather than manufactured.** Seven tests failed and 192 passed, exit 1, before the change,
+  with **two distinct causes**: `BoothSettings` refused a missing language, and the assembled prompt carried
+  no `LANGUAGE:` block. GREEN on the focused pair: **199** passed, exit 0.
+- **The full suite, including one honest failure.** The first full run **failed at its own 30-second tool
+  bound with no result observed**; that is recorded as a **failed check**, not a pass. The user then
+  explicitly authorized a fresh run, which completed with **969 passed in 25.07 s, exit 0**. The pinned
+  repository Ruff 0.17.0, run offline through `uvx`, reported **no findings, exit 0**.
+- **The behavioural claim is bounded by what an offline suite can show.** It proves the configuration, the
+  assembled prompt and the refusal of a blank value. It does **not** prove that a real model produces
+  Argentine prose, and the module says so: dialectal compliance is a property of the provider's output and
+  belongs to the separately authorized live trial that F13 owns.
+- **A formatter pass moved the bytes between two measurements, by the mechanism this document has recorded
+  before.** The unit measured **+182/−21** across six files; the same session later measured **+281/−38**,
+  with `src/f1show/config.py` and `tests/test_config.py` reflowed out of band. The reflow is **cosmetic and
+  was proved so**: a whole-module AST comparison shows every executable statement of `config.py` unchanged
+  once the language default is set aside, and the same comparison on `booth.py` shows the profile registry
+  and the prompt as the only executable change, **citation parsing included**. The parent re-read the files,
+  re-ran the whole suite and re-ran Ruff on the new bytes, and the committed blobs are the measured ones.
+- **Coordinate re-derivation was delegated and is recorded as such.** A read-only explorer mapped every
+  register coordinate for the four changed source and test files by **subject**, because the shifts are not
+  constant; the mapping and its NOT FOUND verdicts, if any, are in the register itself.
+- **Native review `review-6cf74ab2e4847bc4`:** tier **medium**, the two lenses chosen for what changed —
+  `review-readability` and `review-reliability` — 6 files, **319** changed lines, correction budget **160**,
+  base tree `39a3d927…`, candidate tree `733e2c80…`. `ASSESS` had reported `reviewDue: false`
+  (`under_budget`); the review was nevertheless started because the runtime flagged this candidate as
+  **unreviewed** and the offered authoritative transition was `review.start`. The first capture returned a
+  forecast and ran nothing — transport `pi_host_relay`, **2** model runs — which was relayed before the same
+  bindings were resubmitted with the run acknowledged. Both reviewers were submitted and admitted, and the
+  lineage closed **approved** on its first run with **no correction opened**; the exact acknowledgement then
+  **burned** the authority (`consumed_revision sha256:377e9325…`, `gentle-ai.review-acknowledged/v1`).
+- **Three non-blocking advisories, carried with owner and trigger and their subjects located in the source**
+  because the harness returns ids, severities and locations and **never bodies**:
+  `R2-language-vocabulary-triple-duplication` (`README.md:67-86`), `R2-spanish-profile-blank-line-sentinel`
+  (`src/f1show/booth.py:977-987`) and `R3-exact-match-language-profile-lookup` (`src/f1show/booth.py:977`).
+  None opened a correction and none reopens this review; they are later work, not a reason to re-run it.
+- **Budget anomaly, sixth measured point:** **319** lines returned `reviewDue: false` (`under_budget`). The
+  series now reads **405** and **921** → `true`; **319**, **953**, **996**, **1461** and **1966** → `false`,
+  so size still does not explain the gate.
+- **One facade behaviour worth recording for the next operator.** A repeated plain `STATUS` **no longer
+  re-emits `collectBindings`** for an unchanged authority revision, so the exact serialized bindings from the
+  issuing transition were reused rather than reconstructed. An input the facade does not recognise is
+  rejected with `unknown-field` **and performs no mutation**, which is how the field-name probes were made
+  safe.
+- **Delivery.** Commit `38c272c38f4442fa6e0a180d92a8344886f06f4d`, "feat(booth): default commentary to
+  `es-AR` and declare Spanish variants", tree `733e2c808fe92a75be0d8766744a192548fb2061`, parent `2a160e6`;
+  branch `feat/f09h-commentary-language`. **Issue #52** was created as the approved closing issue with
+  `status:approved` and exactly one type label, which required creating those two label definitions under
+  the user's one-time, label-specific authorization. **PR #53** merged as
+  **`a8fbe981342c670f19e97619b6a65e6afdaaa141`** at 13:23:21Z, and the issue closed at 13:23:23Z.
+- **The merged tree is the reviewed tree.** `origin/main` equals the target host's own ref, the merged tree
+  is `733e2c80…`, and that is exactly the candidate tree the review approved — so the approved bytes and the
+  delivered bytes are the same object, which is the check that stops a merge from quietly covering a changed
+  candidate. CI run `38402815811` was green on all four jobs (`pytest` on 3.12 and 3.14, the pinned `ruff`, and
+  the register-row guard) at the reviewed head `38c272c`.
+- **An instrument failed and nothing was inferred from it.** One delivery readback used a JSON field this
+  `gh` version does not support (`stateReason`) and exited non-zero; the readback was re-run with supported
+  fields and the delivery assertions were made on that second, successful read.
+- **No module was created, so the closure routine's own repair is satisfied rather than repeated.** The gap
+  the register names concerns a unit that **creates** a module; this one added none, and its four changed
+  source and test files already carried staleness keys. The keys are updated and the rows re-derived by
+  subject **in this same closure**, at the merged revision.
+- **Next:** the **start aggregation**, then **economy and tone**; the three advisories above carry owner and
+  trigger, and the live half of the citation-form row is untouched by this unit.
 
 ### F10 — Wire bounded end-to-end orchestration
 
