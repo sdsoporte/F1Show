@@ -3668,6 +3668,24 @@ a language with no default, so the variant is the natural extension of a decisio
   `tests/test_booth.py` again after the unit was merged; the parent compared the **ASTs** against the
   merged commit (identical for both) and restored the files to the merged bytes, so the working tree
   matches `main` and a later session cannot mistake a reflow for new work.
+- **A post-closure prose change, authorized by the user, and the start turn now declares itself.** The
+  measured need is a live one: over the recorded 9655 start window the start turn's opening line was
+  *"Comienza una nueva vuelta en pista."* while citing **one member out of twenty**, because the group's
+  event block deliberately replaces the driver line with a row count and **nothing in the prompt said what a
+  start turn is** — the model was handed twenty identities and no reason to name any of them. The prompt now
+  carries a `START:` block, emitted **for the start turn only**, which declares the turn as the start (the
+  first lap of the N cars listed above) and asks for the field by name. Two properties keep it inside this
+  unit's own decisions: it is **instruction text** that names no reference and carries no bracket, so it adds
+  **no citable surface and the scanner sees nothing new**; and it never says *"the race"*, because the booth
+  knows only the session key, so *"the start"* is what the data supports. The alternative — offering each
+  member a start-relevant value so the model would have facts to commentate — was named and **not taken**: it
+  widens the citable surface this unit's review hardened, and it is a unit of its own rather than a retouch.
+- **Its evidence, and the half it does not prove.** RED observed first, with the dumped prompt ending at
+  `rows: 3 lap-1 rows aggregated into this one turn`; then the two new tests green **by name**, the booth
+  file's **169** green, and the full offline suite **993 passing**. What is pinned is the prompt's text; a
+  real model's compliance is **not** provable offline and stays with the live trial. Changed bytes:
+  `d3ea9e6` (parent `2452d14`), `src/f1show/booth.py` **+13** inside `_prompt` — the block sits below every
+  coordinate this register records for that file — and `tests/test_booth.py` **+40**.
 
 ### F09j — The second recorded window: session 9655
 

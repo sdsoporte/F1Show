@@ -505,6 +505,48 @@ async def test_the_start_prompt_offers_one_identity_per_member_and_no_field_refe
 
 
 @pytest.mark.anyio
+async def test_the_start_prompt_declares_the_start_and_asks_for_the_field() -> None:
+    """The start turn says what it is, and what its subject is.
+
+    Measured need: the recorded start turn cited one member and said "a new lap begins on
+    track", because the group's event block replaced the driver line with a row count and
+    nothing told the model that this turn is the start. The declaration and the
+    instruction are prompt text, so they are pinned here; a real model's compliance is
+    not provable offline.
+    """
+    members = [
+        start_row(10, driver=1),
+        start_row(11, driver=2),
+        start_row(12, driver=3),
+    ]
+    model = ScriptedModelClient([spoken(event_reference(members[0]), "The start.")])
+    booth = make_booth(members, model, driver_directory=dict(START_DRIVERS))
+
+    await bounded(booth.run(), hazard="the start-declaration run")
+
+    prompt = model.requests[0].prompt
+    assert "START:" in prompt
+    assert "This turn is the start" in prompt
+    assert "name the drivers this turn covers" in prompt
+    # The declaration is instruction text: it names no reference and carries no bracket.
+    assert not REFERENCE_TOKEN.findall(prompt)
+
+
+@pytest.mark.anyio
+async def test_an_ordinary_turn_does_not_carry_the_start_declaration() -> None:
+    """The start block belongs to the start turn only, so every other turn is unchanged."""
+    events = [detected(index=30)]
+    model = ScriptedModelClient([spoken(ref(events[0]), "A position change.")])
+    booth = make_booth(events, model, driver_directory=dict(START_DRIVERS))
+
+    await bounded(booth.run(), hazard="the ordinary-turn run")
+
+    prompt = model.requests[0].prompt
+    assert "START:" not in prompt
+    assert "This turn is the start" not in prompt
+
+
+@pytest.mark.anyio
 async def test_the_start_turn_admits_its_members_identities_and_nothing_else() -> None:
     members = [
         start_row(10, driver=1),
