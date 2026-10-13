@@ -3192,9 +3192,67 @@ fixes are registered as product decisions.
   - **The register needed no row mapping at this revision, and that is itself the finding.** Peer B confirmed that **no row's file changed** between `b325770` and `6a07cda`: the only modified files were this document and the register, and the two added files are new. Two staleness keys were created for them, which makes it the **third** time in one feature that a module entered the tree with **no key and no row** (after `salience.py` and `mode.py`) — three occurrences in one feature are recorded as a **gap in the closure procedure itself**, not as three separate oversights. Two rows were added from the unit's own measurements: `R3-tie-order-not-derivable` and `R3-team-table-not-derivable`. The declared airing shapes were re-confirmed at **six**, and nothing in `booth.py` moved.
   - **Next: U3b** — the championship rows and the provisional table reaching the prompt, which is the last
     piece of F09g.
-- **Checks pending for the remaining units:** RED/GREEN per unit, focused and full suite on the delivered
-  bytes, Ruff 0.17.0, determinism, deliberate prompt-pin updates, the register rows re-derived **by subject**
-  at each revision, independent verification and the provider-offered native route.
+- **U3b — the championship in the prompt: implemented, verified, reviewed and integrated.** Commit
+  `ffdd899a`, branch `feat/f09g-championship-prompt` (based on `6a07cda`), **PR #49** merged as
+  **`d0b3cea6ce8e1a0f53b15f218a92a63229422853`**.
+  - **What it does:** a pure adapter `src/f1show/championship.py` (700 lines) derives a **bounded**
+    per-moment context — the driver's provisional season position and points, the provisional leader and the
+    gap, and that driver's team position and points — rendered as a plain-prose `CHAMPIONSHIP:` block; the
+    recorded loader now also returns the three championship families, with a **new exclusion-style pin
+    strengthened the way the `drivers` pin was**: available **and deriving zero events**.
+  - **Verified by independent re-derivation at three moments** — the final recorded event, a pit-stop moment
+    and a pre-race moment — every number matching. And the team half's reading, which the writer explicitly
+    flagged as **its own interpretation**, was **proved by the identity it implies**: at the final moment
+    `points_start + delta == points_current` holds **exactly for all ten teams**, with every derived position
+    matching the source (McLaren 522+22=544, Red Bull 483+21=504, Ferrari 453+43=496, Mercedes 336+8=344,
+    Aston Martin 86, Haas 38, RB 36, Williams 17, Alpine 13, Kick Sauber 0).
+  - **A tied position is no longer asserted.** The inherited tie rule disagrees with the source on **8 of 23**
+    drivers, including the final event's own driver (the source says **P19**, our convention says **P18** on
+    the same five points). A position inside a tie is a **convention rather than a fact**, so the block now
+    **states the tie and how many drivers share it**: measured, **470 of 1,648** turns change their wording
+    (**462** driver lines and **8** team lines), the other **1,178** are **byte-identical**, and a driver
+    alone in their points group keeps the bare position. The pre-race driver line deliberately keeps the
+    source's own `position_start`, because that position is **reported rather than derived**; the team line
+    is treated as tied, because teams can share a total and the recorded pre-race rows do.
+  - **Declared season constant:** `RECORDED_SEASON = 2024`, because the three families carry **no year
+    field** and `sessions.json` — the only fixture that has one — is **not** loaded.
+  - **Invariants verified across all 1,648 prompts:** no bracket and no `family[index].field` token in the
+    block, the reference-token set unchanged, the marker still exactly **twice**, the six declared airing
+    shapes untouched, two runs byte-identical, and **no** championship value in any evidence tuple or aired
+    text. The loader pin's teeth were proved by removing a family from the loaded set in a scratch copy.
+  - **An incident identified rather than repaired:** a **`ruff-format`** pass rewrote `booth.py` and
+    `tests/test_run.py` **after** the previous measurement. It is cosmetic, every test passes on the current
+    bytes, and the parent **re-measured** them — which is what named the seventh fingerprint drift.
+  - **Native review `review-7438f42ae5527361`:** tier medium, one `review-reliability` lens, 6 files,
+    **1,966** lines — **approved**, authority **burned** (`consumed_revision sha256:8610deab…`), with three
+    non-blocking advisories carried with owner and trigger and their subjects to be **located in the source**
+    because the harness returns no bodies: `R3-1` (`tests/test_championship.py:564`, WARNING), `R3-2`
+    (`src/f1show/run.py:72-85`, WARNING) and `R3-3` (`tests/test_championship.py:709-715`, SUGGESTION).
+  - **Budget anomaly, fifth measured point:** **1,966** lines returned `reviewDue: false` (`under_budget`).
+    The series now reads 405 and 921 → `true`; 953, 996, 1461 and 1966 → `false`.
+  - **Checks:** focused **208**, full **957**, Ruff 0.17.0 clean, CI green on the PR (`pytest` on 3.12 and
+    3.14, `ruff`, register-row guard), and the suite costs **24.4-25.0 s** against U3a's 18.79 s, with the
+    two new recorded runs measuring **2.33 + 2.15 s** — the arithmetic finally adds up.
+  - **The register is re-anchored by subject at `d0b3cea`.** Peer B mapped every row whose file changed: twelve
+    `booth.py` and `tests/test_booth.py` coordinates re-derived row by row (the booth docstring moved **+9**
+    and the test file's rows moved **+25**), the four `run.py` F10 rows moved again and its subject block was
+    re-derived a **second** time, and the staleness table was updated for four files — of which
+    `tests/test_run.py` was **UNMOVED again** (the **fifth** blob over-flag) while `run.py` flipped from
+    **CURRENT** to stale, which is the cleanest statement of the rule available: **a row that reads CURRENT
+    is a measurement, not a promise.** Two new keys were added for `championship.py` and its tests, making it
+    the **fourth** module in one feature to enter the tree with **no key and no row**: four occurrences are
+    recorded as a **defect in the closure routine itself**, with the repair stated for whoever owns the next
+    closure — a unit that creates a module must add its staleness key and its row in the **same** closure
+    commit. Three rows carry U3b's advisories with their subjects **located in the source**, and the
+    tie-order row now records that the **render states the tie** rather than asserting a settled position.
+    The declared airing shapes were re-confirmed at **six**, and their docstring line moved from `:108` to `:117`.
+- **F09g is complete.** The window's salience, the two modes with the revived priority band, the recorded
+  championship data, the provisional derivation and the championship in the prompt are all in `main`, each
+  one independently verified, natively reviewed with its authority burned, and documented here. The three
+  things it leaves open are stated rather than implied: the live half of the citation-form row stays
+  historical and unmeasured, the supplied-reference-right-of-equals pin and the bare-identity second line
+  remain carried, and the register's procedural gap — **four** modules in this feature entered the tree with
+  no staleness key — is named for whoever owns the next closure.
 
 ### The show: what the profession says, what the data says, and the design
 
