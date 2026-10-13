@@ -44,6 +44,15 @@ prefix, never from a collaborator, and rendered by :func:`f1show.salience.render
 It is **background, never a source**: the block carries no bracket and no reference-shaped
 token, so it cannot add a citable reference and the acceptance below is unchanged.
 
+**The championship picture.** The prompt also carries a ``CHAMPIONSHIP`` block: one
+moment's bounded championship context, derived by :mod:`f1show.championship` from the same
+event prefix the salience projection reads - the current driver's provisional season
+position, points and gap to the leader, and their team's provisional position and points.
+The block is **context, never a source**: it is plain prose with no bracket and no
+reference-shaped token, so it adds no citable reference, and the acceptance below is
+unchanged. Its bounded shape is deliberate: the championship corpus carries a 23-row driver
+table and a 10-row team table, and the booth shows neither.
+
 **Evidence-only sourcing, structurally enforced.** Each event exposes a stable identity and
 one reference per recorded, non-null evidence field. The prompt lists exactly those
 references; the answer protocol requires a first line of
@@ -175,6 +184,12 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator
 
+from f1show.championship import (
+    ChampionshipContext,
+    ChampionshipSource,
+    championship_context,
+    render_championship,
+)
 from f1show.collector import DetectedEvent
 from f1show.config import BoothSettings
 from f1show.dialogue import Speaker, Transcript, Turn
@@ -672,9 +687,14 @@ class CommentaryBooth:
         max_output_tokens: int,
         timeout_seconds: float,
         driver_directory: Mapping[int, tuple[str, str]],
+        championship: ChampionshipSource,
     ) -> None:
         self._model = model
         self._driver_directory = dict(driver_directory)
+        self._team_of_driver = {
+            number: team for number, (_, team) in self._driver_directory.items()
+        }
+        self._championship = championship
         self._events = tuple(events)
         if not self._events:
             raise ValueError(
@@ -758,6 +778,12 @@ class CommentaryBooth:
                     self._bounded_context(turns),
                     salience_summary(prefix),
                     turn_mode(prefix),
+                    championship_context(
+                        prefix,
+                        driver_number=event.driver_number,
+                        source=self._championship,
+                        team_of_driver=self._team_of_driver,
+                    ),
                 ),
                 max_output_tokens=self._max_output_tokens,
                 timeout_seconds=self._timeout_seconds,
@@ -902,6 +928,7 @@ class CommentaryBooth:
         prior_turns: tuple[Turn, ...],
         salience: SalienceSummary,
         mode: TurnMode,
+        championship: ChampionshipContext,
     ) -> str:
         """Assemble the whole prompt from the supplied references, history and window story.
 
@@ -912,9 +939,11 @@ class CommentaryBooth:
         fallback otherwise; that identity is prompt material only, never citable evidence,
         and it never enters ``event.evidence``. The CONTEXT block narrates the window's
         salience projection as plain prose; it carries no bracket and no reference-shaped
-        token, so it adds no citable reference either. The MODE block declares this turn's
-        prosody as instruction text, beside the persona register and under the same
-        no-bracket, no-token rule.
+        token, so it adds no citable reference either. The CHAMPIONSHIP block states the
+        moment's bounded championship picture as plain prose under the same no-bracket,
+        no-token rule, so it too is context and never a source. The MODE block declares
+        this turn's prosody as instruction text, beside the persona register and under the
+        same no-bracket, no-token rule.
         """
         lines = [
             f"You are {persona.name}, the {persona.seat.value} commentator in a two-person "
@@ -956,6 +985,12 @@ class CommentaryBooth:
         )
         lines.extend(
             ["", *render_salience(salience, self._driver_directory).splitlines()]
+        )
+        lines.extend(
+            [
+                "",
+                *render_championship(championship, self._driver_directory).splitlines(),
+            ]
         )
         lines.extend(
             ["", "EVENT:", f"type: {event.event_type.value}", f"family: {event.family}"]

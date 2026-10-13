@@ -42,6 +42,7 @@ from collections.abc import Mapping, Sequence
 from urllib.parse import urlsplit, urlunsplit
 
 from f1show.booth import BoothResult, CommentaryBooth
+from f1show.championship import build_championship_source
 from f1show.collector import FAMILY_ORDER, collect_session_events
 from f1show.config import BoothSettings, ModelProvider, Settings
 from f1show.dialogue import Transcript
@@ -65,9 +66,23 @@ __all__ = [
 #: in the prompt. It is loaded under its own key rather than mixed into the event families.
 _DRIVER_DIRECTORY_FAMILY = "drivers"
 
+#: The three championship families the booth's bounded championship block derives from.
+#: None of them is a collector family: the collector derives **no** event from any of them,
+#: which is the invariant the loader's own tests pin when they add them.
+_CHAMPIONSHIP_FAMILIES = (
+    "championship_drivers",
+    "championship_teams",
+    "session_result",
+)
+
 #: The families a recorded session must hold one JSON file for: the five collector
-#: families plus the driver directory the booth joins.
-_LOADED_FAMILIES = (*FAMILY_ORDER, _DRIVER_DIRECTORY_FAMILY)
+#: families, the driver directory the booth joins, and the three championship families the
+#: bounded championship context derives from.
+_LOADED_FAMILIES = (
+    *FAMILY_ORDER,
+    _DRIVER_DIRECTORY_FAMILY,
+    *_CHAMPIONSHIP_FAMILIES,
+)
 
 #: A trailing path segment that names an API version, e.g. ``v1``, ``v2`` or ``v1beta``.
 #: The native SDK supplies its own, so exactly this segment is stripped before it is
@@ -116,10 +131,13 @@ def load_recorded_session(
     them, and the session's ``drivers`` entry list is loaded too under its own key: it
     derives no event, but the booth joins ``full_name`` and ``team_name`` from it so the
     prompt names the driver, so it belongs to the declared loaded contract rather than to
-    a run path that reads the corpus twice. Every record is filtered to ``session_key``
-    here rather than assumed to be, because ``sessions.json`` holds the whole season. A
-    missing directory, a missing family file or a session with no records is a typed
-    failure, never a silently empty payload.
+    a run path that reads the corpus twice. The three championship families -
+    ``championship_drivers``, ``championship_teams`` and ``session_result`` - are loaded
+    for the same reason and under the same rule: they derive no event either, and the
+    booth's bounded championship block derives its per-moment picture from them. Every
+    record is filtered to ``session_key`` here rather than assumed to be, because
+    ``sessions.json`` holds the whole season. A missing directory, a missing family file or
+    a session with no records is a typed failure, never a silently empty payload.
     """
     directory = pathlib.Path(fixtures_dir)
     if not directory.is_dir():
@@ -226,6 +244,7 @@ async def run_session(
         max_output_tokens=max_output_tokens,
         timeout_seconds=timeout_seconds,
         driver_directory=_driver_directory(payloads),
+        championship=build_championship_source(payloads),
     )
     return await booth.run()
 

@@ -762,7 +762,9 @@ async def test_the_fake_cites_only_a_reference_line_and_refuses_a_prompt_without
 
 #: The record counts measured on the recorded session, per the provenance file. ``drivers``
 #: is the session's entry list rather than an event family: it is loaded for the booth's
-#: identity join, so it is counted here beside the five collector families.
+#: identity join, so it is counted here beside the five collector families. F09g U3b adds the
+#: three championship families for the same reason - the booth's bounded championship block
+#: derives from them - and none of them is a collector family either.
 RECORDED_FAMILY_COUNTS = {
     "position": 403,
     "laps": 1059,
@@ -770,6 +772,9 @@ RECORDED_FAMILY_COUNTS = {
     "stints": 43,
     "race_control": 120,
     "drivers": 20,
+    "championship_drivers": 23,
+    "championship_teams": 10,
+    "session_result": 20,
 }
 
 #: The F09g U2 consequence, measured on the recorded session (1,648 detected events): the
@@ -792,9 +797,17 @@ def test_recorded_source_loads_the_collector_families_with_the_session_filter() 
     loaded = load_recorded_session(SESSION_KEY)
 
     # F09f: the loaded contract is the five collector families plus the session's driver
-    # directory, which the booth joins to name the driver. The set is asserted exactly, so
-    # a sixth accidental family still fails here rather than riding along.
-    assert set(loaded) == set(FAMILY_ORDER) | {"drivers"}
+    # directory, which the booth joins to name the driver. F09g U3b deliberately changed
+    # this pin a second time rather than deleting it: the contract now also carries the
+    # three championship families the bounded championship block derives from. The set is
+    # still asserted exactly, so a tenth accidental family fails here rather than riding
+    # along.
+    assert set(loaded) == set(FAMILY_ORDER) | {
+        "drivers",
+        "championship_drivers",
+        "championship_teams",
+        "session_result",
+    }
     assert {
         family: len(records) for family, records in loaded.items()
     } == RECORDED_FAMILY_COUNTS
@@ -847,6 +860,41 @@ def test_recorded_source_loads_the_driver_directory_but_derives_no_event_from_it
     assert len(load("drivers")) == 20
 
 
+def test_recorded_source_loads_the_championship_families_but_derives_no_event_from_them() -> (
+    None
+):
+    """The three championship families join the loaded contract yet stay event-free.
+
+    F09g U3b changed this pin rather than deleting it. The loader's declared contract now
+    also carries ``championship_drivers`` (23 rows), ``championship_teams`` (10) and
+    ``session_result`` (20), because the booth's bounded championship block derives its
+    per-moment picture from them. The invariant that actually matters is the one the
+    ``drivers`` family was strengthened with: each family is **available** from the loader
+    under its own key, and ``collect_session_events`` still derives **zero** events from
+    any of them, which is proved by collecting the loaded payload with and without them.
+    """
+    loaded = load_recorded_session(SESSION_KEY)
+
+    for family in ("championship_drivers", "championship_teams", "session_result"):
+        assert family in loaded, (
+            f"{family} must be available from the loader, because the run path derives "
+            "the championship source from the payload it already holds"
+        )
+        assert loaded[family], f"an empty {family} would make the derivation fall back"
+        assert all(record["session_key"] == SESSION_KEY for record in loaded[family]), (
+            f"{family} must be session-filtered like every other loaded family"
+        )
+    assert len(loaded["championship_drivers"]) == 23
+    assert len(loaded["championship_teams"]) == 10
+    assert len(loaded["session_result"]) == 20
+    collector_payloads = {
+        family: records for family, records in loaded.items() if family in FAMILY_ORDER
+    }
+    assert collect_session_events(SESSION_KEY, loaded) == collect_session_events(
+        SESSION_KEY, collector_payloads
+    ), "the championship families must derive no event when they are present"
+
+
 def test_recorded_source_refuses_an_unknown_session() -> None:
     with pytest.raises(RecordedSessionNotFoundError) as caught:
         load_recorded_session(SESSION_KEY + 1)
@@ -873,12 +921,19 @@ def _write_synthetic_corpus(
 
     Every collector family holds one record whose only load-bearing property is the session
     key, because what these tests exercise is the loader's per-family file selection and its
-    session filter, not the record shape the collector validates afterwards. ``drivers`` is
+    session filter, not the record shape the collector validates afterwards. The three
+    championship families are written the same way: the loader requires one session-matching
+    record per loaded family, and these tests never derive from them. ``drivers`` is
     written only when supplied, so a caller can model a corpus that is missing exactly that
     family. Nothing here touches the real fixtures: the corpus is built under pytest's
     ``tmp_path`` and thrown away with it.
     """
-    for family in FAMILY_ORDER:
+    for family in (
+        *FAMILY_ORDER,
+        "championship_drivers",
+        "championship_teams",
+        "session_result",
+    ):
         (directory / f"{family}.json").write_text(
             json.dumps([{"session_key": SESSION_KEY}]), encoding="utf-8"
         )
@@ -1075,3 +1130,97 @@ async def test_the_recorded_session_seats_are_deliberate_once_the_caution_band_f
         assert set(evidence_references(event)) <= set(
             REFERENCE_TOKEN.findall(request.prompt)
         ), "the event's own references are still offered"
+
+
+# --- The championship picture in the prompt: the bounded block (F09g U3b) -------
+
+
+#: The declared championship-block heading in the assembled prompt.
+CHAMPIONSHIP_HEADING = "CHAMPIONSHIP:"
+
+
+def championship_block(prompt: str) -> str:
+    """The CHAMPIONSHIP block of an assembled prompt, header included.
+
+    Splitting on the header fails loudly when the block is absent, which is the RED this
+    section needs: the recorded prompts must carry the block, not merely have room for it.
+    """
+    _, after = prompt.split(CHAMPIONSHIP_HEADING, 1)
+    block, _ = after.split("\n\n", 1)
+    return CHAMPIONSHIP_HEADING + block
+
+
+@pytest.mark.anyio
+async def test_the_recorded_session_carries_the_championship_picture_into_the_prompt() -> (
+    None
+):
+    """The last recorded turn's block, quoted with its measured values.
+
+    The final recorded event is a stint start for driver 31, so the last prompt's block
+    states Esteban OCON at P18 on 5 points, Max VERSTAPPEN leading on 354 with a 349-point
+    gap, and Alpine P9 on 13. Every value is the measured one: the running order at that
+    moment is the full twenty-car field, the leader is the source's own start-checkpoint
+    holder plus this race's points so far, and Alpine's 13 is its own ``championship_teams``
+    row plus a zero race delta.
+    """
+    payloads = load_recorded_session(SESSION_KEY)
+    model = EvidenceEchoModelClient()
+
+    result = await bounded(
+        run_session(
+            payloads=payloads,
+            session_key=SESSION_KEY,
+            model=model,
+            clock=FrozenClock(T0),
+            settings=booth_settings(),
+        ),
+        hazard="the recorded championship-block run",
+    )
+
+    assert result.transcript.turns, "the recorded session must air turns"
+    block = championship_block(model.requests[-1].prompt)
+    assert "Esteban OCON" in block, block
+    assert "P18 on 5 points" in block, block
+    assert "Max VERSTAPPEN" in block, block
+    assert "354 points" in block, block
+    assert "gap of 349 points" in block, block
+    assert "Alpine is P9 on 13 points" in block, block
+    assert not any(character in block for character in BRACKETS), block
+    assert REFERENCE_TOKEN.search(block) is None, block
+
+
+@pytest.mark.anyio
+async def test_no_reference_shaped_token_leaks_from_the_championship_block() -> None:
+    """A whole-recorded-session sweep: the new block adds no citable token anywhere.
+
+    For every one of the session's prompts the CHAMPIONSHIP block carries no bracket and no
+    reference-shaped token, the citation marker still appears exactly twice, and removing
+    the block leaves the prompt's reference-token set **unchanged**. That last equality is
+    the sweep's teeth: a block that smuggled a ``family[index].field`` token would change
+    the set, and a block that merely happened to be absent would fail the extraction above.
+    """
+    payloads = load_recorded_session(SESSION_KEY)
+    model = EvidenceEchoModelClient()
+
+    await bounded(
+        run_session(
+            payloads=payloads,
+            session_key=SESSION_KEY,
+            model=model,
+            clock=FrozenClock(T0),
+            settings=booth_settings(),
+        ),
+        hazard="the recorded championship-token sweep run",
+    )
+
+    marker = f1show.booth._CITATION_MARKER
+    assert len(model.requests) > 1000, "the sweep must span the recorded session"
+    for request in model.requests:
+        block = championship_block(request.prompt)
+        assert not any(character in block for character in BRACKETS), block
+        assert REFERENCE_TOKEN.search(block) is None, block
+        assert request.prompt.count(marker) == 2, block
+        without = request.prompt.replace(f"{block}\n\n", "")
+        assert set(REFERENCE_TOKEN.findall(request.prompt)) == set(
+            REFERENCE_TOKEN.findall(without)
+        ), "the championship block must not change the prompt's reference-token set"
