@@ -1,0 +1,225 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1647.4429999999998" height="1434.4" viewBox="0 0 1647.4429999999998 1434.4" style="--bg:#FFFFFF;--fg:#27272A;--font:Inter;background:#FFFFFF">
+<style>
+  text { font-family: var(--font, 'Inter'), system-ui, sans-serif; }
+  svg {
+    /* Derived from --bg and --fg (overridable via --line, --accent, etc.) */
+    --_text:          #27272A;
+    --_text-sec:      #575759;
+    --_text-muted:    #707072;
+    --_text-faint:    #8a8a8c;
+    --_line:          #939395;
+    --_arrow:         #47474a;
+    --_node-fill:     #f9f9f9;
+    --_node-stroke:   #d4d4d4;
+    --_group-fill:    #FFFFFF;
+    --_group-hdr:     #f4f4f4;
+    --_inner-stroke:  #e5e5e5;
+    --_key-badge:     #e9e9ea;
+  }
+</style>
+<defs>
+  <marker id="arrowhead" markerWidth="8" markerHeight="5" refX="7" refY="2.5" orient="auto">
+    <polygon points="0 0, 8 2.5, 0 5" fill="#47474a" stroke="#47474a" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+  <marker id="arrowhead-start" markerWidth="8" markerHeight="5" refX="1" refY="2.5" orient="auto">
+    <polygon points="8 0, 0 2.5, 8 5" fill="#47474a" stroke="#47474a" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+</defs>
+<g class="subgraph" data-id="BUILT" data-region="subgraph" data-label="CONSTRUIDO Y ENTREGADO - todo en main" data-role="group">
+  <rect x="245.70574999999997" y="728.1" width="1063.5535" height="521.4" rx="0" ry="0" fill="#FFFFFF" stroke="#d4d4d4" stroke-width="1" data-id="group-rect:BUILT" data-role="group" />
+  <path d="M245.70574999999997,728.1 H1309.25925 V756.1 H245.70574999999997 Z" fill="#f4f4f4" stroke="#d4d4d4" stroke-width="1" />
+  <text x="257.70574999999997" y="742.1" font-size="12" font-weight="600" fill="#575759" dy="4.199999999999999" textLength="250.2" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">CONSTRUIDO Y ENTREGADO - todo en main</text>
+</g>
+<g class="subgraph" data-id="TODO" data-region="subgraph" data-label="RESTANTE Y DIFERIDO" data-role="group">
+  <rect x="40" y="40" width="412.74" height="295.6" rx="0" ry="0" fill="#FFFFFF" stroke="#d4d4d4" stroke-width="1" data-id="group-rect:TODO" data-role="group" />
+  <path d="M40,40 H452.74 V68 H40 Z" fill="#f4f4f4" stroke="#d4d4d4" stroke-width="1" />
+  <text x="52" y="54" font-size="12" font-weight="600" fill="#575759" dy="4.199999999999999" textLength="141.48" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">RESTANTE Y DIFERIDO</text>
+</g>
+<g class="subgraph" data-id="CARRY" data-region="subgraph" data-label="ACARREADO - registro con dueno y disparador" data-role="group">
+  <rect x="99.874" y="383.6" width="292.992" height="324.5" rx="0" ry="0" fill="#FFFFFF" stroke="#d4d4d4" stroke-width="1" data-id="group-rect:CARRY" data-role="group" />
+  <path d="M99.874,383.6 H392.866 V411.6 H99.874 Z" fill="#f4f4f4" stroke="#d4d4d4" stroke-width="1" />
+  <text x="111.874" y="397.6" font-size="12" font-weight="600" fill="#575759" dy="4.199999999999999" textLength="271.8" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">ACARREADO - registro con dueno y disparador</text>
+</g>
+<g class="subgraph" data-id="WF" data-region="subgraph" data-label="WORKFLOW ODD - una unidad por vuelta" data-role="group">
+  <rect x="40" y="1297.5" width="1567.4429999999998" height="96.9" rx="0" ry="0" fill="#FFFFFF" stroke="#d4d4d4" stroke-width="1" data-id="group-rect:WF" data-role="group" />
+  <path d="M40,1297.5 H1607.4429999999998 V1325.5 H40 Z" fill="#f4f4f4" stroke="#d4d4d4" stroke-width="1" />
+  <text x="52" y="1311.5" font-size="12" font-weight="600" fill="#575759" dy="4.199999999999999" textLength="232.92" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">WORKFLOW ODD - una unidad por vuelta</text>
+</g>
+<polyline class="edge" data-from="TODO" data-to="CARRY" data-style="solid" data-arrow-start="false" data-arrow-end="false" points="246.37,335.6 246.37,383.6" fill="none" stroke="#939395" stroke-width="1" data-relationship="flowchart-edge" data-direction="undirected" data-id="edge:TODO-&gt;CARRY#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="TODO to CARRY" />
+<polyline class="edge" data-from="BOOTH" data-to="WF" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="823.7214999999999,1148.6000000000001 823.7214999999999,1297.5" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:BOOTH-&gt;WF#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="BOOTH to WF" />
+<polyline class="edge" data-from="FIX" data-to="COL" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="505.2767499999999,809 505.27674999999994,857" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:FIX-&gt;COL#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="FIX to COL" />
+<polyline class="edge" data-from="COL" data-to="STORE" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="505.27674999999994,893.9000000000001 505.27674999999994,941.9000000000001" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:COL-&gt;STORE#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="COL to STORE" />
+<polyline class="edge" data-from="STORE" data-to="SNAP" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="505.27674999999994,978.8000000000001 505.2767499999999,1026.8000000000002" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:STORE-&gt;SNAP#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="STORE to SNAP" />
+<polyline class="edge" data-from="SNAP" data-to="BOOTH" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="505.2767499999999,1063.7000000000003 505.2767499999999,1087.7000000000003 779.3349999999999,1087.7000000000003 779.3349999999999,1111.7" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:SNAP-&gt;BOOTH#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="SNAP to BOOTH" />
+<polyline class="edge" data-from="ID" data-to="BOOTH" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="698.60325,1063.7000000000003 698.60325,1087.7000000000003 779.3349999999999,1087.7000000000003 779.3349999999999,1111.7" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:ID-&gt;BOOTH#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="ID to BOOTH" />
+<polyline class="edge" data-from="SAL" data-to="BOOTH" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="860.06675,1063.7000000000003 860.06675,1087.7000000000003 779.3349999999999,1087.7000000000003 779.3349999999999,1111.7" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:SAL-&gt;BOOTH#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="SAL to BOOTH" />
+<polyline class="edge" data-from="MODE" data-to="BOOTH" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="1016.7137499999998,1063.7000000000003 1016.7137499999998,1087.7000000000003 779.3349999999999,1087.7000000000003 779.3349999999999,1111.7" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:MODE-&gt;BOOTH#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="MODE to BOOTH" />
+<polyline class="edge" data-from="CHAMP" data-to="BOOTH" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="1205.9647499999999,1063.7000000000003 1205.9647499999999,1087.7000000000003 779.3349999999999,1087.7000000000003 779.3349999999999,1111.7" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:CHAMP-&gt;BOOTH#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="CHAMP to BOOTH" />
+<polyline class="edge" data-from="BOOTH" data-to="GW" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="734.9485,1148.6000000000001 734.9485,1196.6" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:BOOTH-&gt;GW#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="BOOTH to GW" />
+<polyline class="edge" data-from="RUN" data-to="BOOTH" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="330.4752499999999,1063.7000000000003 330.4752499999999,1087.7000000000003 779.3349999999999,1087.7000000000003 779.3349999999999,1111.7" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:RUN-&gt;BOOTH#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="RUN to BOOTH" />
+<polyline class="edge" data-from="CI" data-to="RUN" data-style="dotted" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" data-label="vigila" points="330.47524999999996,893.9000000000001 330.4752499999999,1026.8000000000002" fill="none" stroke="#939395" stroke-width="1" stroke-dasharray="4 4" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:CI-&gt;RUN#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="CI to RUN: vigila" />
+<polyline class="edge" data-from="F06" data-to="F07" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="115.8775,234.70000000000002 115.8775,282.70000000000005" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:F06-&gt;F07#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="F06 to F07" />
+<polyline class="edge" data-from="F05" data-to="F11" data-style="solid" data-arrow-start="false" data-arrow-end="false" points="284.902,234.70000000000002 284.902,282.70000000000005" fill="none" stroke="#939395" stroke-width="1" data-relationship="flowchart-edge" data-direction="undirected" data-id="edge:F05-&gt;F11#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="F05 to F11" />
+<polyline class="edge" data-from="W1" data-to="W2" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="159.453,1359.95 207.453,1359.95" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:W1-&gt;W2#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="W1 to W2" />
+<polyline class="edge" data-from="W2" data-to="W3" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="312.388,1359.95 360.388,1359.95" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:W2-&gt;W3#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="W2 to W3" />
+<polyline class="edge" data-from="W3" data-to="W4" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="466.80499999999995,1359.95 514.805,1359.95" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:W3-&gt;W4#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="W3 to W4" />
+<polyline class="edge" data-from="W4" data-to="W5" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="622.704,1359.95 670.704,1359.95" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:W4-&gt;W5#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="W4 to W5" />
+<polyline class="edge" data-from="W5" data-to="W6" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="778.603,1359.95 826.603,1359.95" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:W5-&gt;W6#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="W5 to W6" />
+<polyline class="edge" data-from="W6" data-to="W7" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="947.8399999999999,1359.95 995.8399999999999,1359.95" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:W6-&gt;W7#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="W6 to W7" />
+<polyline class="edge" data-from="W7" data-to="W8" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="1099.293,1359.95 1147.293,1359.95" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:W7-&gt;W8#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="W7 to W8" />
+<polyline class="edge" data-from="W8" data-to="W9" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="1288.5369999999998,1359.95 1336.5369999999998,1359.95" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:W8-&gt;W9#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="W8 to W9" />
+<polyline class="edge" data-from="W9" data-to="W10" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-marker-end="arrow" points="1435.5439999999999,1359.95 1483.5439999999999,1359.95" fill="none" stroke="#939395" stroke-width="1" marker-end="url(#arrowhead)" data-relationship="flowchart-edge" data-direction="forward" data-id="edge:W9-&gt;W10#0" data-role="edge" role="graphics-symbol" aria-roledescription="relation" aria-label="W9 to W10" />
+<g class="edge-label" data-from="CI" data-to="RUN" data-label="vigila">
+  <rect class="edge-label-halo" x="304.97524999999996" y="941.2" width="50.598" height="38.3" rx="4" ry="4" fill="#FFFFFF" stroke="none" />
+  <rect x="308.97524999999996" y="945.2" width="42.598" height="30.3" rx="2" ry="2" fill="#FFFFFF" stroke="#e5e5e5" stroke-width="1" />
+  <text x="330.27424999999994" y="960.35" text-anchor="middle" font-size="11" font-weight="400" fill="#575759" dy="3.8499999999999996" textLength="26.598" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">vigila</text>
+</g>
+<g class="node built" data-id="FIX" data-label="fixtures - 11 familias" data-shape="rectangle" data-role="node">
+  <rect x="432.43174999999985" y="772.1" width="145.69" height="36.900000000000006" rx="0" ry="0" fill="#0d7a43" stroke="#07522c" stroke-width="0.75" data-id="node-shape:FIX" data-role="node" />
+  <text x="505.2767499999999" y="790.5500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="105.69" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">fixtures - 11 familias</text>
+</g>
+<g class="node built" data-id="COL" data-label="F04 collector" data-shape="rectangle" data-role="node">
+  <rect x="445.39924999999994" y="857" width="119.75500000000001" height="36.900000000000006" rx="0" ry="0" fill="#0d7a43" stroke="#07522c" stroke-width="0.75" data-id="node-shape:COL" data-role="node" />
+  <text x="505.27674999999994" y="875.45" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="79.755" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">F04 collector</text>
+</g>
+<g class="node built" data-id="STORE" data-label="store + ingest" data-shape="rectangle" data-role="node">
+  <rect x="445.02874999999995" y="941.9000000000001" width="120.49599999999998" height="36.900000000000006" rx="0" ry="0" fill="#0d7a43" stroke="#07522c" stroke-width="0.75" data-id="node-shape:STORE" data-role="node" />
+  <text x="505.27674999999994" y="960.3500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="80.496" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">store + ingest</text>
+</g>
+<g class="node built" data-id="SNAP" data-label="F03 snapshot + replay" data-shape="rectangle" data-role="node">
+  <rect x="418.7232499999999" y="1026.8000000000002" width="173.107" height="36.900000000000006" rx="0" ry="0" fill="#0d7a43" stroke="#07522c" stroke-width="0.75" data-id="node-shape:SNAP" data-role="node" />
+  <text x="505.2767499999999" y="1045.2500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="133.107" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">F03 snapshot + replay</text>
+</g>
+<g class="node built" data-id="ID" data-label="F09f identidad piloto" data-shape="rectangle" data-role="node">
+  <rect x="619.83025" y="1026.8000000000002" width="157.546" height="36.900000000000006" rx="0" ry="0" fill="#0d7a43" stroke="#07522c" stroke-width="0.75" data-id="node-shape:ID" data-role="node" />
+  <text x="698.60325" y="1045.2500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="117.546" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">F09f identidad piloto</text>
+</g>
+<g class="node built" data-id="SAL" data-label="U1 saliencia" data-shape="rectangle" data-role="node">
+  <rect x="805.3762499999999" y="1026.8000000000002" width="109.381" height="36.900000000000006" rx="0" ry="0" fill="#0d7a43" stroke="#07522c" stroke-width="0.75" data-id="node-shape:SAL" data-role="node" />
+  <text x="860.06675" y="1045.2500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="69.381" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">U1 saliencia</text>
+</g>
+<g class="node built" data-id="MODE" data-label="U2 modos + banda" data-shape="rectangle" data-role="node">
+  <rect x="942.7572499999998" y="1026.8000000000002" width="147.913" height="36.900000000000006" rx="0" ry="0" fill="#0d7a43" stroke="#07522c" stroke-width="0.75" data-id="node-shape:MODE" data-role="node" />
+  <text x="1016.7137499999998" y="1045.2500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="107.913" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">U2 modos + banda</text>
+</g>
+<g class="node built" data-id="CHAMP" data-label="U3a + U3b campeonato" data-shape="rectangle" data-role="node">
+  <rect x="1118.67025" y="1026.8000000000002" width="174.58899999999997" height="36.900000000000006" rx="0" ry="0" fill="#0d7a43" stroke="#07522c" stroke-width="0.75" data-id="node-shape:CHAMP" data-role="node" />
+  <text x="1205.9647499999999" y="1045.2500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="134.589" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">U3a + U3b campeonato</text>
+</g>
+<g class="node built" data-id="CI" data-label="F12 CI y guardas" data-shape="rectangle" data-role="node">
+  <rect x="261.70574999999997" y="857" width="137.539" height="36.900000000000006" rx="0" ry="0" fill="#0d7a43" stroke="#07522c" stroke-width="0.75" data-id="node-shape:CI" data-role="node" />
+  <text x="330.47524999999996" y="875.45" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="97.539" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">F12 CI y guardas</text>
+</g>
+<g class="node built" data-id="RUN" data-label="F10 run offline" data-shape="rectangle" data-role="node">
+  <rect x="270.2272499999999" y="1026.8000000000002" width="120.49600000000001" height="36.900000000000006" rx="0" ry="0" fill="#0d7a43" stroke="#07522c" stroke-width="0.75" data-id="node-shape:RUN" data-role="node" />
+  <text x="330.4752499999999" y="1045.2500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="80.496" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">F10 run offline</text>
+</g>
+<g class="node built" data-id="BOOTH" data-label="F09 booth + citas" data-shape="rectangle" data-role="node">
+  <rect x="709.0835" y="1111.7" width="140.50300000000001" height="36.900000000000006" rx="0" ry="0" fill="#0d7a43" stroke="#07522c" stroke-width="0.75" data-id="node-shape:BOOTH" data-role="node" />
+  <text x="779.3349999999999" y="1130.15" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="100.503" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">F09 booth + citas</text>
+</g>
+<g class="node built" data-id="GW" data-label="F08 gateway Gemini" data-shape="rectangle" data-role="node">
+  <rect x="656.1754999999999" y="1196.6" width="157.546" height="36.900000000000006" rx="0" ry="0" fill="#0d7a43" stroke="#07522c" stroke-width="0.75" data-id="node-shape:GW" data-role="node" />
+  <text x="734.9485" y="1215.05" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="117.546" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">F08 gateway Gemini</text>
+</g>
+<g class="node todo" data-id="F05" data-label="F05 delivery Redis" data-shape="rectangle" data-role="node">
+  <rect x="208.35199999999998" y="197.8" width="153.10000000000002" height="36.900000000000006" rx="0" ry="0" fill="#8a6d00" stroke="#5c4800" stroke-width="0.75" data-id="node-shape:F05" data-role="node" />
+  <text x="284.902" y="216.25" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="113.1" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">F05 delivery Redis</text>
+</g>
+<g class="node todo" data-id="F11" data-label="F11 packaging Compose" data-shape="rectangle" data-role="node">
+  <rect x="195.755" y="282.70000000000005" width="178.29399999999998" height="36.900000000000006" rx="0" ry="0" fill="#8a6d00" stroke="#5c4800" stroke-width="0.75" data-id="node-shape:F11" data-role="node" />
+  <text x="284.902" y="301.15000000000003" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="138.294" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">F11 packaging Compose</text>
+</g>
+<g class="node todo" data-id="F06" data-label="F06 tactico" data-shape="rectangle" data-role="node">
+  <rect x="62.669000000000004" y="197.8" width="106.417" height="36.900000000000006" rx="0" ry="0" fill="#8a6d00" stroke="#5c4800" stroke-width="0.75" data-id="node-shape:F06" data-role="node" />
+  <text x="115.8775" y="216.25" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="66.417" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">F06 tactico</text>
+</g>
+<g class="node todo" data-id="F07" data-label="F07 historico" data-shape="rectangle" data-role="node">
+  <rect x="56" y="282.70000000000005" width="119.75500000000001" height="36.900000000000006" rx="0" ry="0" fill="#8a6d00" stroke="#5c4800" stroke-width="0.75" data-id="node-shape:F07" data-role="node" />
+  <text x="115.8775" y="301.15000000000003" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="79.755" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">F07 historico</text>
+</g>
+<g class="node todo" data-id="START" data-label="largada" data-shape="rectangle" data-role="node">
+  <rect x="56" y="84" width="87.892" height="36.900000000000006" rx="0" ry="0" fill="#8a6d00" stroke="#5c4800" stroke-width="0.75" data-id="node-shape:START" data-role="node" />
+  <text x="99.946" y="102.45" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="47.892" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">largada</text>
+</g>
+<g class="node todo" data-id="ECON" data-label="economia y tono" data-shape="rectangle" data-role="node">
+  <rect x="301.424" y="84" width="135.316" height="36.900000000000006" rx="0" ry="0" fill="#8a6d00" stroke="#5c4800" stroke-width="0.75" data-id="node-shape:ECON" data-role="node" />
+  <text x="369.082" y="102.45" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="95.316" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">economia y tono</text>
+</g>
+<g class="node todo" data-id="LANG" data-label="idioma es-419" data-shape="rectangle" data-role="node">
+  <rect x="163.892" y="84" width="117.53200000000001" height="36.900000000000006" rx="0" ry="0" fill="#8a6d00" stroke="#5c4800" stroke-width="0.75" data-id="node-shape:LANG" data-role="node" />
+  <text x="222.65800000000002" y="102.45" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="77.532" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">idioma es-419</text>
+</g>
+<g class="node todo" data-id="F13" data-label="F13 piloto en vivo" data-shape="rectangle" data-role="node">
+  <rect x="56" y="140.9" width="139.02100000000002" height="36.900000000000006" rx="0" ry="0" fill="#8a6d00" stroke="#5c4800" stroke-width="0.75" data-id="node-shape:F13" data-role="node" />
+  <text x="125.51050000000001" y="159.35000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="99.021" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">F13 piloto en vivo</text>
+</g>
+<g class="node todo" data-id="LIVE" data-label="mitad EN VIVO de citas" data-shape="rectangle" data-role="node">
+  <rect x="215.02100000000002" y="140.9" width="170.88399999999996" height="36.900000000000006" rx="0" ry="0" fill="#8a6d00" stroke="#5c4800" stroke-width="0.75" data-id="node-shape:LIVE" data-role="node" />
+  <text x="300.46299999999997" y="159.35000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="130.884" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">mitad EN VIVO de citas</text>
+</g>
+<g class="node carry" data-id="C1" data-label="pin del igual" data-shape="rectangle" data-role="node">
+  <rect x="115.874" y="427.6" width="110.122" height="36.900000000000006" rx="0" ry="0" fill="#1f4e79" stroke="#123a5a" stroke-width="0.75" data-id="node-shape:C1" data-role="node" />
+  <text x="170.935" y="446.05" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="70.122" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">pin del igual</text>
+</g>
+<g class="node carry" data-id="C2" data-label="identidad desnuda" data-shape="rectangle" data-role="node">
+  <rect x="115.874" y="541.4000000000001" width="149.39499999999998" height="36.900000000000006" rx="0" ry="0" fill="#1f4e79" stroke="#123a5a" stroke-width="0.75" data-id="node-shape:C2" data-role="node" />
+  <text x="190.5715" y="559.8500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="109.395" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">identidad desnuda</text>
+</g>
+<g class="node carry" data-id="C3" data-label="4 modulos sin clave" data-shape="rectangle" data-role="node">
+  <rect x="115.874" y="598.3000000000001" width="155.323" height="36.900000000000006" rx="0" ry="0" fill="#1f4e79" stroke="#123a5a" stroke-width="0.75" data-id="node-shape:C3" data-role="node" />
+  <text x="193.5355" y="616.7500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="115.323" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">4 modulos sin clave</text>
+</g>
+<g class="node carry" data-id="C4" data-label="presupuesto: 5 puntos" data-shape="rectangle" data-role="node">
+  <rect x="115.874" y="655.2" width="172.36599999999999" height="36.900000000000006" rx="0" ry="0" fill="#1f4e79" stroke="#123a5a" stroke-width="0.75" data-id="node-shape:C4" data-role="node" />
+  <text x="202.057" y="673.6500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="132.366" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">presupuesto: 5 puntos</text>
+</g>
+<g class="node carry" data-id="C5" data-label="empates + alias" data-shape="rectangle" data-role="node">
+  <rect x="245.996" y="427.6" width="130.87" height="36.900000000000006" rx="0" ry="0" fill="#1f4e79" stroke="#123a5a" stroke-width="0.75" data-id="node-shape:C5" data-role="node" />
+  <text x="311.43100000000004" y="446.05" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="90.87" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">empates + alias</text>
+</g>
+<g class="node carry" data-id="C6" data-label="3 avisos de U3b" data-shape="rectangle" data-role="node">
+  <rect x="115.874" y="484.5" width="134.575" height="36.900000000000006" rx="0" ry="0" fill="#1f4e79" stroke="#123a5a" stroke-width="0.75" data-id="node-shape:C6" data-role="node" />
+  <text x="183.1615" y="502.95" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="94.575" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">3 avisos de U3b</text>
+</g>
+<g class="node wf" data-id="W1" data-label="1 Autorizar" data-shape="rectangle" data-role="node">
+  <rect x="56" y="1341.5" width="103.453" height="36.900000000000006" rx="0" ry="0" fill="#4b2e83" stroke="#2f1c52" stroke-width="0.75" data-id="node-shape:W1" data-role="node" />
+  <text x="107.7265" y="1359.95" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="63.453" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">1 Autorizar</text>
+</g>
+<g class="node wf" data-id="W2" data-label="2 Explorar" data-shape="rectangle" data-role="node">
+  <rect x="207.453" y="1341.5" width="104.93499999999999" height="36.900000000000006" rx="0" ry="0" fill="#4b2e83" stroke="#2f1c52" stroke-width="0.75" data-id="node-shape:W2" data-role="node" />
+  <text x="259.9205" y="1359.95" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="64.935" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">2 Explorar</text>
+</g>
+<g class="node wf" data-id="W3" data-label="3 Resolver" data-shape="rectangle" data-role="node">
+  <rect x="360.388" y="1341.5" width="106.417" height="36.900000000000006" rx="0" ry="0" fill="#4b2e83" stroke="#2f1c52" stroke-width="0.75" data-id="node-shape:W3" data-role="node" />
+  <text x="413.5965" y="1359.95" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="66.417" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">3 Resolver</text>
+</g>
+<g class="node wf" data-id="W4" data-label="4 Clasificar" data-shape="rectangle" data-role="node">
+  <rect x="514.805" y="1341.5" width="107.89900000000002" height="36.900000000000006" rx="0" ry="0" fill="#4b2e83" stroke="#2f1c52" stroke-width="0.75" data-id="node-shape:W4" data-role="node" />
+  <text x="568.7545" y="1359.95" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="67.899" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">4 Clasificar</text>
+</g>
+<g class="node wf" data-id="W5" data-label="5 Registrar" data-shape="rectangle" data-role="node">
+  <rect x="670.704" y="1341.5" width="107.89900000000002" height="36.900000000000006" rx="0" ry="0" fill="#4b2e83" stroke="#2f1c52" stroke-width="0.75" data-id="node-shape:W5" data-role="node" />
+  <text x="724.6535" y="1359.95" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="67.899" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">5 Registrar</text>
+</g>
+<g class="node wf" data-id="W6" data-label="6 Implementar" data-shape="rectangle" data-role="node">
+  <rect x="826.603" y="1341.5" width="121.23700000000001" height="36.900000000000006" rx="0" ry="0" fill="#4b2e83" stroke="#2f1c52" stroke-width="0.75" data-id="node-shape:W6" data-role="node" />
+  <text x="887.2215" y="1359.95" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="81.237" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">6 Implementar</text>
+</g>
+<g class="node wf" data-id="W7" data-label="7 Verificar" data-shape="rectangle" data-role="node">
+  <rect x="995.8399999999999" y="1341.5" width="103.453" height="36.900000000000006" rx="0" ry="0" fill="#4b2e83" stroke="#2f1c52" stroke-width="0.75" data-id="node-shape:W7" data-role="node" />
+  <text x="1047.5665" y="1359.95" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="63.453" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">7 Verificar</text>
+</g>
+<g class="node wf" data-id="W8" data-label="8 Revision nativa" data-shape="rectangle" data-role="node">
+  <rect x="1147.293" y="1341.5" width="141.244" height="36.900000000000006" rx="0" ry="0" fill="#4b2e83" stroke="#2f1c52" stroke-width="0.75" data-id="node-shape:W8" data-role="node" />
+  <text x="1217.915" y="1359.95" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="101.244" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">8 Revision nativa</text>
+</g>
+<g class="node wf" data-id="W9" data-label="9 Integrar" data-shape="rectangle" data-role="node">
+  <rect x="1336.5369999999998" y="1341.5" width="99.007" height="36.900000000000006" rx="0" ry="0" fill="#4b2e83" stroke="#2f1c52" stroke-width="0.75" data-id="node-shape:W9" data-role="node" />
+  <text x="1386.0404999999998" y="1359.95" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="59.007" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">9 Integrar</text>
+</g>
+<g class="node wf" data-id="W10" data-label="10 Entregar" data-shape="rectangle" data-role="node">
+  <rect x="1483.5439999999999" y="1341.5" width="107.899" height="36.900000000000006" rx="0" ry="0" fill="#4b2e83" stroke="#2f1c52" stroke-width="0.75" data-id="node-shape:W10" data-role="node" />
+  <text x="1537.4934999999998" y="1359.95" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff" dy="4.55" textLength="67.899" lengthAdjust="spacingAndGlyphs" data-font-metrics="deterministic-fit">10 Entregar</text>
+</g>
+</svg>
