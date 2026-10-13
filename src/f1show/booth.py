@@ -85,7 +85,9 @@ of the supplied references -- or a matched reference with a bracket glued direct
 (``position[0].position[99]``) -- is refused as
 ``BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT``, which is the one rule that reaches a bare or
 mid-line mention. Every emitted ``Turn`` therefore carries a non-empty ``evidence`` tuple
-drawn from that one event's own references.
+drawn from that one event's own references. The **start turn** is the declared exception:
+it aggregates the lap-1 events, so its evidence is drawn from its members' own references,
+and each absorbed member records ``COVERED_BY_START`` instead of a turn of its own.
 
 **Two faithful-but-wrong citation shapes are normalised, both measured in a live round**
 (206 calls, round 5 Austin 2024): 55 answers copied the reference *together with its
@@ -204,6 +206,7 @@ from f1show.mode import (
 )
 from f1show.ports import Clock, ModelClient, ModelRequest
 from f1show.salience import SalienceSummary, render_salience, salience_summary
+from f1show.start import START_LAP_NUMBER, StartGroup, group_start_events
 
 __all__ = [
     "COLOR_PERSONA",
@@ -232,6 +235,10 @@ PRIORITY_EVENT_TYPES: frozenset[EventType] = CAUTION_EVENT_TYPES
 #: with no number, so the prompt never renders a half-join -- a name with no team, or a
 #: bare number standing in for a name -- and never renders two driver lines.
 _UNKNOWN_DRIVER = "driver: unknown"
+
+#: The same fallback as a bare value. The start turn's VALUES carry a member's identity text
+#: itself, so the fallback there is the word alone rather than the whole EVENT line.
+_UNKNOWN_DRIVER_NAME = "unknown"
 
 #: Declared Spanish registers, not model-selected regional guesses. These are
 #: instruction prose only: no bracket, reference token or citation marker. Languages
@@ -337,9 +344,19 @@ class BoothReason(str, Enum):
     a reference-shaped token that was never supplied. It stands apart from
     ``INVENTED_REFERENCE``, which is about the citation line itself, and from
     ``MULTIPLE_CITATION_LINES``, which is about a further citation-shaped line.
+
+    ``COVERED_BY_START`` names an event whose own turn the start group absorbed: it is a
+    lap-1 row, the start turn already carries it, and no second turn is attempted for it.
+    It is a disclosure rather than a failure, and it is the only reason here decided by the
+    shape of the stream instead of by the answer or by the provider. **It is recorded only
+    when that start turn actually aired**: when the group's own turn degrades, is refused,
+    is suppressed or is excluded, each member mirrors that fate instead, so a lost search
+    turn stays visible as one lost turn per covered row rather than hiding behind a
+    disclosure that asserts the rows were carried.
     """
 
     OUTSIDE_CONTEXT_WINDOW = "outside_context_window"
+    COVERED_BY_START = "covered_by_start"
     NO_CITABLE_EVIDENCE = "no_citable_evidence"
     UNCITED = "uncited"
     INVENTED_REFERENCE = "invented_reference"
@@ -493,29 +510,52 @@ def _reference_scanner(references: Sequence[str]) -> re.Pattern[str] | None:
     """Compile the scanner for one reference token out of the supplied references.
 
     The collector writes every reference as ``<family>[<record_index>].<field>`` and
-    ``_citable_evidence`` reproduces that form, so the shape is *read off* a supplied
-    reference rather than pasted in as a second pattern that could drift from it: each
-    reference is split on the two separators the form itself carries -- the bracketed
-    index and the dot before the field -- and the family and the field are read as word
-    runs. The index window is wider than the digits the collector writes and reaches zero
-    (``_ANY_INDEX``), the bare empty-bracket form is scanned without a field
-    (``_EMPTY_BRACKET``), and every structural joint tolerates whitespace so a reference
-    split by a newline or a NBSP is still one token. A reference that does not carry that
-    structure yields no scanner, and the content rule then has nothing to flag rather than
-    falling back to an invented pattern.
+    ``_citable_evidence`` reproduces that form, but the **start turn** deliberately offers
+    bare identities (``laps[1]``), because its own recorded decision admits exactly one
+    identity per member. What this builds is therefore the form's **grammar** rather than a
+    copy of one sample's text -- the family and the field are both runs of word characters
+    and the index is ``_ANY_INDEX``, wider than the digits the collector writes and reaching
+    zero -- so the pattern is the same on every surface and only ``permitted`` changes what
+    may air. The
+    bare empty-bracket form is scanned without a field (``_EMPTY_BRACKET``), and every
+    structural joint tolerates whitespace so a reference split by a newline or a NBSP is
+    still one token.
+
+    **It is built whenever at least one reference was supplied, bare or not, and the reason
+    is a measured defect rather than a preference.** Deriving it only from references that
+    carry a field left a surface of identities with **no scanner at all**, and the content
+    rule is skipped when there is none: an independent verifier measured that a field-shaped
+    token the start turn never offered (`laps[11].lap_duration`) **aired** in its prose, which
+    is fail-open on the one rule that reaches a bare or mid-line mention. Only an empty list
+    yields no scanner, because then there is nothing to compare a match against.
+
+    **And when the supplied surface is itself made of bare identities, the bare form joins the
+    pattern.** The start turn's own tokens are ``family[index]`` with no field, so a scanner
+    that knows only the field form never matches them: the supplied check and the
+    attached-bracket rule cannot fire, and two more unsupplied tokens aired in the same
+    measurement -- ``laps[777]`` and a fragment glued onto a supplied identity
+    (``laps[10][99].evil``). The alternative is added **only** for a bare surface, so the
+    field-reference surface keeps the declared tolerance for a bare non-empty bracket and
+    this narrowing cannot reach it.
     """
-    for reference in references:
-        family, _, remainder = reference.partition("[")
-        index, _, remainder = remainder.partition("]")
-        if not (family and index and remainder.startswith(".")):
-            continue
-        field = remainder[1:]
-        if not field:
-            continue
-        return re.compile(
-            rf"(?<!\w)(?:\w+\s*\[{_ANY_INDEX}\]\s*\.\s*\w+|{_EMPTY_BRACKET})(?!\w)"
-        )
-    return None
+    if not references:
+        return None
+    bare_surface = any(
+        "." not in reference.partition("]")[2] for reference in references
+    )
+    alternatives = [
+        rf"\w+\s*\[{_ANY_INDEX}\]\s*\.\s*\w+(?!\w)",
+        rf"{_EMPTY_BRACKET}(?!\w)",
+    ]
+    if bare_surface:
+        # No trailing word boundary on this alternative, and the reason is a measured defect
+        # the native risk lens reported as R1-001, severity CRITICAL: it ends at the closing
+        # bracket, so a shared ``(?!\w)`` let a fabricated token glued to a letter
+        # (``laps[777]evil``) pass unread, while the field form needs a dot that is not there.
+        # Dropping the boundary refuses only what was never offered: a *supplied* identity
+        # glued to a word still airs, because the supplied check runs first.
+        alternatives.append(rf"\w+\s*\[{_ANY_INDEX}\]")
+    return re.compile(rf"(?<!\w)(?:{'|'.join(alternatives)})")
 
 
 def _canonical_reference(token: str) -> str:
@@ -559,7 +599,9 @@ def _is_citation_attempt(line: str, scanner: re.Pattern[str] | None) -> bool:
 
 
 def _parse_answer(
-    raw: str, allowed: tuple[str, ...], identity: str | None = None
+    raw: str,
+    allowed: tuple[str, ...],
+    expansions: Mapping[str, tuple[str, ...]] | None = None,
 ) -> _AcceptedAnswer | _RefusedAnswer:
     """Parse the citation-first protocol, refusing anything not backed by ``allowed``.
 
@@ -582,9 +624,11 @@ def _parse_answer(
     header carrying ``=`` is cut at its first ``=`` *before* the comma split, so a copied
     value whose own text carries commas (``laps[4].segments_sector_1 = [20480, 20481, 0]``)
     cannot manufacture extra citation items; the text left of that cut is the reference side
-    and must itself be acceptable. An item equal to ``identity`` (the event's own
-    ``family[index]``) expands to every reference in ``allowed``, in recorded order, and
-    anything else must be one of ``allowed``. Any item that survives neither route is
+    and must itself be acceptable. An item equal to a key of ``expansions`` expands to that
+    key's own references, in recorded order -- the event's own ``family[index]`` for a
+    single-event turn, and one member's identity for the start turn, where each member
+    expands to its own references and never to another member's -- and anything else must
+    be one of ``allowed``. Any item that survives neither route is
     ``INVENTED_REFERENCE``; the normalisations can only ever emit supplied references, so
     the guarantee does not move. The right side of the ``=`` is the value of the reference
     on its left: it is not validated, never cited and never aired.
@@ -626,10 +670,12 @@ def _parse_answer(
     permitted = set(allowed)
     expanded: list[str] = []
     for item in cited:
-        if identity is not None and item == identity:
-            # The event's own identity names the whole event: it expands to every
-            # reference the event owns, never airs as the bare identity.
-            expanded.extend(allowed)
+        if expansions is not None and item in expansions:
+            # An identity names a whole event: it expands to that event's own references
+            # and never airs as the bare identity. A single-event turn has one such key;
+            # the start turn has one per member, so a citation names the member it speaks
+            # about and cannot borrow a different member's detail.
+            expanded.extend(expansions[item])
         elif item in permitted:
             expanded.append(item)
         else:
@@ -759,9 +805,16 @@ class CommentaryBooth:
         )
 
     async def run(self) -> BoothResult:
-        """Commentate every event in order, and return the transcript plus every outcome."""
+        """Commentate every event in order, and return the transcript plus every outcome.
+
+        Exactly one outcome is recorded per event, in event order, and every outcome that
+        is not a turn says why. The one exception to one-model-call-per-event is the start
+        group: its members' own turns are absorbed by a single start turn, and each absorbed
+        event records ``COVERED_BY_START`` rather than vanishing from the record.
+        """
         turns: list[Turn] = []
         outcomes: list[BoothOutcome] = []
+        start = group_start_events(self._events)
         newest = max(
             (
                 event.timestamp_value
@@ -772,7 +825,35 @@ class CommentaryBooth:
         )
         for index, event in enumerate(self._events):
             reference = event_reference(event)
-            citable = _citable_evidence(event)
+            if start is not None and start.covers(index):
+                # Decided by what actually happened to the group's turn, never by assumption:
+                # one outcome is recorded per event in order, so the group's own outcome is
+                # already at its index here (every covered index is greater than
+                # ``start.position``, the lowest member index).
+                outcomes.append(
+                    self._covered_outcome(outcomes[start.position], reference, event)
+                )
+                continue
+            group = start if (start is not None and index == start.position) else None
+            if group is None:
+                citable = _citable_evidence(event)
+                expansions = {reference: tuple(item[0] for item in citable)}
+            else:
+                # One identity per member, valued by that member's own identity line: the
+                # start turn can name every driver it covers while no lap time becomes
+                # citable, and citing a member's identity expands to that member's own
+                # references and never to another member's.
+                citable = tuple(
+                    (
+                        event_reference(member),
+                        self._driver_name(member) or _UNKNOWN_DRIVER_NAME,
+                    )
+                    for member in group.members
+                )
+                expansions = {
+                    event_reference(member): evidence_references(member)
+                    for member in group.members
+                }
             if self._is_stale(event, newest):
                 outcomes.append(
                     self._outcome(
@@ -810,6 +891,7 @@ class CommentaryBooth:
                         source=self._championship,
                         team_of_driver=self._team_of_driver,
                     ),
+                    group=group,
                 ),
                 max_output_tokens=self._max_output_tokens,
                 timeout_seconds=self._timeout_seconds,
@@ -830,7 +912,7 @@ class CommentaryBooth:
                 )
                 continue
             parsed = _parse_answer(
-                response.text, tuple(item[0] for item in citable), identity=reference
+                response.text, tuple(item[0] for item in citable), expansions=expansions
             )
             if isinstance(parsed, _RefusedAnswer):
                 outcomes.append(
@@ -874,6 +956,31 @@ class CommentaryBooth:
                 turns=tuple(turns),
             ),
             outcomes=tuple(outcomes),
+        )
+
+    def _covered_outcome(
+        self, group: BoothOutcome, reference: str, event: DetectedEvent
+    ) -> BoothOutcome:
+        """What a covered member records, decided by the group turn's own fate.
+
+        A member is disclosed as covered **only** when the group's turn aired, because that
+        is the only case in which something carries it. Every other fate of the group --
+        degraded by the provider, refused by the protocol, suppressed as a repetition, or
+        excluded as stale or evidence-less -- is mirrored here, so one failure that costs the
+        group its turn shows up as one lost turn per covered row. Two native reviewers found
+        this independently, as R1-002 and R3-covered-without-start, and both were right: the
+        disclosure used to be written before the group's fate was known.
+        """
+        if group.kind is OutcomeKind.TURN:
+            return self._outcome(
+                OutcomeKind.EXCLUDED, reference, event, reason=BoothReason.COVERED_BY_START
+            )
+        return self._outcome(
+            group.kind,
+            reference,
+            event,
+            failure_type=group.failure_type,
+            reason=group.reason,
         )
 
     def _speaker_for(self, event: DetectedEvent, turns: Sequence[Turn]) -> Speaker:
@@ -946,6 +1053,26 @@ class CommentaryBooth:
             used += len(turn.text)
         return tuple(reversed(selected))
 
+    def _driver_name(self, event: DetectedEvent) -> str | None:
+        """The driver's rendered identity from the session directory, or ``None``.
+
+        The one rendering, used in two places deliberately: the EVENT block of a
+        single-event turn and the VALUES of the start turn, where a member's identity is
+        the value of that member's own identity reference. One rendering means the two can
+        never disagree.
+        """
+        if event.driver_number is not None:
+            identity = self._driver_directory.get(event.driver_number)
+            if identity is not None:
+                full_name, team_name = identity
+                return f"{full_name} ({team_name}, #{event.driver_number})"
+        return None
+
+    def _driver_line(self, event: DetectedEvent) -> str:
+        """The declared EVENT-block line: the rendered identity, or the declared fallback."""
+        name = self._driver_name(event)
+        return _UNKNOWN_DRIVER if name is None else f"driver: {name}"
+
     def _prompt(
         self,
         event: DetectedEvent,
@@ -955,6 +1082,7 @@ class CommentaryBooth:
         salience: SalienceSummary,
         mode: TurnMode,
         championship: ChampionshipContext,
+        group: StartGroup | None = None,
     ) -> str:
         """Assemble the whole prompt from the supplied references, history and window story.
 
@@ -972,7 +1100,11 @@ class CommentaryBooth:
         same no-bracket, no-token rule. A declared Spanish variant adds a LANGUAGE
         block with its address forms and motorsport vocabulary; other languages keep
         their original instruction. Dialectal compliance by a real model is not proved
-        by an offline scripted response.
+        by an offline scripted response. The start turn is the one variant of the EVENT
+        block: it covers a whole group of lap-1 rows, so the single driver line is
+        replaced by the group's lap and row count, and its citable set is one identity per
+        member whose value is that member's own identity line. Every other block is built
+        exactly as it is for a single event.
         """
         profile = _SPANISH_LANGUAGE_PROFILES.get(self._settings.language)
         language_instruction = (
@@ -1036,16 +1168,18 @@ class CommentaryBooth:
         lines.extend(
             ["", "EVENT:", f"type: {event.event_type.value}", f"family: {event.family}"]
         )
-        identity = (
-            None
-            if event.driver_number is None
-            else self._driver_directory.get(event.driver_number)
-        )
-        if identity is None:
-            lines.append(_UNKNOWN_DRIVER)
+        if group is None:
+            lines.append(self._driver_line(event))
         else:
-            full_name, team_name = identity
-            lines.append(f"driver: {full_name} ({team_name}, #{event.driver_number})")
+            # The start turn covers the whole lap-1 group, so naming one driver here would
+            # be false. The members' identities reach the model as the values of their own
+            # identity references, and the block states how many rows this turn aggregates.
+            lines.extend(
+                [
+                    f"lap: {START_LAP_NUMBER}",
+                    f"rows: {len(group.members)} lap-1 rows aggregated into this one turn",
+                ]
+            )
         if event.timestamp_value is not None:
             lines.append(f"timestamp: {event.timestamp_value.isoformat()}")
         else:
