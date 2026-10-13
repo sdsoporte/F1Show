@@ -3150,6 +3150,48 @@ fixes are registered as product decisions.
     is marked **SUPERSEDED as a defect** and the surviving **stale public alias** is carried as its own row;
     and a **third** staleness key was added, for `mode.py` — the **second** module in one feature to enter the
     tree with no key at all, which is the omission the register names rather than quietly repairing.
+- **U3a — the provisional championship derivation: implemented, verified, reviewed and integrated.**
+  Commit `cbfab569`, branch `feat/f09g-standings` (based on `b325770`), **PR #47** merged as
+  **`6a07cda6a59b8328a565d1de7714f249cf21629b`**.
+  - **What it does:** a pure module `src/f1show/standings.py` (402 lines) declares a per-season points
+    dataset and derives an `after_table` and a `provisional_table`, with a declared tie rule. It is **not**
+    wired into the prompt; U3b owns that wiring.
+  - **The fastest-lap condition is modelled, not delegated.** 2024 grants one point **with a top-10
+    condition**, 2025 grants none, and a granting season that cannot establish the holder's position
+    **refuses** instead of guessing. This is not hypothetical: the recorded session's own derived fastest lap
+    belongs to **driver 31, lap 53, 97.33 s**, and driver 31 finished **P18**, so crediting it would over-state
+    the table. The unit's verification re-derived the measurements from the JSON alone, and the parent
+    re-ran the writer's mutant: removing the condition fails **three** tests, including the recorded
+    over-credit, and with the holder flagged the recorded table still matches on **23/23** rows.
+  - **Three measurements, and two of them are findings.** (1) The ledger identity holds for **every** driver,
+    the derived table reproduces the source's `points_current` on **23/23** rows, and the source's own points
+    match the declared scale on **20/20**. (2) The order **within a points tie is not derivable**: a
+    `driver_number` rule disagrees with the source on **8 rows** and a `position_start`-stability rule still
+    on **2**, across four tie groups — recorded as a **finding**, never fitted to the data. (3) **A team table
+    cannot be derived from a session's entry list plus driver rows at all.** Global totals agree at
+    **2078.0**, but per team the source sits above the driver sum by **Ferrari 6, Haas 1 and RB 12** — exactly
+    the **19** points held by the three drivers with no entry-list row (**#3: 12, #50: 7, #2: 0**). Two
+    reasons are visible in the bytes: the entry list is **session-scoped**, so a driver who did not start this
+    race is unmapped however many points they hold, and the driver table carries **one** team per driver per
+    session, so a season scored across two teams cannot be expressed. The numbers **uniquely determine** the
+    split even so, and the design consequence is recorded: **the season team table must come from the source's
+    own endpoint**, not from a join.
+  - **The provisional table's property, and its limit.** With every lap complete it equals the after table; a
+    different running order gives a different table, and **200/200** sampled shuffles differ from it, so the
+    property is not vacuous. It proves our own arithmetic self-consistency and **nothing** about the source's
+    real in-race values, because no in-race table exists in the corpus — the module says so itself.
+  - **Declared omissions, kept declared:** sprint points, half points, penalties and disqualification,
+    countback tie-breaks, and team aggregation.
+  - **Native review `review-f0762d68ec5e9f68`:** tier medium, one `review-reliability` lens, 2 files, **953**
+    lines — **approved with no advisory findings at all**, authority **burned** (`consumed_revision
+    sha256:54c7dc57…`). The cleanest closure in this feature.
+  - **Budget anomaly, fourth measured point:** **953** lines returned `reviewDue: false` (`under_budget`). The
+    series now reads 405 and 921 → `true`; 996, 1461 and 953 → `false`, so size does not explain the gate.
+  - **Checks:** focused **29**, full **926**, Ruff 0.17.0 clean, and CI green on the PR (`pytest` on 3.12 and
+    3.14, `ruff`, register-row guard).
+  - **The register needed no row mapping at this revision, and that is itself the finding.** Peer B confirmed that **no row's file changed** between `b325770` and `6a07cda`: the only modified files were this document and the register, and the two added files are new. Two staleness keys were created for them, which makes it the **third** time in one feature that a module entered the tree with **no key and no row** (after `salience.py` and `mode.py`) — three occurrences in one feature are recorded as a **gap in the closure procedure itself**, not as three separate oversights. Two rows were added from the unit's own measurements: `R3-tie-order-not-derivable` and `R3-team-table-not-derivable`. The declared airing shapes were re-confirmed at **six**, and nothing in `booth.py` moved.
+  - **Next: U3b** — the championship rows and the provisional table reaching the prompt, which is the last
+    piece of F09g.
 - **Checks pending for the remaining units:** RED/GREEN per unit, focused and full suite on the delivered
   bytes, Ruff 0.17.0, determinism, deliberate prompt-pin updates, the register rows re-derived **by subject**
   at each revision, independent verification and the provider-offered native route.
