@@ -3655,6 +3655,66 @@ a language with no default, so the variant is the natural extension of a decisio
   merged commit (identical for both) and restored the files to the merged bytes, so the working tree
   matches `main` and a later session cannot mistake a reflow for new work.
 
+### F09j — The second recorded window: session 9655
+
+- [ ] **Authorized 2026-10-13, in the user's own words.** Asked how to choose the second race they chose **"Ir directo a 9655"**; asked about the family they chose **"Omitir intervals"**; asked about the scope they chose **"Sesión completa, verbatim"**. It does **not** cover: any authenticated or live call, a paid tier, a third session, or a change to the existing session's fixtures.
+- **Objective:** a second recorded race so the pipeline — and the start aggregation in particular — can be checked
+  against a session other than 9617, **supplementing** the corpus rather than re-pinning it.
+- **Decisions taken here, with the measurement each rests on.** (1) **Subdirectory:** the loader opens
+  `<dir>/<family>.json`, so the second session lives in `fixtures/openf1/9655/` and is read by passing
+  `fixtures_dir`; **no loader change**. (2) **`intervals` omitted**, and the reason is measured rather than
+  aesthetic: the collector derives **no event** from it and the loader does not even read it, and it is
+  **2,965,644 bytes of the 3,608,000-ish corpus** — about four fifths of the data for none of the behaviour.
+  The omission is declared in the provenance rather than left as a silent gap. (3) **Whole session verbatim,
+  ten GETs** (`sessions?session_key=9655` plus the nine families), on the free tier with **no credential at
+  all**, inside the documented **3 req/s and 30 req/min**. (4) **Season 2024**: `run_session` composes the
+  championship source with the 2024 default and the declared season rules cover only 2024 and 2025, so a
+  later season would be silently scored with the wrong fastest-lap rule.
+- **Invariants that must not move:** the existing session's fixtures, pins and counts are **untouched**; every
+  new fixture is recorded **verbatim** — no sampling and no re-serialisation — with bytes, record count, first
+  and last date, request time and SHA256 in `fixtures/openf1/PROVENANCE.md`; the new session's test module
+  asserts **only** what it measured, and every number in it is re-measured by the parent from the files.
+- **Expected risks, named before the fetch rather than after:** a family that answers empty or 404 for this
+  session (the worker must report it, never invent it); an event count that differs from the record count if
+  the session carries repeated updates, since the collector deduplicates by identity; and the fact that order,
+  indices, null timestamps and seat consequences are all session-specific, so nothing may be inherited from
+  9617's pins.
+- **Route:** one worker writes the capture script, the ten fixtures, the provenance section and the new test
+  module inside a declared surface; then the parent **re-measures every number** from the files themselves, an
+  independent verifier checks the result, the provider's native route runs, and delivery stays a separate
+  user decision.
+- **Delivered as PR #57, merge commit `043d2a5cd153f895c49da10f9813813fb74278cd`,** CI run `38437785270`
+  green on all four jobs, and the merged tree `692a06c4…` is **exactly** the reviewed candidate tree.
+- **It had to be two commits, and the reason is measured rather than aesthetic.** The first `START` over the
+  whole unit returned **`lens_context_budget_exceeded`**: **575 KB of single-line JSON cannot be turned into
+  reviewer material**. That refusal created **no authority** — the provider's own words — so nothing was
+  abandoned or repaired. The documented continuation is to reduce the candidate's scope, so `ed02c18` holds
+  the corpus and `b0899e8` the authored part, and the review covered the authored part (medium tier, one
+  reliability lens, 4 files, **426** lines, approved with its authority burned).
+- **The corpus therefore carries no native review, and the record says so** instead of implying coverage.
+  What stands in its place is **measurement**: each file's SHA256 and byte size, each record's
+  `session_key`, the parent's independent re-derivation of every pinned number, and an independent
+  verifier's six-claim pass.
+- **The verifier's one finding was real and is fixed here.** `10 requests in 7.4 s` compared directly
+  against a **per-minute** ceiling reads as about **81 per minute**, above the documented 30; the two limits
+  are a **rate** (3/second) and a **count** (30/minute), and both provenance sections now say which is which
+  while naming the old arithmetic as **wrong**. The same defect sat in the pre-existing 9617 section, so the
+  repair is stated as covering both rather than only the new one.
+- **Two claims elsewhere were falsified by the new corpus** and are corrected in the same unit:
+  `championship.py`'s declared-season comment named only `1247`/`9617`, and `run.py`'s loader docstring
+  claimed `sessions.json` holds the whole season — true of the first corpus and false of the second's single
+  row.
+- **The measurements this unit adds, every one re-measured by the parent from the bytes:** **1,708** events
+  with no deduplication loss; the five-lap window holds **114** (laps 92, race_control 20, pit 2); the start
+  group has **20 members at position 29** covering **19**; the run gives **1,689** turns, **1,708** outcomes
+  and **19** exclusions with 1,689 model calls; **zero** null `date_start` in 944 laps, so its members are
+  **contiguous at 29-48** where 9617's were not; and **1,353** of 1,689 seats differ from strict alternation
+  against **1,023** of 1,629 on 9617 — the concrete demonstration that seat consequences are
+  session-specific and must never be inherited.
+- **A same-size coincidence worth keeping:** `drivers.json` is **8,013 bytes in both sessions** with
+  different contents. Equal size is never equal content, and it is the provenance's SHA256 that separates
+  them.
+
 ### F10 — Wire bounded end-to-end orchestration
 
 - [ ] Correlate enrichment by event/session/version, apply bounded join deadlines,

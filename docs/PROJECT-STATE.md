@@ -2,7 +2,7 @@
 
 One page for the question *what exists, what does not, and what is merely carried*. It is a **snapshot**, and it names the revision it was drawn at: `odd/tasks/f1show.md` stays the authority.
 
-**Snapshot:** `b0f5f32` (the merge of PR #55), the close of **F09i** and **F09h** — the start aggregation and the commentary language — suite **986 passing** - CI on **3.12 and 3.14** with **Ruff 0.17.0** pinned - **no open pull requests**.
+**Snapshot:** `043d2a5` (the merge of PR #57), the close of **F09j** — a second recorded session — on top of F09i and F09h; the corpus now holds **two** sessions - suite **991 passing** - CI on **3.12 and 3.14** with **Ruff 0.17.0** pinned - **no open pull requests**.
 
 ## The map
 
@@ -24,7 +24,10 @@ flowchart TB
     CI["F12 CI y guardas"]
     LANG["F09h idioma es-AR"]
     STARTAGG["F09i largada"]
+    WIN2["F09j ventana 9655"]
     FIX --> COL --> STORE --> SNAP --> BOOTH
+    FIX --- WIN2
+    WIN2 --> COL
     ID --> BOOTH
     SAL --> BOOTH
     MODE --> BOOTH
@@ -73,7 +76,7 @@ flowchart TB
   classDef todo fill:#8a6d00,stroke:#5c4800,color:#ffffff
   classDef carry fill:#1f4e79,stroke:#123a5a,color:#ffffff
   classDef wf fill:#4b2e83,stroke:#2f1c52,color:#ffffff
-  class FIX,COL,STORE,SNAP,ID,SAL,MODE,CHAMP,LANG,STARTAGG,BOOTH,GW,RUN,CI built
+  class FIX,WIN2,COL,STORE,SNAP,ID,SAL,MODE,CHAMP,LANG,STARTAGG,BOOTH,GW,RUN,CI built
   class F05,F11,F06,F07,ECON,F13,LIVE todo
   class C1,C2,C3,C4,C5,C6,C7,C8 carry
   class W1,W2,W3,W4,W5,W6,W7,W8,W9,W10 wf
@@ -103,6 +106,7 @@ Exports for readers who cannot render Mermaid: [`project-state.svg`](assets/proj
 | F12 | CI and guards | the lint standard committed with its version pinned, the declared floor enforced, and a register-row guard |
 | F09h | the commentary language | Argentine Spanish (`es-AR`) by default, with `es-419`, `es-MX` and `es-ES` selectable and each declaring its address forms and motorsport vocabulary; an omitted language takes the default, an explicit blank is still an error, and the prompt's citation protocol is unchanged |
 | F09i | the start aggregation | the twenty lap-1 events air as **one start turn** instead of twenty near-identical ones, with one identity per member citable and every absorbed row recording `covered_by_start` — and, when the group's own turn does not air, mirroring its fate instead of claiming coverage |
+| F09j | the second recorded window | session **9655** (the 2024 Qatar Grand Prix) recorded verbatim from the free tier with **no credential**: ten families, **574,894 bytes**, a dated provenance section, and five tests that pin its measured facts; the start rule now has a second, differently-shaped session behind it (zero null timestamps there, where 9617 has an orphan that sorts last) |
 
 ## Remaining, and why
 
@@ -128,6 +132,8 @@ Everything below lives in `docs/CARRIED-FINDINGS.md` with its location, owner an
 - **Three advisories** from U3b, with their subjects located in the source because the harness returns no bodies.
 - A **bare token glued to a letter** (`position[0][99].evil`) **airs on a field-reference surface**; measured on both the pre-change and the post-change bytes, so it is pre-existing, and closing it would also close the declared tolerance for a bare non-empty bracket — a product trade the module reserves to the user.
 - **Two files with no register row and no staleness key at all**: `src/f1show/config.py` and `tests/test_config.py`, named in the register as a gap rather than repaired by ceremony.
+- **The second recorded session carries no native review**, and the reason is measured: 575 KB of single-line JSON exceeded the provider's reviewer lens budget, and the split that followed means the review covered the authored part only. It is verified by **measurement** instead — file hashes, counts, the parent's re-derivation and an independent verifier's pass — and the register row says so.
+- The **pacing arithmetic** in both provenance sections was wrong as written (`10 requests in 7.4 s` and `8 in 8.481 s` compared against a **per-minute** ceiling read as about 81 and 57); both now state a rate bound and a count bound separately, with the old arithmetic named as wrong.
 
 ## The workflow every unit goes through
 
