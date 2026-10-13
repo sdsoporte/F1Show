@@ -4123,3 +4123,85 @@ does; they matter only to whoever reads the error text. Also worth keeping: the 
 **101** entries in `__all__` against this branch's **93**, and the difference is simply that its tree
 carries eight booth exports — **the third time this session that two apparently conflicting numbers
 turned out to be two trees**, so a per-tree count must always travel with its tree.
+
+### F14 — Wall-clock playback: the mode learns to wait for the clock
+
+- [ ] **Authorized 2026-10-14.** User, choosing this over the two alternatives offered: **"Unidad propia,
+  offline y ahora"**. The requirement it answers is the user's own words below. It covers **no** live or model
+  call, **no** credential, **no** purchase, no fixture capture, no change to the booth, the collector, the
+  citation surface or the request cadence, and no packaging. It can land **before F11-F13** because it needs no
+  subscription: every recorded event already carries its real timestamp, so the timing machinery is free.
+- **Objective.** The pipeline consumes a recorded session **at the rate it happened**: the event at offset 0 is
+  released at 0, the one at 1:34:23.754 at 1:34:23.754, so a run can be watched as a race is watched. Today
+  replay is **unpaced** — records come back in a total order and are consumed as fast as they are read, which
+  is precisely what makes a replay reproduce the transcript byte for byte.
+- **The three timing concerns, which is what the decision turned on.** (1) The **request** cadence — how often
+  the writer asks the provider, ~3 s in live — exists in `request_policy.py` and its live value belongs to F13.
+  (2) The **consumption** cadence — how fast the pipeline hands events to the booth — is **unbuilt and
+  unowned**, and it is the one this unit builds. (3) **End-to-end latency**, event to aired line, is the ≤ 8
+  second budget, measured at F13. Naming them apart is part of this unit's record because conflating them is
+  what made the requirement look gated on money when only one of the three is.
+- **The seam is already in the repository, measured rather than assumed.** `ports.MonotonicClock` declares
+  `monotonic()` and `async sleep(seconds)` and its own docstring says it is *"deliberately a different seam
+  from `Clock`"*, because pacing measures an **elapsed duration** while `Clock` reports the UTC instant an
+  observation is stamped with; `fakes.FakeMonotonicClock` advances only when someone sleeps on it, records
+  every wait exactly, and refuses a negative sleep. So this unit adds **no port**: what is missing is the
+  policy that decides how long to wait, and nothing else.
+- **Design decisions, settled before the first source write.** (1) **Placement:** a new pure module
+  `src/f1show/pacing.py`, which decides **how long to wait** and never waits itself — the wait is delegated to
+  the injected `MonotonicClock`, and the module knows nothing of the booth, the collector, HTTP or the store.
+  Rejected: pacing inside `run.py`, which would bury a testable rule in the loop F10 declares clock-free, and
+  pacing inside the source, which would make the collector's determinism depend on time. (2) **What is
+  paced:** the **event**, because the requirement is that the commentary advances with the race; the offset is
+  `event_time − origin` over the declared scale, where the **origin is the run's own earliest known event
+  instant** rather than the session's `date_start`, so a run that starts mid-session paces from its own first
+  event. (3) **Unknown timestamps:** an event whose own timestamp is unknown is released **immediately after
+  the previous one, with no wait**, and that is declared rather than guessed — the corpus already holds such
+  members (the null-timestamp `laps[0]` orphan, and `stints` carries no timestamp field at all) and inventing
+  "now" for them would assert a fact the data does not have. (4) **The time scale:** a declared **positive
+  float, default 1.0**, injected with the run's other parameters, never read from the environment and never a
+  hidden constant, because a 94-minute race at scale 1.0 takes 94 minutes and a test must exercise the same
+  code path at a high scale. (5) **The invariant that makes it safe:** pacing changes **when** a turn airs and
+  **never what it says**, so at any scale the transcript must be **byte-identical** to the unpaced run — which
+  is why this unit touches neither the booth nor the citation surface.
+- **Acceptance, measurable on the fake clock with no real waiting.** Every release waits
+  `max(0, (event_time − origin)/scale − elapsed)`, so no wait is ever negative; the waits sum to the scaled
+  span within one tick; the run's total virtual duration equals `(last known instant − origin)/scale` within
+  one tick; and the transcript is byte-identical to the unpaced run. **The suite never really waits:** every
+  test injects `FakeMonotonicClock`, and a test that slept for real would be a defect of the test rather than
+  of the product.
+- **Invariants that must not move:** the byte-for-byte replay; the citation surface and the six declared
+  airing shapes; `run.py` reads no clock of its own (F10); the request cadence in `request_policy.py`
+  untouched; and the offline suite's runtime must not become a function of wall time.
+- **Specs, quoted and not summarised.**
+  - **S1.** *"Deberiamos poder iniciar desde la largada hasta el final de la carrera (1:34:23.754) en tiempo
+    real"* — a recorded session is consumed at its own rate.
+  - **S2.** *"y poder mientras se analizan los datos poder generar los comentarios y obtener un dialogo entre
+    Presentador y relator"* — the commentary is produced **during** the paced run, not afterwards, and the
+    two-seat dialogue is unchanged.
+  - **S3.** Pacing must not alter what is said: the transcript is byte-identical to the unpaced run at any
+    scale.
+  - **S4.** The suite must not wait in real time: the fake monotonic clock is the only clock a test injects.
+- **Tasks.**
+  - **T1** (S1, S3) — the pure pacing rule and its unit tests: offsets, the scale, non-negative waits, and the
+    unknown-timestamp rule. Commit expected: the rule and its tests.
+  - **T2** (S2) — wire it into the run so events are released at their offsets, with the dialogue and the
+    citation surface untouched. Commit expected: the wiring.
+  - **T3** (S3) — the byte-identical transcript test between a paced and an unpaced run. Commit expected: the
+    invariant's test.
+  - **T4** (S1, S4) — the end-to-end pacing measurement over a recorded session on the fake clock: the scaled
+    span, the tolerance, and zero real waiting. Commit expected: the measurement.
+  - **T5** — documentation: `ARCHITECTURE.md` stops saying that no unit claims wall-clock playback and names
+    **F14**, and the register is re-derived by subject at the closing revision. Commit expected: the record.
+- **Evidence budget and route:** the seam was mapped by the parent in one batch (both protocols and both fakes,
+  read rather than assumed); then **one work unit in its own worktree**, guided by test-first development with
+  a real RED (an unpaced run's elapsed virtual time is zero where the pacing rule requires the scaled span), an
+  independent read-only verifier, the provider-offered native route under RDD, and the register re-derived by
+  subject at the closing revision. Delivery stays a separate user decision.
+- **Log.**
+  - **L1.** The user, 2026-10-13, proposing the five-layer split and this capability in their own words:
+    *"Ejemplo: tenemos los datos de GP de Spain 2026 en datos. Deberiamos poder iniciar desde la largada hasta
+    el final de la carrera (1:34:23.754) en tiempo real y poder mientras se analizan los datos poder generar
+    los comentarios y obtener un dialogo entre Presentador y relator."*
+  - **L2.** The user asked what the open item meant, was given the three timing concerns apart, and chose
+    **"Unidad propia, offline y ahora"** over placing it inside F13 or leaving it declared open.
