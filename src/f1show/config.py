@@ -5,9 +5,10 @@ construction time. Two rules shape this module:
 
 * **Endpoints have documented defaults and are overridable.** They are safe
   because a wrong endpoint fails loudly on the first request.
-* **Model IDs, the commentary language and credentials have no defaults.** An
-  unset model ID or language is a configuration error, never a silent fallback
-  to whatever an SDK happens to offer.
+* **Model IDs and credentials have no defaults.** An unset model ID is a
+  configuration error, never a silent fallback to whatever an SDK happens to offer.
+* **The commentary language defaults to Argentine Spanish (es-AR).** This is a
+  declared audience choice, overridable by any explicit non-blank language.
 * **Local file paths have documented defaults and are overridable.** A path is
   not a secret and a wrong one fails loudly when the file cannot be opened,
   unlike a credential, whose absence would otherwise be a silent downgrade.
@@ -115,15 +116,17 @@ class ReplaySettings(_Section):
     @classmethod
     def _require_positive(cls, value: int | None) -> int | None:
         if value is not None and value <= 0:
-            raise ValueError(f"replay session selector must be a positive integer, got {value}")
+            raise ValueError(
+                f"replay session selector must be a positive integer, got {value}"
+            )
         return value
 
 
 class BoothSettings(_Section):
-    """The commentary booth: required model ID and required language."""
+    """The commentary booth: required model ID and overridable es-AR language."""
 
     model_id: Annotated[str, Field(min_length=1)]
-    language: Annotated[str, Field(min_length=1)]
+    language: Annotated[str, Field(min_length=1)] = "es-AR"
     provider: ModelProvider = ModelProvider.fake
 
     @field_validator("model_id", "language", mode="after")
@@ -146,7 +149,9 @@ class CredentialsSettings(_Section):
     openf1_password: SecretStr | None = None
     gemini_api_key: SecretStr | None = None
 
-    @field_validator("openf1_username", "openf1_password", "gemini_api_key", mode="before")
+    @field_validator(
+        "openf1_username", "openf1_password", "gemini_api_key", mode="before"
+    )
     @classmethod
     def _empty_string_is_missing(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
@@ -162,7 +167,9 @@ class TimeWindowSettings(_Section):
 
     @field_validator("since", "until", mode="after")
     @classmethod
-    def _require_timezone(cls, value: dt.datetime | None, info: ValidationInfo) -> dt.datetime | None:
+    def _require_timezone(
+        cls, value: dt.datetime | None, info: ValidationInfo
+    ) -> dt.datetime | None:
         if value is not None and (value.tzinfo is None or value.utcoffset() is None):
             raise ValueError(
                 f"{info.field_name} must be timezone-aware; naive datetimes are ambiguous and are rejected"
@@ -171,7 +178,11 @@ class TimeWindowSettings(_Section):
 
     @model_validator(mode="after")
     def _check_ordering(self) -> TimeWindowSettings:
-        if self.since is not None and self.until is not None and self.since > self.until:
+        if (
+            self.since is not None
+            and self.until is not None
+            and self.since > self.until
+        ):
             raise ValueError("window.since must not be later than window.until")
         return self
 
@@ -205,7 +216,8 @@ class Settings(BaseSettings):
                 "replay mode requires replay.session_key to be an explicit positive integer"
             )
         if self.mode is Mode.live and (
-            self.credentials.openf1_username is None or self.credentials.openf1_password is None
+            self.credentials.openf1_username is None
+            or self.credentials.openf1_password is None
         ):
             raise ValueError(
                 "live mode requires OpenF1 credentials: set credentials.openf1_username "

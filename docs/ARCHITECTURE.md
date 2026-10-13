@@ -176,8 +176,11 @@ These are decisions, not aspirations:
   commentary. The measurable acceptance limit F12 targets is **≤ 8 seconds**.
 - **Audience: the technical Formula 1 fan.** A data-dense register in which every
   claim is tied to session evidence.
-- **Commentary language: configurable, with no default fixed yet.** It is modelled as
-  typed configuration; its default is chosen before F09.
+- **Commentary language: Argentine Spanish (`es-AR`) by default.** Typed configuration
+  also selects `es-419`, `es-MX` or `es-ES`, with declared address forms and motorsport
+  vocabulary for both seats. Other explicit non-blank languages remain supported;
+  blank values are refused. This controls prompt instructions, not audio synthesis
+  or a guarantee of a real model's dialectal compliance.
 - **Model spend per session is not capped.** The system **measures and reports** usage;
   it does not enforce a per-session ceiling. The pilot ceiling is **approved at F13**
   against measured usage now that the subscription price is known.
@@ -212,6 +215,6 @@ that still gate this architecture are:
 - **Cost and quota policy** — request/token/concurrency bounds, retry and backoff, and
   the correction above that no hard stop exists until F13. Reported token counts alone
   do not constitute a hard spend limit.
-- **Commentary contract** — the language default (before F09) and output sink; the
+- **Commentary contract** — the output sink; the language default is `es-AR`, the
   audience is fixed as the technical F1 fan, and any measurable cost acceptance limit
   beyond the ≤ 8 second latency target is approved at F12/F13.

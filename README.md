@@ -41,8 +41,9 @@ explicit scope boundaries.
 
 **A replayable commentary pipeline runs today, entirely offline, and the CI enforces it.**
 
-Snapshot at `c7727f9` (the close of F09g): **957 tests passing** on Python 3.12 and 3.14, Ruff 0.17.0
-pinned, and the register-row guard green.
+Baseline snapshot at `c7727f9` (the close of F09g): **957 tests passing** on Python 3.12 and 3.14,
+Ruff 0.17.0 pinned, and the register-row guard green. The commentary-language configuration below
+extends that baseline; the project state map records the earlier snapshot.
 
 What exists, all of it offline from recorded fixtures with fake providers and an injected clock:
 
@@ -56,12 +57,34 @@ What exists, all of it offline from recorded fixtures with fake providers and an
 - `f1show.run.main`, which runs one replay session and prints its transcript reproducibly.
 
 What is **not** here, and why: Redis delivery and Docker packaging (deferred as a pair), tactical
-analysis and historical enrichment, the start aggregation, economy and tone, and the language variant —
+analysis and historical enrichment, the start aggregation, and economy and tone —
 all registered as design rather than missing. The live pilot is gated on a purchased subscription and has
 made zero calls. [`docs/PROJECT-STATE.md`](docs/PROJECT-STATE.md) draws the whole picture in one map.
 
 Audio, dashboards, social posting, multi-session operation and cloud deployment remain deliberately out
 of scope for this delivery.
+
+## Commentary language
+
+**Argentine Spanish (`es-AR`) is the default.** Omit `booth.language` to use it, or select another
+variant through that setting or `F1SHOW_BOOTH__LANGUAGE`, for example:
+
+```sh
+export F1SHOW_BOOTH__LANGUAGE=es-MX
+```
+
+| Code | Address forms | Declared motorsport vocabulary |
+| --- | --- | --- |
+| `es-AR` (default) | voseo: vos, tenés, podés | auto, neumáticos, nafta, boxes, auto de seguridad |
+| `es-419` | neutral Latin American Spanish, tuteo | auto, neumáticos, gasolina, pits, auto de seguridad |
+| `es-MX` | Mexican Spanish, tuteo | auto, llantas, gasolina, pits, auto de seguridad |
+| `es-ES` | tú / vosotros | coche, neumáticos, gasolina, boxes, coche de seguridad |
+
+Both seats receive the selected register. Driver and team names stay as supplied, and the citation
+protocol remains language-independent. Existing explicit languages such as `en` still work;
+an explicitly empty or whitespace-only language remains an error. The model ID is still required.
+Offline checks prove the configuration and prompt instructions, not a real model's dialectal
+compliance. No audio synthesis or live call is part of this change.
 
 ## Repository layout
 
@@ -108,6 +131,6 @@ These are unresolved and are tracked as explicit tasks rather than assumptions:
 - Available Gemini model IDs and GA status must be confirmed by enumerating with the
   account and checking current documentation before any commentary code is written.
   Model IDs are never guessed, and no price is attributable to a named model yet.
-- The commentary language default and the pilot ceiling that becomes the first hard
-  cost stop at F13 must be approved by the user. The audience is fixed as the
-  technical Formula 1 fan.
+- The pilot ceiling that becomes the first hard cost stop at F13 must be approved
+  by the user. The audience is fixed as the technical Formula 1 fan; the declared
+  commentary language default is `es-AR`.
