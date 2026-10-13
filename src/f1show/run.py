@@ -48,7 +48,8 @@ from f1show.config import BoothSettings, ModelProvider, Settings
 from f1show.dialogue import Transcript
 from f1show.fakes import ScriptedModelClient
 from f1show.gemini import GoogleGenAIClient
-from f1show.ports import Clock, ModelClient, ModelResponse
+from f1show.pacing import PacingSpec
+from f1show.ports import Clock, ModelClient, ModelResponse, MonotonicClock
 
 __all__ = [
     "DEFAULT_FIXTURE_DIR",
@@ -222,6 +223,8 @@ async def run_session(
     context_window_seconds: float = DEFAULT_CONTEXT_WINDOW_SECONDS,
     max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    monotonic: MonotonicClock | None = None,
+    pacing: PacingSpec | None = None,
 ) -> BoothResult:
     """Run one session's replayed records through the collector and the booth.
 
@@ -244,6 +247,8 @@ async def run_session(
         context_window_seconds=context_window_seconds,
         max_output_tokens=max_output_tokens,
         timeout_seconds=timeout_seconds,
+        monotonic=monotonic,
+        pacing=pacing,
         driver_directory=_driver_directory(payloads),
         championship=build_championship_source(payloads),
     )

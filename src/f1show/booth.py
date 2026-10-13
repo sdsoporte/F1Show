@@ -204,7 +204,8 @@ from f1show.mode import (
     render_mode_instruction,
     turn_mode,
 )
-from f1show.ports import Clock, ModelClient, ModelRequest
+from f1show.pacing import Pacer, PacingSpec
+from f1show.ports import Clock, ModelClient, ModelRequest, MonotonicClock
 from f1show.salience import SalienceSummary, render_salience, salience_summary
 from f1show.start import START_LAP_NUMBER, StartGroup, group_start_events
 
@@ -760,6 +761,8 @@ class CommentaryBooth:
         timeout_seconds: float,
         driver_directory: Mapping[int, tuple[str, str]],
         championship: ChampionshipSource,
+        monotonic: MonotonicClock | None = None,
+        pacing: PacingSpec | None = None,
     ) -> None:
         self._model = model
         self._driver_directory = dict(driver_directory)
@@ -779,6 +782,19 @@ class CommentaryBooth:
                 "the booth commentates exactly one session; the supplied events carry "
                 f"session keys {session_keys}"
             )
+        if monotonic is None and pacing is not None:
+            raise ValueError(
+                "a declared playback cadence needs its monotonic clock: pacing measures "
+                "an elapsed duration, and the observation clock cannot supply one"
+            )
+        if monotonic is not None and pacing is None:
+            raise ValueError(
+                "a monotonic clock without a declared playback cadence would pace "
+                "nothing: pass both or neither"
+            )
+        self._cadence: tuple[Pacer, MonotonicClock] | None = (
+            None if pacing is None or monotonic is None else (Pacer(self._events, pacing), monotonic)
+        )
         self._settings = settings
         self._clock = clock
         self._session_key = self._events[0].session_key
@@ -811,6 +827,11 @@ class CommentaryBooth:
         is not a turn says why. The one exception to one-model-call-per-event is the start
         group: its members' own turns are absorbed by a single start turn, and each absorbed
         event records ``COVERED_BY_START`` rather than vanishing from the record.
+
+        When a playback cadence was declared, each event is released at its own recorded
+        offset on the injected monotonic clock instead of immediately. The cadence changes
+        when a turn airs and never what it says, so the transcript is byte-identical to the
+        unpaced run at any scale; with no cadence declared nothing here waits at all.
         """
         turns: list[Turn] = []
         outcomes: list[BoothOutcome] = []
@@ -823,7 +844,14 @@ class CommentaryBooth:
             ),
             default=None,
         )
+        cadence = self._cadence
+        started = 0.0 if cadence is None else cadence[1].monotonic()
         for index, event in enumerate(self._events):
+            if cadence is not None:
+                pacer, clock = cadence
+                await clock.sleep(
+                    pacer.wait_seconds(event, elapsed_seconds=clock.monotonic() - started)
+                )
             reference = event_reference(event)
             if start is not None and start.covers(index):
                 # Decided by what actually happened to the group's turn, never by assumption:

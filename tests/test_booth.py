@@ -58,7 +58,7 @@ from f1show.collector import DetectedEvent
 from f1show.config import BoothSettings
 from f1show.dialogue import Speaker, Turn
 from f1show.events import EventType
-from f1show.fakes import FrozenClock, ScriptedModelClient
+from f1show.fakes import FakeMonotonicClock, FrozenClock, ScriptedModelClient
 from f1show.gemini import (
     ModelError,
     ModelRateLimitedError,
@@ -67,6 +67,7 @@ from f1show.gemini import (
     ModelTimeoutError,
     ModelTransportError,
 )
+from f1show.pacing import PacingSpec
 from f1show.ports import ModelClient, ModelRequest, ModelResponse
 
 UTC = dt.timezone.utc
@@ -227,8 +228,14 @@ def make_booth(
     timeout_seconds: float = 3.0,
     driver_directory: dict[int, tuple[str, str]] | None = None,
     championship: ChampionshipSource | None = None,
+    monotonic: FakeMonotonicClock | None = None,
+    pacing: PacingSpec | None = None,
 ) -> CommentaryBooth:
-    """Build the booth with the shipped frozen clock and explicit bounds."""
+    """Build the booth with the shipped frozen clock and explicit bounds.
+
+    A playback cadence is opt-in: with no ``pacing`` and no ``monotonic`` the booth
+    behaves exactly as it did before the cadence existed.
+    """
     if settings is None:
         settings = BoothSettings(model_id=TEST_MODEL_ID, language="en")
     return CommentaryBooth(
@@ -243,6 +250,8 @@ def make_booth(
         timeout_seconds=timeout_seconds,
         driver_directory={} if driver_directory is None else driver_directory,
         championship=EMPTY_CHAMPIONSHIP if championship is None else championship,
+        monotonic=monotonic,
+        pacing=pacing,
     )
 
 
@@ -3586,3 +3595,73 @@ async def test_the_championship_block_states_a_tied_position_as_tied() -> None:
         evidence_references(events[-1])
     ), "the tie wording is context: it must not add a reference"
     assert prompt.count(f1show.booth._CITATION_MARKER) == 2
+
+# --- F14: the wall-clock playback cadence, wired at the booth ---------------------------
+
+
+def events_at(*offsets: float) -> list[DetectedEvent]:
+    """One event per offset, stamped that many seconds after ``T0``."""
+    return [
+        detected(index=index, timestamp=T0 + dt.timedelta(seconds=offset))
+        for index, offset in enumerate(offsets)
+    ]
+
+
+def scripted_for(events: Sequence[DetectedEvent]) -> ScriptedModelClient:
+    """One valid answer per event, each citing that event's own first reference."""
+    return ScriptedModelClient(
+        [spoken(ref(item), f"Commentary on {item.record_index}.") for item in events]
+    )
+
+
+def paced(events: Sequence[DetectedEvent], model: ModelClient, *, scale: float) -> tuple[CommentaryBooth, FakeMonotonicClock]:
+    """A booth whose cadence runs on a virtual monotonic clock at a declared scale."""
+    monotonic = FakeMonotonicClock()
+    booth = make_booth(events, model, monotonic=monotonic, pacing=PacingSpec(scale=scale))
+    return booth, monotonic
+
+
+@pytest.mark.anyio
+async def test_a_paced_booth_waits_each_events_own_offset() -> None:
+    """The waits are the recorded offsets over the scale, one per event, in order."""
+    events = events_at(0.0, 10.0, 25.0)
+    booth, monotonic = paced(events, scripted_for(events), scale=1.0)
+    await bounded(booth.run(), hazard="the paced booth run")
+    assert monotonic.sleeps == [0.0, 10.0, 15.0]
+    # Each wait is the gap to its own target, so the waits sum to the run's scaled span.
+    assert sum(monotonic.sleeps) == pytest.approx(25.0)
+
+
+@pytest.mark.anyio
+async def test_the_scale_changes_the_waits_and_nothing_else() -> None:
+    """At forty times the speed the same run waits forty times less, event for event."""
+    events = events_at(0.0, 10.0, 25.0)
+    booth, monotonic = paced(events, scripted_for(events), scale=40.0)
+    await bounded(booth.run(), hazard="the fast paced run")
+    assert monotonic.sleeps == [0.0, 0.25, 0.375]
+
+
+@pytest.mark.anyio
+async def test_the_booth_refuses_a_cadence_it_cannot_keep() -> None:
+    """A scale with no clock, or a clock with no scale, is refused loudly."""
+    events = events_at(0.0)
+    model = scripted_for(events)
+    with pytest.raises(ValueError):
+        make_booth(events, model, pacing=PacingSpec(scale=1.0))
+    with pytest.raises(ValueError):
+        make_booth(events, model, monotonic=FakeMonotonicClock())
+
+
+@pytest.mark.anyio
+async def test_a_paced_run_and_an_unpaced_run_agree_turn_for_turn() -> None:
+    """The invariant: pacing changes when a turn airs, never what it says."""
+    events = events_at(0.0, 10.0, 25.0)
+    unpaced = await bounded(
+        make_booth(events, scripted_for(events)).run(), hazard="the unpaced run"
+    )
+    paced_booth, _ = paced(events, scripted_for(events), scale=50.0)
+    paced_result = await bounded(paced_booth.run(), hazard="the paced run")
+    assert paced_result.transcript.turns == unpaced.transcript.turns
+    assert [(item.kind, item.reason) for item in paced_result.outcomes] == [
+        (item.kind, item.reason) for item in unpaced.outcomes
+    ]
