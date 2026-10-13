@@ -4192,17 +4192,31 @@ turned out to be two trees**, so a per-tree count must always travel with its tr
   - **S3.** Pacing must not alter what is said: the transcript is byte-identical to the unpaced run at any
     scale.
   - **S4.** The suite must not wait in real time: the fake monotonic clock is the only clock a test injects.
-- **Tasks.**
-  - **T1** (S1, S3) — the pure pacing rule and its unit tests: offsets, the scale, non-negative waits, and the
-    unknown-timestamp rule. Commit expected: the rule and its tests.
-  - **T2** (S2) — wire it into the run so events are released at their offsets, with the dialogue and the
-    citation surface untouched. Commit expected: the wiring.
-  - **T3** (S3) — the byte-identical transcript test between a paced and an unpaced run. Commit expected: the
-    invariant's test.
-  - **T4** (S1, S4) — the end-to-end pacing measurement over a recorded session on the fake clock: the scaled
-    span, the tolerance, and zero real waiting. Commit expected: the measurement.
-  - **T5** — documentation: `ARCHITECTURE.md` stops saying that no unit claims wall-clock playback and names
+- **Tasks, with what each one observed rather than what it promised.**
+  - [x] **T1** (S1, S3) — the pure pacing rule and its unit tests: offsets, the scale, non-negative waits, and
+    the unknown-timestamp rule. **Observed:** RED was the absent module (collection error, exit 2), GREEN
+    **12** cases, the suite at **1005**, Ruff clean. One test of mine carried wrong arithmetic — it asserted the
+    third event's wait as its *target* rather than the gap beyond what had already elapsed — and the product was
+    right; the test was corrected with the reason written beside it. Commit `959bd39`.
+  - [x] **T2** (S2) — wire it into the run so events are released at their offsets, with the dialogue and the
+    citation surface untouched. **Observed:** the pacer is one object with two callers; **189** cases green
+    across the pacing and booth files; the section's own claim about the booth was corrected here, not later.
+    Commit `3a04440`.
+  - [x] **T3** (S3) — the byte-identical transcript test between a paced and an unpaced run. **Observed:**
+    **a pin with no RED**, and the register already documents that shape — the test passes as soon as the wiring
+    exists, because the cadence cannot alter what a turn says. Pinned at two scales: three synthetic events at
+    scale **50**, and the whole corpus at scale **1**. Commit `3a04440`.
+  - [x] **T4** (S1, S4) — the end-to-end pacing measurement over a recorded session on the fake clock: the
+    scaled span, the tolerance, and zero real waiting. **Observed, and this is the unit's own number:**
+    **1,648** waits, one per event, summing to **3,000+ seconds** of race at scale 1, over **1,629** aired turns,
+    and the two corpus runs — paced and unpaced — finish in **5.6 seconds of real time**. The run's own closing
+    bound is the proof that nothing slept for real: a run that waited would still be inside its first gaps when
+    the bound expired. Commit `3a04440`.
+  - [ ] **T5** — documentation: `ARCHITECTURE.md` stops saying that no unit claims wall-clock playback and names
     **F14**, and the register is re-derived by subject at the closing revision. Commit expected: the record.
+- **The suite at this unit's closing revision: 1013 passing**, Ruff 0.17.0 clean with the repository's own
+  selection, and the one warning reported is a third-party `DeprecationWarning` from `google/genai` under
+  Python 3.14 rather than anything this unit introduced.
 - **Evidence budget and route:** the seam was mapped by the parent in one batch (both protocols and both fakes,
   read rather than assumed); then **one work unit in its own worktree**, guided by test-first development with
   a real RED (an unpaced run's elapsed virtual time is zero where the pacing rule requires the scaled span), an

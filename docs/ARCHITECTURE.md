@@ -45,7 +45,7 @@ Five layers, in order. The first four are a pipeline over data at rest; the fift
 | 2 | **Normalization** | Validation, deduplication, provenance and source timestamps: *is this a well-formed record of our events?* | Every record becomes an `EventEnvelope` carrying a source timestamp and its provenance: strict toward our own vocabulary, tolerant toward the provider's fields. | `[built]` — the collector, across the recorded families |
 | 3 | **Interpretation** | What the data *means* for the race: gaps, pace, stints, pit windows; identity, records, historical context. | Interpretation emits **facts with their source fields**, and an estimate is labelled an assumption rather than a fact. | `[partial]` — salience, the championship context and driver identity exist; the tactical analyst (F06) and the historian (F07) do not |
 | 4 | **Commentary** | Deciding how to say it: turns, register, tone, language. | Every claim rests on a reference layer 3 supplied; the model adds language, never data. | `[built]` — the two-person booth and the model gateway |
-| 5 | **The mode** | Not a stage: **how the pipeline obtains its data, and what rate it is consumed at**. | Both sources sit behind one adapter boundary, so layers 2-4 cannot tell them apart. | `[partial]` — replay is built; live is deferred to F13, and **wall-clock playback** is the one piece neither mode has today |
+| 5 | **The mode** | Not a stage: **how the pipeline obtains its data, and what rate it is consumed at**. | Both sources sit behind one adapter boundary, so layers 2-4 cannot tell them apart. | `[partial]` — replay is built and **wall-clock playback is F14**, built and offline; live is deferred to F13 |
 
 **Two contracts hold the path together**, and both are contracts rather than code:
 
@@ -183,10 +183,11 @@ mode of operation the system is built and regression-tested in first.
   total order and are consumed as fast as they are read, which is exactly what makes a
   replay reproduce byte for byte. Real-time operation reads the same source at
   wall-clock rate — start at the lights and reach 1:34:23.754 in 1:34:23.754 — and the
-  seam for it exists, because the clock is injectable. The cadence itself is unbuilt,
-  and this document leaves its placement open rather than inventing an owner: live
-  access and the ≤ 8 second measurement are F13's, and a wall-clock replay is a third
-  thing no unit claims yet.
+  seam for it exists, because the clock is injectable. The cadence itself is **built: F14**, which is
+  offline and needs no subscription — it consumes a recorded session at the rate it happened, which is also
+  the cheapest rehearsal the live mode can get, because the timing machinery is the part a subscription does
+  not gate. Live access and the ≤ 8 second measurement remain F13's, and this document no longer leaves the
+  cadence's placement open.
 
 ### Live data is not free
 
