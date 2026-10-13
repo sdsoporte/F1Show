@@ -1103,8 +1103,11 @@ class CommentaryBooth:
         by an offline scripted response. The start turn is the one variant of the EVENT
         block: it covers a whole group of lap-1 rows, so the single driver line is
         replaced by the group's lap and row count, and its citable set is one identity per
-        member whose value is that member's own identity line. Every other block is built
-        exactly as it is for a single event.
+        member whose value is that member's own identity line. A start turn also carries a
+        declared START block of instruction text, which states that the turn is the start
+        and asks for the field by name; it names no reference and carries no bracket, so it
+        adds no citable surface, and it is emitted for the start turn only. Every other
+        block is built exactly as it is for a single event.
         """
         profile = _SPANISH_LANGUAGE_PROFILES.get(self._settings.language)
         language_instruction = (
@@ -1165,6 +1168,24 @@ class CommentaryBooth:
                 *render_championship(championship, self._driver_directory).splitlines(),
             ]
         )
+        if group is not None:
+            # Emitted for the start turn only, as instruction text: it names no reference and
+            # carries no bracket, so it adds no citable surface and the scanner sees nothing
+            # new. It exists because the group's event block deliberately replaces the driver
+            # line with a row count, and a measured live start turn then described "a new
+            # lap" while citing one member out of twenty. The declaration says what the turn
+            # is and what its subject is; it never says "the race", because the booth knows
+            # only the session key and a first lap is the start of any session.
+            lines.extend(
+                [
+                    "",
+                    "START:",
+                    "This turn is the start: the first lap of the "
+                    f"{len(group.members)} cars listed above, aggregated into one turn.",
+                    "Put the field on the line: name the drivers this turn covers instead "
+                    "of describing a lap in general.",
+                ]
+            )
         lines.extend(
             ["", "EVENT:", f"type: {event.event_type.value}", f"family: {event.family}"]
         )
