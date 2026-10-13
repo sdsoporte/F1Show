@@ -135,8 +135,9 @@ def load_recorded_session(
     ``championship_drivers``, ``championship_teams`` and ``session_result`` - are loaded
     for the same reason and under the same rule: they derive no event either, and the
     booth's bounded championship block derives its per-moment picture from them. Every
-    record is filtered to ``session_key`` here rather than assumed to be, because
-    ``sessions.json`` holds the whole season. A missing directory, a missing family file or
+    record is filtered to ``session_key`` here rather than assumed to be, because a recorded
+    ``sessions.json`` may hold far more than one session's rows: the first corpus's file is the whole
+    season listing while the second's holds a single row. A missing directory, a missing family file or
     a session with no records is a typed failure, never a silently empty payload.
     """
     directory = pathlib.Path(fixtures_dir)
