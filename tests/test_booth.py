@@ -49,6 +49,11 @@ from f1show.booth import (
     event_reference,
     evidence_references,
 )
+from f1show.championship import (
+    RECORDED_SEASON,
+    ChampionshipSource,
+    build_championship_source,
+)
 from f1show.collector import DetectedEvent
 from f1show.config import BoothSettings
 from f1show.dialogue import Speaker, Turn
@@ -86,9 +91,27 @@ BOOTH_SOURCE = Path(inspect.getsourcefile(f1show.booth) or "").resolve()
 #: exactly the supplied references and no other.
 REFERENCE_TOKEN = re.compile(r"[a-z_]+\[\d+\]\.[a-z0-9_]+")
 
-#: Every bracket character. The CONTEXT block is declared to carry none of them, so a
-#: hostile recorded message cannot smuggle a reference-shaped token into the prompt.
+#: Every bracket character. The CONTEXT and CHAMPIONSHIP blocks are declared to carry none
+#: of them, so a hostile recorded message cannot smuggle a reference-shaped token in.
 BRACKETS = "[](){}"
+
+#: The declared championship-block heading. Like the MODE block, it is instruction context
+#: and never evidence: it adds no bracket and no reference-shaped token.
+CHAMPIONSHIP_HEADING = "CHAMPIONSHIP:"
+
+#: An empty championship source for the booths that carry no championship rows at all.
+EMPTY_CHAMPIONSHIP = build_championship_source({}, season=RECORDED_SEASON)
+
+
+def championship_block(prompt: str) -> str:
+    """The CHAMPIONSHIP block of an assembled prompt, from its header to the next blank line.
+
+    Splitting on the header fails loudly when the block is absent, which is the RED this
+    section needs: a prompt without the block must not quietly pass a membership check.
+    """
+    _, after = prompt.split(CHAMPIONSHIP_HEADING, 1)
+    block, _ = after.split("\n\n", 1)
+    return CHAMPIONSHIP_HEADING + block
 
 
 def context_block(prompt: str) -> str:
@@ -203,6 +226,7 @@ def make_booth(
     max_output_tokens: int = 64,
     timeout_seconds: float = 3.0,
     driver_directory: dict[int, tuple[str, str]] | None = None,
+    championship: ChampionshipSource | None = None,
 ) -> CommentaryBooth:
     """Build the booth with the shipped frozen clock and explicit bounds."""
     if settings is None:
@@ -218,6 +242,7 @@ def make_booth(
         max_output_tokens=max_output_tokens,
         timeout_seconds=timeout_seconds,
         driver_directory={} if driver_directory is None else driver_directory,
+        championship=EMPTY_CHAMPIONSHIP if championship is None else championship,
     )
 
 
@@ -2630,6 +2655,7 @@ def test_every_bound_must_be_in_range(keyword: str, value: float) -> None:
         # Supplied so a new required keyword cannot make the guard pass vacuously through
         # a TypeError instead of the in-range refusal this test is about.
         "driver_directory": {},
+        "championship": EMPTY_CHAMPIONSHIP,
     }
     arguments[keyword] = value
     with pytest.raises((ValueError, TypeError)):
@@ -2808,3 +2834,282 @@ async def test_a_clearing_race_control_row_does_not_take_the_priority_slot() -> 
     order = await spoken_order(booth, hazard="the clearing-row band run")
 
     assert order == (Speaker.lead, Speaker.color, Speaker.lead)
+
+
+# --- The championship picture: the bounded context block (F09g U3b) --------------
+
+
+#: The three-driver, two-team source these booth tests share. Driver 1 and 3 race for
+#: Alpha, driver 2 for Beta; only drivers 1 and 2 carry a `session_result` row.
+CHAMPIONSHIP_DRIVERS = [
+    {"driver_number": 1, "position_start": 1, "points_start": 100.0},
+    {"driver_number": 2, "position_start": 2, "points_start": 90.0},
+    {"driver_number": 3, "position_start": 3, "points_start": 80.0},
+]
+CHAMPIONSHIP_TEAMS = [
+    {"team_name": "Alpha", "position_start": 1, "points_start": 200.0},
+    {"team_name": "Beta", "position_start": 2, "points_start": 150.0},
+]
+CHAMPIONSHIP_RESULTS = [
+    {"driver_number": 1, "position": 1, "points": 25.0},
+    {"driver_number": 2, "position": 2, "points": 18.0},
+]
+CHAMPIONSHIP_DIRECTORY = {
+    1: ("One Racer", "Alpha"),
+    2: ("Two Racer", "Beta"),
+    3: ("Three Racer", "Alpha"),
+}
+
+
+def championship_source() -> ChampionshipSource:
+    return build_championship_source(
+        {
+            "championship_drivers": CHAMPIONSHIP_DRIVERS,
+            "championship_teams": CHAMPIONSHIP_TEAMS,
+            "session_result": CHAMPIONSHIP_RESULTS,
+        },
+        season=RECORDED_SEASON,
+    )
+
+
+@pytest.mark.anyio
+async def test_the_prompt_carries_the_championship_picture_in_a_block() -> None:
+    """RED before F09g U3b: the booth never told a seat what is at stake.
+
+    One completed lap and two position reads settle the order at 1 then 2, so driver 1
+    scores 25 (100 + 25 = 125) and driver 2 scores 18 (90 + 18 = 108). The last turn is
+    driver 2's, so their block reads P2 on 108 points, a 17-point gap to driver 1, and
+    their team Beta on 150 + 18 = 168, second behind Alpha's 200 + 25 = 225. The block is
+    plain prose: no bracket and no reference-shaped token, so it cannot add a citation.
+    """
+    events = (
+        detected(
+            index=0,
+            event_type=EventType.LAP_COMPLETED,
+            family="laps",
+            evidence={"lap_number": 1, "lap_duration": 100.0},
+            driver_number=1,
+        ),
+        detected(index=1, evidence={"position": 1}, driver_number=1),
+        detected(index=2, evidence={"position": 2}, driver_number=2),
+    )
+    model = ScriptedModelClient(answered(events, ["L0.", "L1.", "L2."]))
+    booth = make_booth(
+        events,
+        model,
+        driver_directory=CHAMPIONSHIP_DIRECTORY,
+        championship=championship_source(),
+    )
+
+    await bounded(booth.run(), hazard="the championship-block run")
+
+    prompt = model.requests[-1].prompt
+    block = championship_block(prompt)
+    assert "Two Racer" in block and "P2 on 108 points" in block, block
+    assert "One Racer" in block and "125 points" in block, block
+    assert "gap of 17 points" in block, block
+    assert "Beta" in block and "P2 on 168 points" in block, block
+    assert not any(character in block for character in BRACKETS), block
+    assert REFERENCE_TOKEN.search(block) is None, block
+    assert set(REFERENCE_TOKEN.findall(prompt)) == set(
+        evidence_references(events[-1])
+    ), "the championship block is context: it must not add a reference"
+    assert prompt.count(f1show.booth._CITATION_MARKER) == 2
+
+
+@pytest.mark.anyio
+async def test_the_championship_block_states_a_driver_with_no_championship_row() -> (
+    None
+):
+    """An unresolvable driver is stated in prose, never silently dropped or guessed."""
+    events = (
+        detected(
+            index=0,
+            event_type=EventType.LAP_COMPLETED,
+            family="laps",
+            evidence={"lap_number": 1, "lap_duration": 100.0},
+            driver_number=1,
+        ),
+        detected(index=1, evidence={"position": 1}, driver_number=1),
+        detected(
+            index=2,
+            event_type=EventType.PIT_STOP,
+            family="pit",
+            evidence={"lap_number": 3, "pit_duration": 30.0},
+            driver_number=4,
+        ),
+    )
+    model = ScriptedModelClient(answered(events, ["L0.", "L1.", "L2."]))
+    booth = make_booth(
+        events,
+        model,
+        driver_directory=CHAMPIONSHIP_DIRECTORY,
+        championship=championship_source(),
+    )
+
+    await bounded(booth.run(), hazard="the row-less-driver block run")
+
+    block = championship_block(model.requests[-1].prompt)
+    assert "driver 4" in block, block
+    assert "no championship checkpoint" in block, block
+    assert not any(character in block for character in BRACKETS), block
+    assert REFERENCE_TOKEN.search(block) is None, block
+
+
+@pytest.mark.anyio
+async def test_the_championship_block_states_the_pre_race_picture_before_a_lap() -> (
+    None
+):
+    """Before any completed lap the block reports the source's own pre-race row."""
+    event = detected(index=0, evidence={"position": 2}, driver_number=2)
+    model = ScriptedModelClient([spoken(ref(event), "Two Racer is P2.")])
+    booth = make_booth(
+        [event],
+        model,
+        driver_directory=CHAMPIONSHIP_DIRECTORY,
+        championship=championship_source(),
+    )
+
+    await bounded(booth.run(), hazard="the pre-race championship block run")
+
+    block = championship_block(model.requests[0].prompt)
+    assert "pre-race" in block, block
+    assert "P2 on 90 points" in block, block
+    assert "Beta" in block and "P2 on 150 points" in block, block
+    assert not any(character in block for character in BRACKETS), block
+    assert REFERENCE_TOKEN.search(block) is None, block
+
+
+@pytest.mark.anyio
+async def test_two_renders_are_byte_identical_with_the_championship_block() -> None:
+    events = (
+        detected(
+            index=0,
+            event_type=EventType.LAP_COMPLETED,
+            family="laps",
+            evidence={"lap_number": 1, "lap_duration": 100.0},
+            driver_number=1,
+        ),
+        detected(index=1, evidence={"position": 1}, driver_number=1),
+        detected(index=2, evidence={"position": 2}, driver_number=2),
+    )
+    texts = ["L0.", "L1.", "L2."]
+    first = ScriptedModelClient(answered(events, texts))
+    second = ScriptedModelClient(answered(events, texts))
+
+    await bounded(
+        make_booth(
+            events,
+            first,
+            driver_directory=CHAMPIONSHIP_DIRECTORY,
+            championship=championship_source(),
+        ).run(),
+        hazard="the first championship render run",
+    )
+    await bounded(
+        make_booth(
+            events,
+            second,
+            driver_directory=CHAMPIONSHIP_DIRECTORY,
+            championship=championship_source(),
+        ).run(),
+        hazard="the second championship render run",
+    )
+
+    assert [request.prompt for request in first.requests] == [
+        request.prompt for request in second.requests
+    ]
+
+
+#: A source with a deliberate driver tie (drivers 1 and 2 both start on 100, and both keep
+#: the total because neither scores in the running order) and a deliberate team tie (Alpha
+#: and Beta both start on 200).
+TIED_CHAMPIONSHIP_DRIVERS = [
+    {"driver_number": 1, "position_start": 1, "points_start": 100.0},
+    {"driver_number": 2, "position_start": 2, "points_start": 100.0},
+    {"driver_number": 3, "position_start": 3, "points_start": 80.0},
+]
+TIED_CHAMPIONSHIP_TEAMS = [
+    {"team_name": "Alpha", "position_start": 1, "points_start": 200.0},
+    {"team_name": "Beta", "position_start": 2, "points_start": 200.0},
+    {"team_name": "Gamma", "position_start": 3, "points_start": 100.0},
+]
+TIED_CHAMPIONSHIP_RESULTS = [
+    {"driver_number": 1, "position": 1, "points": 25.0},
+    {"driver_number": 2, "position": 2, "points": 18.0},
+]
+TIED_CHAMPIONSHIP_DIRECTORY = {
+    1: ("One Racer", "Alpha"),
+    2: ("Two Racer", "Beta"),
+    3: ("Three Racer", "Gamma"),
+}
+
+
+def tied_championship_source() -> ChampionshipSource:
+    return build_championship_source(
+        {
+            "championship_drivers": TIED_CHAMPIONSHIP_DRIVERS,
+            "championship_teams": TIED_CHAMPIONSHIP_TEAMS,
+            "session_result": TIED_CHAMPIONSHIP_RESULTS,
+        },
+        season=RECORDED_SEASON,
+    )
+
+
+@pytest.mark.anyio
+async def test_the_championship_block_states_a_tied_position_as_tied() -> None:
+    """RED before U3b-R1: the block presented a tie convention as a settled position.
+
+    Driver 3's own position event leaves the running order at just driver 3, so driver 3
+    scores 25 (80 + 25 = 105) and is alone; drivers 1 and 2 keep 100 each and share a
+    position. The later pit stop is driver 1's, so its block must state the 100-point tie
+    instead of a bare settled position - while driver 3's earlier block keeps the bare form
+    byte for byte. The team line is treated the same way: Alpha and Beta both start on 200,
+    so Alpha's own line is tied too, and Gamma's lone 100 is not.
+    """
+    events = (
+        detected(
+            index=0,
+            event_type=EventType.LAP_COMPLETED,
+            family="laps",
+            evidence={"lap_number": 1, "lap_duration": 100.0},
+            driver_number=3,
+        ),
+        detected(index=1, evidence={"position": 1}, driver_number=3),
+        detected(
+            index=2,
+            event_type=EventType.PIT_STOP,
+            family="pit",
+            evidence={"lap_number": 3, "pit_duration": 30.0},
+            driver_number=1,
+        ),
+    )
+    model = ScriptedModelClient(answered(events, ["L0.", "L1.", "L2."]))
+    booth = make_booth(
+        events,
+        model,
+        driver_directory=TIED_CHAMPIONSHIP_DIRECTORY,
+        championship=tied_championship_source(),
+    )
+
+    await bounded(booth.run(), hazard="the tied-championship block run")
+
+    lone_block = championship_block(model.requests[1].prompt)
+    assert "P1 on 105 points in the season championship" in lone_block, lone_block
+    assert "Gamma is P3 on 100 points" in lone_block, lone_block
+    assert "tied with" not in lone_block, lone_block
+
+    tied_block = championship_block(model.requests[-1].prompt)
+    assert "P2 on 100 points, tied with 1 other driver" in tied_block, tied_block
+    assert "P2 on 100 points in the season championship" not in tied_block, (
+        "a tied position must not be rendered in the bare settled form"
+    )
+    assert "Alpha is P1 on 200 points, tied with 1 other team" in tied_block, tied_block
+
+    prompt = model.requests[-1].prompt
+    assert not any(character in tied_block for character in BRACKETS), tied_block
+    assert REFERENCE_TOKEN.search(tied_block) is None, tied_block
+    assert set(REFERENCE_TOKEN.findall(prompt)) == set(
+        evidence_references(events[-1])
+    ), "the tie wording is context: it must not add a reference"
+    assert prompt.count(f1show.booth._CITATION_MARKER) == 2
