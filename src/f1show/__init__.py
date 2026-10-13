@@ -12,6 +12,14 @@ stop exists before F13.
 
 from __future__ import annotations
 
+from f1show.audio import (
+    VOICE_MAP,
+    AudioSynthesizer,
+    EdgeTTSAudioSynthesizer,
+    FakeAudioSynthesizer,
+    rate_for_mode,
+    resolve_voice,
+)
 from f1show.auth import (
     DEFAULT_OPENF1_TOKEN_URL,
     TOKEN_REFRESH_SKEW_SECONDS,
@@ -168,4 +176,7 @@ __all__ = [
     "run_session", "native_base_url", "main",
     "load_recorded_session", "RecordedSourceError", "RecordedSourceMissingError",
     "RecordedSessionNotFoundError",
+    # Audio synthesis
+    "AudioSynthesizer", "EdgeTTSAudioSynthesizer", "FakeAudioSynthesizer",
+    "VOICE_MAP", "rate_for_mode", "resolve_voice",
 ]
