@@ -57,6 +57,7 @@ from f1show.run import (
     native_base_url,
     run_session,
 )
+from f1show.start import group_start_events
 
 UTC = dt.timezone.utc
 SESSION_KEY = 9617
@@ -92,6 +93,12 @@ FABRICATED_NATIVE_RESPONSE = {
 #: is end-anchored: a numbered value line, the old ``reference = value`` line and a bulleted
 #: rule line are all left alone, and only a supplied reference is ever cited.
 _PROMPT_REFERENCE = re.compile(r"^-\s+([a-z_]+\[\d+\]\.[a-z0-9_]+)\s*$", re.MULTILINE)
+
+#: The start turn's declared surface is one **identity** per member -- ``- laps[10]``, with no
+#: field -- because the group turn names whole events rather than single fields. It is a
+#: narrower shape than the line above, and the double accepts it for the same reason it
+#: accepts the other: the booth offered it in this very prompt.
+_PROMPT_IDENTITY = re.compile(r"^-\s+([a-z_]+\[\d+\])\s*$", re.MULTILINE)
 
 #: Any reference-shaped token anywhere in the prompt: ``family[record].field``. The set of
 #: these must equal the current event's supplied references, so the MODE instruction text
@@ -174,6 +181,12 @@ class EvidenceEchoModelClient:
     reads the reference list the booth actually supplied and cites its first entry. It
     therefore cannot answer with an invented source, and a valid turn is produced for
     every call - which is what makes the turn-order and evidence assertions meaningful.
+
+    Two offered shapes exist and both are the booth's own: a field reference
+    (``- family[record].field``) for a single-event turn, and a bare identity
+    (``- family[record]``) for the start turn, whose declared surface is one identity per
+    member. The field form is tried first, so every single-event prompt behaves exactly as
+    it did before; when neither shape is offered the double still refuses.
     """
 
     def __init__(self) -> None:
@@ -181,7 +194,9 @@ class EvidenceEchoModelClient:
 
     async def generate(self, request: ModelRequest) -> ModelResponse:
         self.requests.append(request)
-        match = _PROMPT_REFERENCE.search(request.prompt)
+        match = _PROMPT_REFERENCE.search(request.prompt) or _PROMPT_IDENTITY.search(
+            request.prompt
+        )
         if match is None:
             raise AssertionError(
                 "the booth supplied no reference to cite; the fake refuses to invent one"
@@ -315,6 +330,14 @@ async def test_run_session_turns_the_recorded_fixtures_into_an_evidence_carrying
     turns = result.transcript.turns
     events = recorded_events()
     references = {event_reference(event) for event in events}
+    group = group_start_events(events)
+    assert group is not None and len(group.members) == RECORDED_LAP_ONE_EVENTS
+    start_reference = event_reference(events[group.position])
+    member_references = {
+        reference
+        for member in group.members
+        for reference in evidence_references(member)
+    }
     assert result.transcript.session_key == SESSION_KEY
     assert result.transcript.language == "en"
     assert turns, "the recorded session must air at least one turn"
@@ -326,6 +349,13 @@ async def test_run_session_turns_the_recorded_fixtures_into_an_evidence_carrying
         assert turn.model_id == TEST_MODEL_ID
         assert turn.event_ref in references
         assert turn.evidence
+        if turn.event_ref == start_reference:
+            # F09i's declared exception, asserted rather than waived: the start turn draws
+            # its evidence from the lap-1 members it aggregates, so its references belong to
+            # those events and not to the single event whose identity its ``event_ref``
+            # carries.
+            assert set(turn.evidence) <= member_references
+            continue
         assert all(
             reference.startswith(f"{turn.event_ref}.") for reference in turn.evidence
         )
@@ -392,6 +422,11 @@ async def test_run_session_threads_the_recorded_driver_directory_into_the_prompt
     directory cannot resolve renders the declared fallback, never a half-join. The
     acceptance is unchanged: every aired turn still cites only references its own event
     supplied, so the join creates no newly citable token.
+
+    F09i added one exception, asserted rather than waived: the **start turn** covers a whole
+    group, so it draws no single ``driver:`` line. Its members' identities arrive instead as
+    the VALUES of their own references, and each of those values must be a directory entry or
+    the declared fallback, which keeps the no-half-join guarantee on the new surface too.
     """
     payloads = load_recorded_session(SESSION_KEY)
     directory = {
@@ -416,13 +451,37 @@ async def test_run_session_threads_the_recorded_driver_directory_into_the_prompt
         f"driver: {full_name} ({team_name}, #{number})"
         for number, (full_name, team_name) in directory.items()
     }
+    events = recorded_events()
+    group = group_start_events(events)
+    assert group is not None and len(group.members) == RECORDED_LAP_ONE_EVENTS
+    start_marker = (
+        f"rows: {RECORDED_LAP_ONE_EVENTS} lap-1 rows aggregated into this one turn"
+    )
     joined_lines: list[str] = []
     for request in model.requests:
         driver_lines = [
             line for line in request.prompt.splitlines() if line.startswith("driver:")
         ]
+        if start_marker in request.prompt:
+            assert driver_lines == [], (
+                "the group turn names no single driver; it renders one identity per member "
+                f"as a value instead, got {driver_lines!r}"
+            )
+            _, _, values = request.prompt.partition("VALUES, in the same order")
+            offered = [
+                line.split(". ", 1)[1]
+                for line in values.splitlines()
+                if line[:1].isdigit() and ". " in line
+            ]
+            assert len(offered) == RECORDED_LAP_ONE_EVENTS, offered
+            for value in offered:
+                assert value == "unknown" or f"driver: {value}" in expected, (
+                    "a group identity must be a directory entry or the declared fallback; "
+                    f"got {value!r}"
+                )
+            continue
         assert len(driver_lines) == 1, (
-            "every prompt carries exactly one driver line; got "
+            "every single-event prompt carries exactly one driver line; got "
             f"{driver_lines!r} in:\n{request.prompt}"
         )
         (line,) = driver_lines
@@ -435,10 +494,19 @@ async def test_run_session_threads_the_recorded_driver_directory_into_the_prompt
         "the recorded directory must resolve at least one aired event, or the join is "
         "never exercised through the run path"
     )
-    references = {event_reference(event) for event in recorded_events()}
+    references = {event_reference(event) for event in events}
+    start_reference = event_reference(events[group.position])
+    member_references = {
+        reference
+        for member in group.members
+        for reference in evidence_references(member)
+    }
     for turn in result.transcript.turns:
         assert turn.event_ref in references
         assert turn.evidence
+        if turn.event_ref == start_reference:
+            assert set(turn.evidence) <= member_references
+            continue
         assert all(
             reference.startswith(f"{turn.event_ref}.") for reference in turn.evidence
         )
@@ -784,6 +852,11 @@ RECORDED_FAMILY_COUNTS = {
 RECORDED_CAUTION_EVENTS = 9
 RECORDED_SEAT_CHANGES = 1023
 
+#: The recorded session's lap-1 rows: the start aggregation's own subject, one per driver.
+#: F09i's aggregation replaces those twenty turns with one start turn and records a
+#: ``covered_by_start`` outcome for each of the other nineteen.
+RECORDED_LAP_ONE_EVENTS = 20
+
 
 def test_the_project_default_recorded_directory_resolves_to_the_recorded_corpus() -> (
     None
@@ -1068,10 +1141,14 @@ async def test_the_recorded_session_seats_are_deliberate_once_the_caution_band_f
     The collector emits ``RACE_CONTROL`` for every race-control row, so the band's
     ``FLAG``/``SAFETY_CAR``/``VIRTUAL_SAFETY_CAR`` types matched nothing and the recorded
     seats were strict alternation. With the derived caution signal consulted, a recorded
-    caution row hands the lead the next slot, which flips the phase nine times and changes
-    **1,023** of the 1,648 aired seats. Only the seat changes: the number of turns, their
-    order, their text and their evidence are untouched, so this is the seat band and not a
-    transcript-shape change.
+    caution row hands the lead the next slot, which flips the phase nine times and changes a
+    pinned number of aired seats. Only the seat changes: the order, text and evidence of the
+    turns are untouched, so this is the seat band and not a transcript-shape change.
+
+    F09i shortened that transcript by one turn per covered lap-1 member, so the pinned number
+    of changed seats was **re-measured** rather than carried, and the two structural
+    assertions below (non-alternation, and a lead-lead pair at a recorded caution) are what
+    prove the band still fires on the same events.
     """
     events = recorded_events()
     cautions = [event for event in events if announces_caution(event)]
@@ -1105,11 +1182,19 @@ async def test_the_recorded_session_seats_are_deliberate_once_the_caution_band_f
         actual is not expected for actual, expected in zip(seats, strict, strict=True)
     )
     assert changed == RECORDED_SEAT_CHANGES
-    assert len(turns) == len(events), (
+    # F09i: the start turn replaces the twenty lap-1 turns with one, so the transcript is
+    # shorter by one turn per covered member while the outcomes stay one per event.
+    group = group_start_events(events)
+    assert group is not None and len(group.members) == RECORDED_LAP_ONE_EVENTS
+    attempted = [
+        event for index, event in enumerate(events) if index not in group.covered
+    ]
+    start_reference = event_reference(events[group.position])
+    assert len(turns) == len(attempted), (
         "the caution band changes the seat, never the transcript shape"
     )
     assert [turn.event_ref for turn in turns] == [
-        event_reference(event) for event in events
+        event_reference(event) for event in attempted
     ]
     # The MODE block is instruction text, and the prompt-shape pins hold on every one of
     # the recorded session's prompts: the declared line is present, the citation marker
@@ -1117,8 +1202,10 @@ async def test_the_recorded_session_seats_are_deliberate_once_the_caution_band_f
     # token. (The whole-prompt token set also carries prior turns' own cited references, which
     # is the pre-existing context contract, so the new-block check is what proves no leak.)
     marker = f1show.booth._CITATION_MARKER
-    assert len(model.requests) == len(events), "one prompt per aired recorded event"
-    for event, request in zip(events, model.requests, strict=True):
+    assert len(model.requests) == len(attempted), (
+        "one prompt per attempted recorded event"
+    )
+    for event, request in zip(attempted, model.requests, strict=True):
         lines = request.prompt.splitlines()
         start = next(
             index for index, line in enumerate(lines) if line.startswith("MODE:")
@@ -1127,6 +1214,19 @@ async def test_the_recorded_session_seats_are_deliberate_once_the_caution_band_f
         assert not any(character in block for character in BRACKETS), block
         assert REFERENCE_TOKEN.search(block) is None, block
         assert request.prompt.count(marker) == 2
+        if event_reference(event) == start_reference:
+            # The group turn's declared surface is one identity per member, so what it offers
+            # is the identity form rather than a field reference: a narrower shape, and the
+            # whole point of the decision this unit records. The check is scoped to the
+            # EVIDENCE block on purpose: the prompt's whole token set also carries the
+            # previous turns' own cited references, which is the pre-existing context
+            # contract and not this turn's offered surface.
+            for member in group.members:
+                assert f"- {event_reference(member)}" in request.prompt
+            _, _, after_marker = request.prompt.partition("EVIDENCE:")
+            evidence_block, _, _ = after_marker.partition("VALUES, in the same order")
+            assert REFERENCE_TOKEN.findall(evidence_block) == [], evidence_block
+            continue
         assert set(evidence_references(event)) <= set(
             REFERENCE_TOKEN.findall(request.prompt)
         ), "the event's own references are still offered"

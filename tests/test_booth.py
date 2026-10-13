@@ -394,6 +394,328 @@ async def test_explicit_english_keeps_the_previous_language_prompt() -> None:
     assert "LANGUAGE:" not in model.requests[0].prompt
 
 
+# --- The start aggregation ------------------------------------------------------
+
+
+def start_row(index: int, *, driver: int, duration: float = 90.0) -> DetectedEvent:
+    """One recorded lap-1 row: the family, type and evidence the collector derives for it."""
+    return detected(
+        index=index,
+        event_type=EventType.LAP_COMPLETED,
+        family="laps",
+        evidence={"lap_number": 1, "lap_duration": duration},
+        driver_number=driver,
+    )
+
+
+#: Three lap-1 rows and the positions of the two events interleaved between them, plus the
+#: driver directory the start prompt draws its identity lines from.
+START_DRIVERS = {
+    1: ("Lando NORRIS", "McLaren"),
+    2: ("Oscar PIASTRI", "McLaren"),
+    3: ("Max VERSTAPPEN", "Red Bull"),
+}
+
+
+@pytest.mark.anyio
+async def test_the_lap_one_events_air_as_one_start_turn_and_cover_their_own_members() -> (
+    None
+):
+    members = [
+        start_row(10, driver=1, duration=91.0),
+        start_row(11, driver=2, duration=92.0),
+        start_row(12, driver=3, duration=93.0),
+    ]
+    others = [detected(index=30), detected(index=31)]
+    events = [members[0], others[0], members[1], others[1], members[2]]
+    model = ScriptedModelClient(
+        [
+            spoken(
+                event_reference(members[0]),
+                "Three away, and the field runs wide at turn one.",
+            ),
+            spoken(ref(others[0]), "A position change mid-pack."),
+            spoken(ref(others[1]), "Another position change."),
+        ]
+    )
+    booth = make_booth(events, model, driver_directory=dict(START_DRIVERS))
+
+    result = await bounded(booth.run(), hazard="the start-aggregation run")
+
+    # One outcome per event survives; only the turn count changes, which is the point.
+    assert len(result.outcomes) == len(events)
+    assert [outcome.kind for outcome in result.outcomes] == [
+        OutcomeKind.TURN,
+        OutcomeKind.TURN,
+        OutcomeKind.EXCLUDED,
+        OutcomeKind.TURN,
+        OutcomeKind.EXCLUDED,
+    ]
+    assert [
+        outcome.reason for outcome in result.outcomes if outcome.reason is not None
+    ] == [
+        BoothReason.COVERED_BY_START,
+        BoothReason.COVERED_BY_START,
+    ]
+    # The covered events name themselves, so a reader can see which rows the start absorbed.
+    assert [
+        outcome.event_ref
+        for outcome in result.outcomes
+        if outcome.reason is BoothReason.COVERED_BY_START
+    ] == [event_reference(members[1]), event_reference(members[2])]
+    # Alternation follows the turns that aired, so the two covered events do not shift it.
+    assert [turn.speaker for turn in result.transcript.turns] == [
+        Speaker.lead,
+        Speaker.color,
+        Speaker.lead,
+    ]
+    assert len(model.requests) == 3
+
+    start_turn = result.transcript.turns[0]
+    assert start_turn.event_ref == event_reference(members[0])
+    # The start turn's evidence is drawn from the member it cited, and from that member only.
+    assert set(start_turn.evidence) == set(evidence_references(members[0]))
+
+
+@pytest.mark.anyio
+async def test_the_start_prompt_offers_one_identity_per_member_and_no_field_reference() -> (
+    None
+):
+    members = [
+        start_row(10, driver=1),
+        start_row(11, driver=2),
+        start_row(12, driver=3),
+    ]
+    model = ScriptedModelClient([spoken(event_reference(members[0]), "The start.")])
+    booth = make_booth(members, model, driver_directory=dict(START_DRIVERS))
+
+    await bounded(booth.run(), hazard="the start-prompt run")
+
+    prompt = model.requests[0].prompt
+    for member in members:
+        assert f"- {event_reference(member)}" in prompt
+    # The identity's value is the driver's line from the session directory, so the turn can
+    # name who it covers without a single lap time becoming citable.
+    assert "Lando NORRIS (McLaren, #1)" in prompt
+    assert "Max VERSTAPPEN (Red Bull, #3)" in prompt
+    # One identity per member and nothing else: no field reference is offered to copy.
+    assert not REFERENCE_TOKEN.findall(prompt)
+    assert prompt.count("EVIDENCE:") == 2
+    assert "VALUES, in the same order" in prompt
+
+
+@pytest.mark.anyio
+async def test_the_start_turn_admits_its_members_identities_and_nothing_else() -> None:
+    members = [
+        start_row(10, driver=1),
+        start_row(11, driver=2),
+        start_row(12, driver=3),
+    ]
+
+    def run_with(citation: str) -> Any:
+        model = ScriptedModelClient([spoken(citation, "The start.")])
+        booth = make_booth(members, model, driver_directory=dict(START_DRIVERS))
+        return bounded(booth.run(), hazard=f"the start-citation run for {citation!r}")
+
+    # A reference belonging to an event outside the group cannot ride in on the group turn.
+    outside = await run_with(ref(detected(index=77)))
+    assert outside.outcomes[0].kind is OutcomeKind.REFUSED
+    assert outside.outcomes[0].reason is BoothReason.INVENTED_REFERENCE
+
+    # And a member's own field reference is not offered either: the start turn's surface is
+    # the identities, so the field is a token the prompt never showed.
+    field = await run_with(f"{event_reference(members[1])}.lap_duration")
+    assert field.outcomes[0].kind is OutcomeKind.REFUSED
+    assert field.outcomes[0].reason is BoothReason.INVENTED_REFERENCE
+
+    # A member's identity expands to that member's own references, and to no other member's.
+    member = await run_with(event_reference(members[1]))
+    assert member.outcomes[0].kind is OutcomeKind.TURN
+    aired = member.transcript.turns[0].evidence
+    assert set(aired) == set(evidence_references(members[1]))
+    assert not set(aired) & set(evidence_references(members[0]))
+    assert not set(aired) & set(evidence_references(members[2]))
+
+
+@pytest.mark.anyio
+async def test_the_start_turn_sees_a_bare_identity_shape_too() -> None:
+    """The attached-fragment rule and the bare form, on the surface made of bare identities.
+
+    The same class the field-shaped probe found: a surface whose supplied tokens are bare
+    identities must recognise that form, otherwise the attached-bracket rule never fires and
+    an unsupplied bare token airs. Both cases below are refused on any single-event turn and
+    aired on the start turn before the scanner learned the form, which is the asymmetry the
+    two runs of this test hold apart -- the field-reference surface keeps the declared
+    tolerance for a bare non-empty bracket, and only the bare-identity surface narrows.
+    """
+    members = [
+        start_row(10, driver=1),
+        start_row(11, driver=2),
+        start_row(12, driver=3),
+    ]
+
+    def run_with(prose: str) -> Any:
+        model = ScriptedModelClient([spoken(event_reference(members[0]), prose)])
+        booth = make_booth(members, model, driver_directory=dict(START_DRIVERS))
+        return bounded(booth.run(), hazard=f"the start bare-identity run for {prose!r}")
+
+    # A fabricated fragment glued onto a supplied identity is a citation attempt a reader
+    # cannot tell from a real reference, so it must not air on the group turn either.
+    attached = await run_with(
+        f"After {event_reference(members[0])}[99].evil the field settled."
+    )
+    assert attached.transcript.turns == ()
+    assert attached.outcomes[0].reason is BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT
+
+    # A bare identity the group does not contain is not one of the turn's own tokens.
+    absent = await run_with("and laps[777] tells the story.")
+    assert absent.transcript.turns == ()
+    assert absent.outcomes[0].reason is BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT
+
+    # The members' own identities still air as commentary, which is what keeps this a
+    # narrowing of the unsupplied case and not a blanket refusal of the form.
+    supplied = await run_with(
+        f"and {event_reference(members[1])} carries the other line."
+    )
+    assert supplied.transcript.turns
+    assert supplied.outcomes[0].kind is OutcomeKind.TURN
+
+
+@pytest.mark.anyio
+async def test_the_start_turn_refuses_an_unsupplied_token_in_its_commentary() -> None:
+    """The content rule must not be skipped just because the surface is identities.
+
+    Found by an independent verifier and measured as **fail-open**: with bare identities the
+    scanner could not be derived from the supplied references, so the prose check was skipped
+    for the whole turn and a field-shaped token that was never offered **aired**. The control
+    is the same token on a single-event turn, which is refused.
+    """
+    members = [
+        start_row(10, driver=1),
+        start_row(11, driver=2),
+        start_row(12, driver=3),
+    ]
+    leaked = f"{event_reference(members[1])}.lap_duration"
+    model = ScriptedModelClient(
+        [spoken(event_reference(members[0]), f"And {leaked} says the gap closed.")]
+    )
+    booth = make_booth(members, model, driver_directory=dict(START_DRIVERS))
+
+    result = await bounded(booth.run(), hazard="the start-turn content-rule run")
+
+    assert result.transcript.turns == ()
+    assert result.outcomes[0].kind is OutcomeKind.REFUSED
+    assert result.outcomes[0].reason is BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT
+
+
+@pytest.mark.anyio
+async def test_the_start_turn_refuses_a_bare_identity_glued_to_a_word() -> None:
+    """Found by the native risk lens as R1-001, severity CRITICAL.
+
+    The bare alternative ends at the closing bracket, so the shared trailing word boundary
+    rejected the match and the field alternative needs a dot: a fabricated token glued to a
+    letter, ``laps[777]evil``, was read as prose and aired on the start turn.
+    """
+    members = [start_row(10, driver=1), start_row(11, driver=2), start_row(12, driver=3)]
+    model = ScriptedModelClient(
+        [spoken(event_reference(members[0]), "And laps[777]evil tells the story.")]
+    )
+    booth = make_booth(members, model, driver_directory=dict(START_DRIVERS))
+
+    result = await bounded(booth.run(), hazard="the glued bare-token run")
+
+    assert result.transcript.turns == ()
+    assert result.outcomes[0].reason is BoothReason.UNSUPPLIED_REFERENCE_IN_TEXT
+
+
+@pytest.mark.anyio
+async def test_a_group_whose_start_turn_never_airs_does_not_claim_to_have_covered_anything() -> (
+    None
+):
+    """Found twice over, by the native risk and reliability lenses (R1-002, R3).
+
+    Coverage used to be recorded before the group's own fate was known, so a failed start
+    call left nineteen members disclosed as ``COVERED_BY_START`` by a turn that never aired --
+    and, worse, their commentary was silently gone behind a disclosure asserting the
+    opposite. The rule these two runs pin: a member is disclosed as covered **only** when the
+    group's turn actually aired; otherwise each member mirrors the group's own fate, so one
+    provider failure stays visible as twenty lost turns instead of one.
+    """
+    members = [start_row(10, driver=1), start_row(11, driver=2), start_row(12, driver=3)]
+
+    async def run_with(model: Any) -> BoothResult:
+        booth = make_booth(members, model, driver_directory=dict(START_DRIVERS))
+        return await bounded(booth.run(), hazard="the group-failure run")
+
+    # The provider fails on the group's call: every member mirrors the degradation.
+    degraded = await run_with(
+        ScriptedFailingModelClient([ModelServerError("the group call failed")])
+    )
+    assert [outcome.kind for outcome in degraded.outcomes] == [
+        OutcomeKind.DEGRADED,
+        OutcomeKind.DEGRADED,
+        OutcomeKind.DEGRADED,
+    ]
+    assert [outcome.failure_type for outcome in degraded.outcomes] == ["ModelServerError"] * 3
+    assert all(
+        outcome.reason is not BoothReason.COVERED_BY_START
+        for outcome in degraded.outcomes
+    )
+    assert degraded.transcript.turns == ()
+
+    # The group's answer is refused: every member mirrors the refusal and its reason.
+    refused = await run_with(
+        ScriptedModelClient([spoken(ref(detected(index=77)), "A fabricated citation.")])
+    )
+    assert [outcome.kind for outcome in refused.outcomes] == [
+        OutcomeKind.REFUSED,
+        OutcomeKind.REFUSED,
+        OutcomeKind.REFUSED,
+    ]
+    assert {outcome.reason for outcome in refused.outcomes} == {
+        BoothReason.INVENTED_REFERENCE
+    }
+    assert refused.transcript.turns == ()
+
+
+@pytest.mark.anyio
+async def test_a_group_whose_start_turn_airs_discloses_every_member_as_covered() -> None:
+    """The other half of the rule, held apart so the disclosure cannot be dropped outright."""
+    members = [start_row(10, driver=1), start_row(11, driver=2), start_row(12, driver=3)]
+    model = ScriptedModelClient([spoken(event_reference(members[0]), "Three away, cleanly.")])
+    booth = make_booth(members, model, driver_directory=dict(START_DRIVERS))
+
+    result = await bounded(booth.run(), hazard="the group-airs run")
+
+    assert [outcome.kind for outcome in result.outcomes] == [
+        OutcomeKind.TURN,
+        OutcomeKind.EXCLUDED,
+        OutcomeKind.EXCLUDED,
+    ]
+    assert {outcome.reason for outcome in result.outcomes if outcome.reason} == {
+        BoothReason.COVERED_BY_START
+    }
+
+
+@pytest.mark.anyio
+async def test_a_stream_with_one_lap_one_row_keeps_one_turn_per_event() -> None:
+    """With nothing to aggregate there is no group, so the previous behaviour stands."""
+    events = [start_row(10, driver=1), detected(index=30)]
+    model = ScriptedModelClient(answered(events, ["One.", "Two."]))
+    booth = make_booth(events, model, driver_directory=dict(START_DRIVERS))
+
+    result = await bounded(booth.run(), hazard="the single-lap-one-row run")
+
+    assert [outcome.kind for outcome in result.outcomes] == [
+        OutcomeKind.TURN,
+        OutcomeKind.TURN,
+    ]
+    assert len(model.requests) == 2
+    assert [turn.event_ref for turn in result.transcript.turns] == [
+        event_reference(event) for event in events
+    ]
+
+
 # --- Turn order and the priority band -----------------------------------------
 
 
