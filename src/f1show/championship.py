@@ -132,10 +132,13 @@ __all__ = [
 ]
 
 #: The recorded corpus's season. The three championship families carry no year field - only
-#: ``meeting_key`` 1247 and ``session_key`` 9617 - the scope guard refuses ``sessions.json``,
-#: and the declared points dataset is per-season, so the season is a **declared** input
-#: rather than a derived one. The recorded session is the 2024 United States Grand Prix
-#: (``fixtures/openf1/PROVENANCE.md``), so that is the declared value the run path passes.
+#: ``meeting_key`` and ``session_key`` rows, ``1247``/``9617`` for the 2024 United States Grand Prix and
+#: ``1251``/``9655`` for the 2024 Qatar Grand Prix - the scope guard refuses ``sessions.json``, and
+#: the declared points dataset is per-season, so the season is a **declared** input rather than a
+#: derived one. **Both** recorded sessions are 2024, and ``fixtures/openf1/PROVENANCE.md`` is where
+#: their identity is recorded, so 2024 is the declared value the run path passes. A session from
+#: another season would be scored with these rules until the dataset and this declaration move
+#: together.
 RECORDED_SEASON = 2024
 
 
