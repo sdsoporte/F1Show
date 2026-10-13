@@ -79,9 +79,15 @@ class PacingSpec:
 def pacing_origin(events: Sequence[DetectedEvent]) -> dt.datetime | None:
     """The run's own earliest known instant, or ``None`` when no event carries one.
 
-    The minimum rather than the first record's instant, because the recorded order is not
-    the timestamp order: the corpus interleaves families, and a member with an unknown
-    timestamp is ordered last while still belonging to the same moment.
+    The **minimum** rather than the first record's instant, and the reason is robustness
+    rather than the delivered corpus: the collector happens to sort known timestamps before
+    returning them, so over both recorded sessions the first event is already the earliest
+    -- an independent verifier measured exactly that, and an earlier version of this
+    docstring justified the rule with "the recorded order is not the timestamp order", which
+    is false for the corpus as shipped. The minimum stays because the rule must not
+    *depend* on that sort: a different family order, a future collector, or any caller that
+    hands over its own sequence could put a later instant first, and the run's origin would
+    then be wrong in a way nothing would report.
     """
     known = [
         event.timestamp_value for event in events if event.timestamp_value is not None
@@ -111,7 +117,14 @@ class Pacer:
         """
         if self.origin is None or event.timestamp_value is None:
             return 0.0
-        target = (event.timestamp_value - self.origin).total_seconds() / self.spec.scale
+        offset = (event.timestamp_value - self.origin).total_seconds()
+        target = offset / self.spec.scale
+        if not math.isfinite(target):
+            raise ValueError(
+                "the declared playback scale cannot place this event in finite time: an "
+                f"offset of {offset:.3f}s at scale {self.spec.scale!r} is not a duration a "
+                "clock can wait, and a wait that can hang is a defect rather than a plan"
+            )
         return max(0.0, target - elapsed_seconds)
 
 

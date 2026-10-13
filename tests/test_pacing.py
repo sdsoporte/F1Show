@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import hashlib
+from pathlib import Path
 import re
 
 import pytest
@@ -256,32 +258,67 @@ class CitesTheFirstOfferedReference:
         )
 
 
+def prompts_of(model: CitesTheFirstOfferedReference) -> list[str]:
+    """One SHA-256 per model request: the strongest form of "nothing else changed"."""
+    return [
+        hashlib.sha256(request.prompt.encode()).hexdigest() for request in model.requests
+    ]
+
+
+#: The two recorded windows with the directory each one's fixtures live in. Session 9617
+#: sits at the corpus root while 9655 has a directory of its own, which is a difference
+#: between the two captures rather than a preference -- and the loader refuses a session it
+#: cannot find in the directory it was given, so the pair has to travel together.
+RECORDED_WINDOWS = [
+    pytest.param(SESSION_KEY, None, id="9617"),
+    pytest.param(9655, Path("fixtures/openf1/9655"), id="9655"),
+]
+
+
+@pytest.mark.parametrize(("session_key", "fixtures_dir"), RECORDED_WINDOWS)
 @pytest.mark.anyio
-async def test_a_paced_run_over_the_recorded_session_costs_no_real_time() -> None:
-    """At scale 1 the waits sum to ninety minutes of race, and the run still finishes.
+async def test_a_paced_run_over_a_recorded_session_costs_no_real_time(
+    session_key: int, fixtures_dir: Path | None
+) -> None:
+    """At scale 1 the waits sum to the session's own span, and the run still finishes.
 
-    The hazard bound is the proof that nothing slept for real: a booth that really waited
-    would still be inside its first gap when the bound expired. The two runs also have to
-    agree turn for turn, which is S3 checked over the whole corpus rather than three events.
+    Both recorded sessions, because the second one was recorded with a differently shaped
+    stream (zero null timestamps where the first has an orphan). The comparison is
+    deliberately stronger than turn texts: it hashes **every model prompt**, so a cadence
+    that reached the booth through a reordered or altered event would show even if the
+    words came out the same. The run's closing bound is the proof that nothing slept for
+    real -- a run that waited would still be inside its first gaps when it expired.
     """
-    payloads = load_recorded_session(SESSION_KEY)
-    events = collect_session_events(SESSION_KEY, payloads)
+    # ``None`` means the corpus root, so the keyword is omitted rather than passed as
+    # None: the loader takes a path and refuses anything else.
+    payloads = (
+        load_recorded_session(session_key)
+        if fixtures_dir is None
+        else load_recorded_session(session_key, fixtures_dir=fixtures_dir)
+    )
+    events = collect_session_events(session_key, payloads)
     monotonics = FakeMonotonicClock()
+    paced_model = CitesTheFirstOfferedReference()
+    unpaced_model = CitesTheFirstOfferedReference()
+    settings = BoothSettings(model_id="test-model", language="en")
 
-    def a_run(*, paced: bool) -> object:
-        cadence = {"monotonic": monotonics, "pacing": PacingSpec(scale=1.0)} if paced else {}
-        return run_session(
+    async with asyncio.timeout(90):
+        paced = await run_session(
             payloads=payloads,
-            session_key=SESSION_KEY,
-            model=CitesTheFirstOfferedReference(),
+            session_key=session_key,
+            model=paced_model,
             clock=FrozenClock(T0),
-            settings=BoothSettings(model_id="test-model", language="en"),
-            **cadence,
+            settings=settings,
+            monotonic=monotonics,
+            pacing=PacingSpec(scale=1.0),
         )
-
-    async with asyncio.timeout(60):
-        paced = await a_run(paced=True)
-        unpaced = await a_run(paced=False)
+        unpaced = await run_session(
+            payloads=payloads,
+            session_key=session_key,
+            model=unpaced_model,
+            clock=FrozenClock(T0),
+            settings=settings,
+        )
 
     known = [event.timestamp_value for event in events if event.timestamp_value is not None]
     span = (max(known) - min(known)).total_seconds()
@@ -291,7 +328,8 @@ async def test_a_paced_run_over_the_recorded_session_costs_no_real_time() -> Non
     assert sum(monotonics.sleeps) == pytest.approx(span, abs=1.0)
     # Ninety minutes of race, paced, and not one of them spent waiting for real.
     assert span > 3000.0
-    # S3 over the whole corpus: the cadence changed when, and nothing else.
+    # S3 over a whole session: the cadence changed when, and nothing else.
+    assert prompts_of(paced_model) == prompts_of(unpaced_model)
     assert [turn.text for turn in paced.transcript.turns] == [
         turn.text for turn in unpaced.transcript.turns
     ]
@@ -299,3 +337,36 @@ async def test_a_paced_run_over_the_recorded_session_costs_no_real_time() -> Non
     assert [(item.kind, item.reason) for item in paced.outcomes] == [
         (item.kind, item.reason) for item in unpaced.outcomes
     ]
+
+
+def test_a_scale_that_would_wait_forever_is_refused() -> None:
+    """A validated scale can still scale an offset past what a clock can express.
+
+    Measured by the independent verifier rather than by the author: ``PacingSpec(1e-320)``
+    is positive and finite, so validation accepts it, and ``offset / scale`` overflows to
+    ``inf`` -- a wait no clock can satisfy, which on a real clock is a hang that neither
+    errors nor finishes. This project declares a wait that can hang to be a defect, so the
+    rule refuses it out loud instead, the same way it refuses a non-serializable value
+    rather than rendering it approximately.
+    """
+    events = (event(index=0, offset_seconds=0.0), event(index=1, offset_seconds=10.0))
+    pacer = Pacer(events, PacingSpec(scale=1e-320))
+    with pytest.raises(ValueError):
+        pacer.wait_seconds(events[1], elapsed_seconds=0.0)
+
+
+@pytest.mark.anyio
+async def test_run_session_refuses_half_a_cadence_as_loudly_as_the_booth() -> None:
+    """The wiring refuses a half cadence too, rather than one level above the check."""
+    payloads = load_recorded_session(SESSION_KEY)
+    settings = BoothSettings(model_id="test-model", language="en")
+    for half in ({"monotonic": FakeMonotonicClock()}, {"pacing": PacingSpec(scale=1.0)}):
+        with pytest.raises(ValueError):
+            await run_session(
+                payloads=payloads,
+                session_key=SESSION_KEY,
+                model=CitesTheFirstOfferedReference(),
+                clock=FrozenClock(T0),
+                settings=settings,
+                **half,
+            )
