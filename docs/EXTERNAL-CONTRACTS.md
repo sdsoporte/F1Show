@@ -326,6 +326,59 @@ The last two are the ones most likely to produce a subtly wrong historical claim
 "retirement" count from 2025 onwards cannot be decomposed into mechanical failure
 versus accident, and must not be presented as if it could.
 
+## FastF1 — evaluated 2026-10-13, not adopted
+
+**What it is.** `theOehrly/Fast-F1` (v3.8.3) is a Python package for *"accessing and analyzing Formula 1
+results, schedules, timing data and telemetry"*, and it is the de-facto standard for telemetry analysis
+in Python. **MIT licensed** (`LICENSE`, the `pyproject.toml` classifier and PyPI agree),
+`requires-python >= 3.10` with classifiers through 3.14, so it fits this project's floor. Its HTTP is
+**synchronous** (`requests`), and its install is heavy: a throwaway environment measured **347 MB**
+(scipy 80, pandas 52, numpy 33, matplotlib 25, fontTools 23, cryptography 15, pillow 14, rapidfuzz 12).
+
+**Access model, and the fact that decides its role here.** Authentication is required **only** for its
+Live Timing client, which needs an **F1TV Access/Pro/Premium subscription**, a browser addon for the
+sign-in flow, and does not work in hosted or WebAssembly environments; **all data obtained after a
+session has ended is free and unauthenticated**
+(`docs.fastf1.dev/api_reference/accounts_auth.html`). It is therefore **not a new door to the live
+path** — the same paywall, a different handle — and this project's free-mode decision is unchanged by
+it. It also ships a Jolpica client, which is the archive this project already chose for the historical
+half.
+
+**Measured against this project's corpus** — throwaway environment, cache under `/tmp`, no
+credentials, nothing written inside the repository, and **sessions identified by date rather than by a
+guessed round**:
+
+| | 9617 Austin (round 19) | 9655 Qatar (round 23) |
+| --- | --- | --- |
+| Load without telemetry | 10.6 s | 9.9 s |
+| Lap rows, FastF1 vs ours | **1,059 vs 1,059** | **943 vs 944** |
+| Race-control rows, FastF1 vs ours | **119 vs 120** | **113 vs 112** |
+| Results | **21 columns** | against our **11** — it adds `GridPosition`, `Q1/Q2/Q3`, `Points`, `Status` |
+
+The deltas are **one row and session-specific**, never systematic. And **this project holds something
+it does not expose at all**: our laps carry **mini-sector segments** (`segments_sector_*`) while its
+lap table has no segments column.
+
+**What it brings that this project has no field for.** Car data per driver (`Speed`, `RPM`,
+`nGear`, `Throttle`, `Brake`, `DRS`), position per driver (`X`, `Y`, `Z`), and weather
+(`AirTemp`, `TrackTemp`, `Humidity`, `Pressure`, `Rainfall`, `WindDirection`, `WindSpeed`).
+One lap of one driver, merged by FastF1 itself, measured **838 rows over 111.6 s (~7.5 rows/s)** across
+**18 channels**, including `Distance`, `RelativeDistance`, `DriverAhead` and
+`DistanceToDriverAhead`.
+
+**What it would cost, measured rather than estimated.** Cache without telemetry for two races: **13.1
+MB**. Cache **with** telemetry for **one** race weekend: **147.2 MB** — against this project's entire
+recorded corpus of **3.61 MB + 0.57 MB = 4.18 MB**. A warm-cache reload takes 1.9 s.
+
+**The provenance problem, stated before any adoption.** Its cache stores **parsed pickles**, not the
+raw response bodies that `fixtures/openf1/PROVENANCE.md` records as the artifact, and its data path
+would be a second one beside the single sync writer this design declares.
+
+**Status: a candidate source for F06 (tactical) and F07 (historical); not adopted.** Those deferred
+units need exactly the channels above — the colour seat cannot answer *why* from lap times alone — but
+adopting them means deciding the volume, accepting a second data path, and solving the provenance
+question. Nothing was installed inside the repository and no product code was changed.
+
 ## `google-genai`
 
 ### SDK and version

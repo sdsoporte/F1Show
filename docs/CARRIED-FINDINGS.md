@@ -633,6 +633,12 @@ approved:
 
 **Fixtures are keyed by their provenance, not by blob OIDs, and that is deliberate.** `PROVENANCE.md` records each family's byte size, record count, request URL, request time and SHA256, which is a stronger key than a blob row for data no reviewer reads; the F09j corpus alone would have needed ten rows of JSON nobody can review. Recorded here so a later closure does not "repair" the difference by inventing keys |
 
+## The telemetry source question — evaluated, not adopted (2026-10-13)
+
+| Location | Ids observed there | Severity | Owner | Trigger | Status |
+| --- | --- | --- | --- | --- | --- |
+| `docs/EXTERNAL-CONTRACTS.md`, the FastF1 section | an evaluation, not a review: no finding ids | — | **F06**, with F07 behind it | F06 or F07 being authorized | **OPEN as a decision, closed as an evaluation.** FastF1 brings the one thing this project has no field for — per-driver car data, position and weather — and it was measured in a throwaway environment: **347 MB installed**, **13.1 MB** of cache without telemetry for two races, **147.2 MB** with telemetry for **one** weekend against our whole **4.18 MB** corpus, lap counts matching exactly in one session and within one row in the other, results richer than ours, and **no mini-sector column** where ours has one. The decisive constraint is recorded with it: **its live path needs an F1TV subscription, its post-session path is free and unauthenticated**, so it offers no new door to the live data. Whoever authorizes F06 must decide three things this evaluation leaves open: the **volume**, whether a **second data path** beside the single sync writer is acceptable, and the **provenance** question — its cache holds parsed pickles, while this register's corpus rule records raw response bodies with SHA256. Nothing was installed in the repository and no code changed |
+
 ## Cross-cutting, from verification rather than from reviews
 
 | Subject | Where recorded | Owner | Trigger | Status |

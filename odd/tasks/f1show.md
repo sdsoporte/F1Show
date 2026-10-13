@@ -1704,6 +1704,20 @@ prove nothing about any behaviour. Naming the recipient converts it from a promi
 with a deadline. If F06 lands and does not use it, removing it is the correct outcome, not keeping it
 out of politeness.
 
+**The telemetry source question, evaluated before F06 is authorized (2026-10-13).** F06's tactical
+reading needs something this project's recorded corpus has **no field for at all**: car data (speed,
+RPM, gear, throttle, brake, DRS), position (X/Y/Z) and weather. The candidate is **FastF1**, and it was
+measured rather than read about: MIT licensed, Python ≥3.10, **347 MB installed**, **147.2 MB of cache
+for one race weekend with telemetry** against this project's whole 4.18 MB corpus, and — decisively —
+**its live path needs an F1TV subscription while its post-session path is free and unauthenticated**,
+so it is not a new door to the live data. On the other side of the ledger it matches our lap counts
+exactly in one session and within one row in the other, it is **richer than our `session_result`**
+(it carries grid position and qualifying times) and it **does not expose the mini-sectors our own laps
+carry**. The full evaluation, with every number and its method, is in
+`docs/EXTERNAL-CONTRACTS.md § FastF1`, and the decision it leaves open is stated there: volume,
+a second data path, and pickles-versus-raw-bodies provenance. F07's historical half shares the
+question. **Nothing was installed in this repository and no code was written.**
+
 - [ ] Calculate contextual gap/pace/stint alerts with configurable circuit/session
   parameters. Treat tyre-life and pit-loss estimates as assumptions, not facts.
 - Acceptance/checks: qualifying cutoffs follow the selected season/session rules;
