@@ -3525,6 +3525,136 @@ a language with no default, so the variant is the natural extension of a decisio
 - **Next:** the **start aggregation**, then **economy and tone**; the three advisories above carry owner and
   trigger, and the live half of the citation-form row is untouched by this unit.
 
+### F09i — The start aggregation: twenty lap-1 sentences become one start
+
+- [ ] **Authorized 2026-10-13.** User: "Si procede con la limpieza de ramas. luego cree mas
+  conveniente crear una nueva prueba de 5 laps como antes o seguimos con la largada ?" and then chose
+  **"Largada y después la captura"**, so this unit runs **first** and the second five-lap window is a
+  **separate later step**, never a prerequisite. It does **not** cover any live or model call, credential
+  use, a new fixture capture, audio, transport or packaging, economy and tone, or a change to the language
+  lexicon.
+- **Objective, from the registered design (item 5 of the show design above):** the twenty lap-1 events
+  become **one "start" turn**, with the individual laps summarised per lap afterwards, because twenty
+  near-identical sentences are not a start.
+- **The material is already in the repository, measured rather than assumed.** `fixtures/openf1/laps.json`
+  holds **1,059** rows, of which exactly **20 are lap 1** — one row per driver — and `position.json` holds
+  **403** rows for the single recorded session `9617`. So the corpus the design names is present and this
+  unit needs **no** capture to be implemented or tested; the second window is a later generality check, not
+  a prerequisite.
+- **The open design decision this unit must settle *before* its first source write, and it is a decision
+  rather than a detail:** where the aggregation lives — collector, booth, or a new pure module — and, more
+  consequentially, **what an aggregate turn may cite**. A turn's citable set today is the supplied
+  references of **its own** event; an aggregate event would carry the **union** of its members' supplied
+  references, which is a **widening of the citable surface** rather than a rendering change. It is settled
+  explicitly here and recorded, never left to the implementation to imply.
+- **Invariants that must not move:** only current-event **supplied** references may air; **no new airing
+  shape** and the declared shapes stay **six**; a replay still reproduces the transcript byte for byte; the
+  citation marker still appears **exactly twice** per prompt; no value from the salience, mode or
+  championship blocks becomes evidence; and nothing becomes citable unless this record says so.
+- **Evidence budget and route:** the seam is mapped by **one read-only explorer**, because understanding it
+  needs more lookups than a single batch allows; then **one work unit in its own worktree**, guided by
+  test-first development (the aggregation has a real RED: the transcript's turn count and the start's
+  wording), an independent read-only verifier, the provider-offered native route under RDD, and the register
+  re-derived by subject at the closing revision. Delivery stays a separate user decision, and the branch and
+  worktree are removed after integration under the same proof rule the cleanup used (`git branch -d`, never
+  `-D`, and a clean tree first).
+- **Checks to expect:** the focused tests fail before the change and pass after it, the full offline suite
+  runs, the pinned Ruff runs, and the citation invariants are scanned over the **whole** recorded session
+  rather than a sample.
+- **The design decisions, settled before the first source write and recorded here.** (1) **Placement:** the
+  grouping lives in a new pure module `src/f1show/start.py` and the citation rule stays in `booth.py`, which
+  owns the parser. Doing it in the collector was rejected because it would break F04's "one event, one source
+  record" contract and move the 1,648 fixture-count pins, and a module that also owned ordering would have
+  added a third determinism dependency to the byte-for-byte replay invariant. (2) **The citable surface, decided
+  by the user:** the start turn offers **one identity per member** (`laps[1]`, ...) whose value is that member's
+  identity line from the session directory, and citing a member's identity expands to **that member's own**
+  references and never to another member's. The two alternatives were named and not taken: the **full union** of
+  the members' ~240 field values (widest, and ~20x the prompt for that one turn) and a **declared subset** of
+  identity plus lap duration and pit-out flag (~60 values, which would have made lap times citable at the
+  start). (3) **Accounting:** every event still records exactly one outcome; a covered member records
+  `EXCLUDED` + `COVERED_BY_START`, so the absence is stated rather than silent, and only the turn count
+  changes. (4) **Position:** the start turn airs at the **first** member's index, so its salience, mode and
+  championship context describe the state **before** the start — which is the pre-race picture, verified in the
+  rendered prompt. (5) **Mode untouched:** with the declared triggers a lap-1 row is `build`, which is what the
+  design asks for (one line), so no mode change rode along.
+- **A scan, not a prefix, and the corpus proves why.** The member test is applied to every event because the
+  measured stream is **not** uniform: the group sits at index **25** with identity `laps[1]`, and its **last**
+  member is **`laps[0]`** — the null-timestamp orphan the collector's total order puts after every other event
+  of the race. A prefix rule or a contiguous block would have dropped a real member.
+- **RED, then GREEN, both observed.** RED: `tests/test_start.py` failed to collect (exit 2, `No module named
+  'f1show.start'`) and the diagnostics named `BoothReason.COVERED_BY_START` as unknown — the two things the unit
+  adds. GREEN: **8** tests for the pure rule and **4** booth tests, confirmed by selecting them by name rather
+  than by counting a combined run; then **981** passing on the full offline suite and Ruff 0.17.0 clean, both
+  after the two regressions the existing suite caught: a doubled `driver:` prefix in the fallback line, and a
+  start-prompt assertion that wrongly used the whole prompt, which also carries the previous turns' cited
+  references.
+- **Measured on the recorded session 9617, from the built artefact rather than a diff:** **1,648** events,
+  **1,648** outcomes, **1,629** turns and **1,629** model calls (**19** covered), the start prompt offering
+  exactly **20** identity lines and **zero** field references while **no** other prompt offers an identity line,
+  and the start turn's own evidence exactly the **12** references of the member it cited (one of the record's 13
+  fields is `None`).
+- **One measurement that a verifier is asked to falsify rather than accept:** the pinned seat consequence was
+  **1,023** changed seats against strict alternation before this unit, over 1,648 turns, and it is **still
+  exactly 1,023** after it, over 1,629 turns. The number reproduced twice, by the suite's own assertion and by
+  a standalone script, and the assertion was **not** re-fitted; the mechanism is not obvious, so it is stated as
+  an observation under test instead of as an explanation.
+- **A refuted diagnostic, recorded so it is not re-investigated.** Pyright reports `Import "f1show.start" could
+  not be resolved` in three files while the module imports and runs. The measurement that settles it is a probe
+  file importing **both** an old module and the new one: the old resolves and only the new fails, which locates
+  the cause in the language server's **file index** rather than in the package or the environment — the same
+  class this document already recorded for `f1show.mode`. The literal proof is that
+  `python -c "import f1show.start"` prints the module's own path in the same package directory as `booth.py`.
+- **The native review escalated first, and its findings were read rather than guessed.** Lineage
+  `review-2119579e381d86e6` (tier medium, 6 paths, **936** lines, base tree `107afe48`) ran both lenses
+  and closed **escalated** on `R1-001` with `unknown_causality`; the closure's own action line read
+  *"review completed with inconclusive severe findings; maintainer action is informational"*. The harness
+  returns identifiers, severities and locations and **never bodies**, so under the maintainer's explicit
+  authorization the finding was read from the native transaction store
+  (`.git/gentle-ai/review-transactions/v2/<lineage>/review-state.json`) and reported before anything was
+  delivered. **All three findings were real and all three were this unit's:**
+  - `R1-001` (**CRITICAL**, deterministic, `booth.py:543-546`): the bare-identity alternative I had just
+    added ends at the closing bracket, so the shared `(?!\w)` boundary rejected the match while the
+    field alternative needs a dot that is not there — a fabricated token glued to a letter
+    (`laps[777]evil`) **aired**. Introduced by the earlier fix, not pre-existing.
+  - `R1-002` and `R3-covered-without-start` (**WARNING** each, `booth.py:815-826`, found
+    **independently by both lenses**, which is the strongest signal of the run): coverage was recorded
+    **before** the group's own fate was known, so a failed, refused, suppressed or stale start call
+    dropped nineteen rows' commentary behind a disclosure asserting they had been carried by a turn that
+    never existed. At the baseline one failed event lost its own turn; the unit amplified one failure
+    into twenty lost turns.
+- **All three were closed with RED first, and one more came from independent verification.** The glued
+  token aired and the degraded group still claimed coverage until the fixes; the third was the verifier's
+  fail-open prose rule. The rules now: the bare form carries **no** trailing boundary (a *supplied*
+  identity glued to a word still airs, because the supplied check runs first, so only what was never
+  offered is refused), and **coverage is disclosed only when the group's turn actually aired** — every
+  other fate is mirrored per member, so a lost call stays visible as one lost turn per covered row.
+  Three tests pin the corrected behaviour, including the control that a group which does air still
+  discloses coverage.
+- **The corrected bytes were reviewed afresh, and this time they were approved.** Lineage
+  `review-2fcf1148e5d3f5d3` (tier medium, `review-risk` + `review-reliability`, 5 files, **980**
+  lines, candidate tree `6ae63de9…`) closed **approved** with **no advisory findings carried**, and the
+  exact acknowledgement **burned** the authority (`consumed_revision sha256:4b7906c2…`,
+  `gentle-ai.review-acknowledged/v1`).
+- **Two provider behaviours recorded for the next operator.** (1) The facade emits `collectBindings` on a
+  **direct** `status` call and **not** through the codemode wrapper, measured in two units; the bindings
+  must be captured from the direct call and reused verbatim. (2) A host-relay **transport failure** on the
+  group capture (`prepared 0, submitted 0, no mutation`) is continued by re-reading status and submitting
+  the **reoffered slots one at a time**, which is exactly what the provider's own next-action said and
+  what succeeded; nothing was replayed from inference.
+- **Delivery.** Commit `1a4cbc352e3213f3b4000e14b58a4a107e832773` (parent `87d0819`, five files,
+  **+925/−55**), **PR #55**, CI run `38422462279` green on all four jobs, merged as
+  **`b0f5f32245ce1d202d49e7bfc00c18c1f2ecd84b`**. `origin/main` equals the host's own ref and the merged
+  tree `6ae63de9…` is **exactly the reviewed candidate tree**.
+- **One pre-existing gap is carried, and it is not this unit's.** On a **field-reference** surface a bare
+  token glued to a letter (`position[0][99].evil`) still airs — measured on both the pre-change and the
+  post-change bytes. Closing it would also close the declared tolerance for a bare non-empty bracket,
+  which the module documents as a product trade belonging to the user; it goes to the register with an
+  owner and a trigger rather than being closed unilaterally.
+- **A formatter reflow measured rather than trusted.** The deferred formatter reflowed `booth.py` and
+  `tests/test_booth.py` again after the unit was merged; the parent compared the **ASTs** against the
+  merged commit (identical for both) and restored the files to the merged bytes, so the working tree
+  matches `main` and a later session cannot mistake a reflow for new work.
+
 ### F10 — Wire bounded end-to-end orchestration
 
 - [ ] Correlate enrichment by event/session/version, apply bounded join deadlines,
