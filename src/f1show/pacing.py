@@ -45,6 +45,7 @@ from f1show.collector import DetectedEvent
 from f1show.ports import MonotonicClock
 
 __all__ = [
+    "Pacer",
     "PacingSpec",
     "pacing_origin",
     "release_at_offsets",
@@ -88,6 +89,32 @@ def pacing_origin(events: Sequence[DetectedEvent]) -> dt.datetime | None:
     return min(known) if known else None
 
 
+class Pacer:
+    """The playback rule together with one run's own origin.
+
+    Two callers need the same arithmetic: the paced release below, which streams a
+    recorded session's events, and the booth, which walks its own event sequence
+    internally and therefore cannot consume a paced stream. Keeping the rule in one object
+    is what stops two nearly equal copies of it from drifting apart.
+    """
+
+    def __init__(self, events: Sequence[DetectedEvent], spec: PacingSpec) -> None:
+        self.spec = spec
+        self.origin = pacing_origin(events)
+
+    def wait_seconds(self, event: DetectedEvent, *, elapsed_seconds: float) -> float:
+        """How long to wait before releasing ``event``, given the run's elapsed time.
+
+        Zero when the data cannot place the event -- either the event carries no instant or
+        the whole run carries none -- and zero when the event is already behind schedule,
+        because asking a clock to rewind is not something a clock can do.
+        """
+        if self.origin is None or event.timestamp_value is None:
+            return 0.0
+        target = (event.timestamp_value - self.origin).total_seconds() / self.spec.scale
+        return max(0.0, target - elapsed_seconds)
+
+
 async def release_at_offsets(
     events: Sequence[DetectedEvent], *, clock: MonotonicClock, spec: PacingSpec
 ) -> AsyncIterator[DetectedEvent]:
@@ -95,16 +122,14 @@ async def release_at_offsets(
 
     An async generator rather than a function returning a sequence, because the waiting
     **is** the product: a caller that collected every event and then waited would pace
-    nothing. The elapsed time is read from the same monotonic clock that spends it, so the
-    rule holds whatever the clock's origin is, and a late event clamps to a zero wait
-    instead of moving time backwards.
+    nothing. Every event is waited on exactly once -- including the ones whose wait is
+    zero -- so the waits correspond to the events one for one and their sum is the run's
+    scaled span.
     """
-    origin = pacing_origin(events)
+    pacer = Pacer(events, spec)
     started = clock.monotonic()
     for event in events:
-        wait = 0.0
-        if origin is not None and event.timestamp_value is not None:
-            target = (event.timestamp_value - origin).total_seconds() / spec.scale
-            wait = max(0.0, target - (clock.monotonic() - started))
-        await clock.sleep(wait)
+        await clock.sleep(
+            pacer.wait_seconds(event, elapsed_seconds=clock.monotonic() - started)
+        )
         yield event

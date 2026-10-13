@@ -19,14 +19,19 @@ edges:
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
+import re
 
 import pytest
 
-from f1show.collector import DetectedEvent
+from f1show.collector import DetectedEvent, collect_session_events
+from f1show.config import BoothSettings
 from f1show.events import EventType
-from f1show.fakes import FakeMonotonicClock
-from f1show.pacing import PacingSpec, pacing_origin, release_at_offsets
+from f1show.fakes import FakeMonotonicClock, FrozenClock
+from f1show.pacing import Pacer, PacingSpec, pacing_origin, release_at_offsets
+from f1show.ports import ModelRequest, ModelResponse
+from f1show.run import load_recorded_session, run_session
 
 UTC = dt.timezone.utc
 SESSION_KEY = 9617
@@ -175,3 +180,122 @@ async def test_equal_inputs_produce_equal_waits() -> None:
     _, first = await released(events, scale=2.0)
     _, second = await released(events, scale=2.0)
     assert first.sleeps == second.sleeps
+
+# --- T2: the pacer the booth and the paced release share --------------------------------
+
+
+def test_the_pacer_places_one_event_against_the_runs_own_origin() -> None:
+    """The same rule the paced release uses, callable for one event at a time.
+
+    The booth walks its events internally and so cannot consume a paced stream; it asks
+    the same pacer instead. Two copies of a timing rule would drift, so this pins the one
+    the booth calls and the next test pins that the stream agrees with it.
+    """
+    events = (
+        event(index=0, offset_seconds=5.0),
+        event(index=1, offset_seconds=0.0),
+        event(index=2, offset_seconds=10.0),
+    )
+    pacer = Pacer(events, PacingSpec(scale=1.0))
+    assert pacer.wait_seconds(events[0], elapsed_seconds=0.0) == pytest.approx(5.0)
+    assert pacer.wait_seconds(events[1], elapsed_seconds=5.0) == pytest.approx(0.0)
+    assert pacer.wait_seconds(events[2], elapsed_seconds=5.0) == pytest.approx(5.0)
+
+
+def test_the_pacer_cannot_place_an_event_the_data_does_not() -> None:
+    """Zero when the event carries no instant, and zero when the whole run carries none."""
+    placed = Pacer(
+        (unknown(index=0), event(index=1, offset_seconds=10.0)), PacingSpec(scale=1.0)
+    )
+    assert placed.wait_seconds(unknown(index=0), elapsed_seconds=0.0) == 0.0
+    placeless = Pacer((unknown(index=0), unknown(index=1)), PacingSpec(scale=1.0))
+    assert placeless.wait_seconds(unknown(index=0), elapsed_seconds=0.0) == 0.0
+
+
+@pytest.mark.anyio
+async def test_the_paced_release_waits_exactly_what_the_pacer_says() -> None:
+    """One rule, two callers: the stream and the pacer must never disagree."""
+    events = (event(index=0, offset_seconds=0.0), event(index=1, offset_seconds=4.0))
+    pacer = Pacer(events, PacingSpec(scale=2.0))
+    first = pacer.wait_seconds(events[0], elapsed_seconds=0.0)
+    second = pacer.wait_seconds(events[1], elapsed_seconds=first)
+    _, clock = await released(events, scale=2.0)
+    assert clock.sleeps == [pytest.approx(first), pytest.approx(second)]
+
+
+# --- T4: the end-to-end measurement, over the whole recorded session --------------------
+
+FIELD_REFERENCE = re.compile(r"^-\s+([a-z_]+\[\d+\]\.[a-z0-9_]+)\s*$", re.MULTILINE)
+IDENTITY_REFERENCE = re.compile(r"^-\s+([a-z_]+\[\d+\])\s*$", re.MULTILINE)
+
+
+class CitesTheFirstOfferedReference:
+    """Answer every turn with the first reference that turn's own prompt offered.
+
+    A corpus run needs one answer per aired turn -- 1,629 over the recorded session -- and
+    each answer must cite a reference that turn actually supplied, so the answer is derived
+    from the prompt instead of written by hand. It is a scripted double, not a measurement:
+    it makes no model call and claims nothing about a real model's behaviour.
+    """
+
+    def __init__(self) -> None:
+        self.requests: list[ModelRequest] = []
+
+    async def generate(self, request: ModelRequest) -> ModelResponse:
+        self.requests.append(request)
+        match = FIELD_REFERENCE.search(request.prompt) or IDENTITY_REFERENCE.search(
+            request.prompt
+        )
+        if match is None:
+            raise AssertionError("the prompt offered no reference to cite")
+        return ModelResponse(
+            model_id=request.model_id,
+            text=f"EVIDENCE: {match.group(1)}\nCommentary on {match.group(1)}.",
+            input_tokens=1,
+            output_tokens=1,
+        )
+
+
+@pytest.mark.anyio
+async def test_a_paced_run_over_the_recorded_session_costs_no_real_time() -> None:
+    """At scale 1 the waits sum to ninety minutes of race, and the run still finishes.
+
+    The hazard bound is the proof that nothing slept for real: a booth that really waited
+    would still be inside its first gap when the bound expired. The two runs also have to
+    agree turn for turn, which is S3 checked over the whole corpus rather than three events.
+    """
+    payloads = load_recorded_session(SESSION_KEY)
+    events = collect_session_events(SESSION_KEY, payloads)
+    monotonics = FakeMonotonicClock()
+
+    def a_run(*, paced: bool) -> object:
+        cadence = {"monotonic": monotonics, "pacing": PacingSpec(scale=1.0)} if paced else {}
+        return run_session(
+            payloads=payloads,
+            session_key=SESSION_KEY,
+            model=CitesTheFirstOfferedReference(),
+            clock=FrozenClock(T0),
+            settings=BoothSettings(model_id="test-model", language="en"),
+            **cadence,
+        )
+
+    async with asyncio.timeout(60):
+        paced = await a_run(paced=True)
+        unpaced = await a_run(paced=False)
+
+    known = [event.timestamp_value for event in events if event.timestamp_value is not None]
+    span = (max(known) - min(known)).total_seconds()
+    # One wait per event, in order, and their sum is the session's own span at scale 1.
+    assert len(monotonics.sleeps) == len(events)
+    assert all(wait >= 0.0 for wait in monotonics.sleeps)
+    assert sum(monotonics.sleeps) == pytest.approx(span, abs=1.0)
+    # Ninety minutes of race, paced, and not one of them spent waiting for real.
+    assert span > 3000.0
+    # S3 over the whole corpus: the cadence changed when, and nothing else.
+    assert [turn.text for turn in paced.transcript.turns] == [
+        turn.text for turn in unpaced.transcript.turns
+    ]
+    assert len(paced.transcript.turns) == len(unpaced.transcript.turns) > 0
+    assert [(item.kind, item.reason) for item in paced.outcomes] == [
+        (item.kind, item.reason) for item in unpaced.outcomes
+    ]

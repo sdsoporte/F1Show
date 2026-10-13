@@ -4170,9 +4170,19 @@ turned out to be two trees**, so a per-tree count must always travel with its tr
   one tick; and the transcript is byte-identical to the unpaced run. **The suite never really waits:** every
   test injects `FakeMonotonicClock`, and a test that slept for real would be a defect of the test rather than
   of the product.
+- **Where the cadence is injected, and an earlier claim in this section that it would not be.** The booth
+  walks its own event sequence internally — `for index, event in enumerate(self._events)`, with the start
+  group's covered members decided by index — so it **cannot** consume a paced stream. The cadence is therefore
+  injected into it: two optional parameters, **both or neither**, and the booth asks the **same `Pacer`** the
+  paced release uses, so the rule has one home and two callers instead of two nearly equal copies. So this unit
+  **does** change `booth.py`; what it does not touch is the **citation surface**, the six declared airing shapes
+  and the citable references, which is the claim that matters. Recorded here rather than smoothed over, because
+  the first draft of this section said the unit touched neither the booth nor the citation surface and only the
+  second half of that was true.
 - **Invariants that must not move:** the byte-for-byte replay; the citation surface and the six declared
-  airing shapes; `run.py` reads no clock of its own (F10); the request cadence in `request_policy.py`
-  untouched; and the offline suite's runtime must not become a function of wall time.
+  airing shapes; `run.py` reads no clock of its own (F10) — the monotonic clock is injected like every other
+  collaborator; the request cadence in `request_policy.py` untouched; and the offline suite's runtime must not
+  become a function of wall time.
 - **Specs, quoted and not summarised.**
   - **S1.** *"Deberiamos poder iniciar desde la largada hasta el final de la carrera (1:34:23.754) en tiempo
     real"* — a recorded session is consumed at its own rate.
