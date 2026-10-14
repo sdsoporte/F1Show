@@ -4329,9 +4329,18 @@ turned out to be two trees**, so a per-tree count must always travel with its tr
     so no lineage was created and nothing was burned; T4's independent verification already exceeds the plan
     the assessment returned. A fresh `assess` runs on the closing bytes immediately before delivery, and a
     `reviewDue: true` there would start the cycle at that point.
-  - [ ] **T6** — delivery: push, PR, CI green, merge commit — each the user's separate decision. The branch is
-    reconciled with `main` **first** (merge-base `78a0671`; `main` ahead by `d3f381a`, `e328072`, `d23ee49`),
-    then delivered, so the PR carries the audio unit and this record and nothing else.
+  - [x] **T6** — delivered, with every side measured. **Observed:** the branch was reconciled with `main`
+    first (`15ea3e6`, merge clean — the only content it brought was `e328072`'s 17 register lines), pushed as
+    `origin/feat/audio-tts-booth`, and opened as **PR #64**; CI run **38497270303** finished **4/4 green**
+    (pytest 3.12 in 1m2s, pytest 3.14 in 1m11s, ruff in 10s, the register guard in 6s), exit 0. The user
+    authorized the merge by selecting **"Merge con CI verde (recomendado)"** after the PR was open. Merged as
+    a **merge commit** — `45a81ba45a4e0ffa994e6fb498df5fd32878ddba` at `2026-10-14T01:45:51Z`, never squash or
+    rebase — and the three-sided check agrees: local `main` = `origin/main` = GitHub API = `45a81ba`, tree
+    **clean**, session on `main`. Pre-delivery receipts on the closing bytes: `uv run --frozen pytest -q` →
+    **1026 passed** (50.09 s), the Python floor `uv run --frozen --python 3.12 pytest -q` → **1026 passed**
+    (52.17 s), `uvx ruff@0.17.0 check --no-cache src tests` → **All checks passed!**. The branch
+    `feat/audio-tts-booth`, the audio branch's history and everything else in the tree stay untouched:
+    deletion is a separate user decision.
 - **Evidence budget and route.** The parent mapped the unit in bounded reads (module, tests, exports, docs
   sites, git topology) and measured every number above itself; the implementation stays the sibling session's
   work, carried by reference (Engram `booth-models-and-voices`) and by its commit. Closure runs the checks
