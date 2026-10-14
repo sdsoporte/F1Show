@@ -4305,8 +4305,19 @@ turned out to be two trees**, so a per-tree count must always travel with its tr
     `uvx ruff@0.17.0 check --no-cache src tests` — prints **"All checks passed!"**. The branch reconciliation
     with `main` was moved to **T6**, where it belongs: it is a delivery step, and at the start of this
     closure the merge-base was `78a0671` with `main` ahead by `d3f381a`, `e328072` and `d23ee49`.
-  - [ ] **T4** — independent verification, required by the risk line: the candidate adds a **dependency**
-    (risk item 5), so an independent verifier runs after the change's own checks, not instead of them.
+  - [x] **T4** — independent verification, and its one finding closed before review. **Observed:** the
+    verifier treated the parent's eleven claims as a falsification target against `15ea3e6` and returned
+    **10 PASS / 1 FAIL**: suite **1025 passed** in its own run (92.54 s), ruff clean, a **socket-blocked
+    import** of `f1show` opening no connection, `import edge_tts` present only inside the two method bodies,
+    the staleness blobs matching `85772027…`/`ad77bae7…`, every document correct with no remaining
+    current-tense "no speech synthesis" claim outside the historical `SOURCE-REVIEW.md`, commit `26f4cb6`
+    carrying exactly the four documentation files, zero `.mp3` tracked, and the `booth.py` reflow confirmed
+    as formatter noise **excluded** from the candidate. **The FAIL was real:** the blank-refusal matrix
+    (2 implementations × 2 methods) had tests in only **3 of 4** cells —
+    `FakeAudioSynthesizer.synthesize_to_file` was untested. Closed with
+    `test_fake_synthesizer_rejects_blank_file`, which pins both observables (the `ValueError` **and** that no
+    destination file is created): audio cases **10 in 0.31 s**, suite **1026 passed**, ruff clean. Commit
+    `1100cbf`. The verifier mutated no repository state and made no network call.
   - [ ] **T5** — the native review under RDD: `assess`, then the route it offers, with the acknowledgement
     burning the authority.
   - [ ] **T6** — delivery: push, PR, CI green, merge commit — each the user's separate decision. The branch is
