@@ -4298,7 +4298,8 @@ turned out to be two trees**, so a per-tree count must always travel with its tr
     **two staleness keys** — `audio.py` `85772027…` and `test_audio.py` `ad77bae7…`, both anchored at their
     creation commit `deeaf4c`, satisfying the register's own repair a second time — and the new section
     **"The audio wiring — built as a module, wired into nothing"** with owner *the first unit asked to emit
-    audio from a run* and trigger *wiring it into `run.py` or the booth*. Every file reported Markdown clean.
+    audio from a run* and trigger *wiring it into `run.py` or the booth*. Markdown diagnostics were incomplete
+    where Marksman was silent; the functional and structural checks are the observed proof.
   - [x] **T3** — the checks at the closing revision, measured after the doc edits rather than before them.
     **Observed:** the suite reports **1025 passed, 1 warning in 53.43 s** (the warning is the known third-party
     `google/genai` `DeprecationWarning`), and the repository's own lint invocation —
@@ -4317,7 +4318,8 @@ turned out to be two trees**, so a per-tree count must always travel with its tr
     `FakeAudioSynthesizer.synthesize_to_file` was untested. Closed with
     `test_fake_synthesizer_rejects_blank_file`, which pins both observables (the `ValueError` **and** that no
     destination file is created): audio cases **10 in 0.31 s**, suite **1026 passed**, ruff clean. Commit
-    `1100cbf`. The verifier mutated no repository state and made no network call.
+    `1100cbf`. This is a coverage pin for behavior already implemented by delegation: **no RED was observed**
+    and no behavior change is claimed. The verifier mutated no repository state and made no product network call.
   - [x] **T5** — the native review gate, measured and decided. **Observed:** `assess` over the committed range
     (`baseRef: main`, `committedOnly`) at `f3b2bad` returned schema `gentle-pi.review-assessment-plan/v1`:
     risk **medium** (nativeRisk medium, reason `configuration_change` on `pyproject.toml`), **9** changed
@@ -4360,3 +4362,7 @@ turned out to be two trees**, so a per-tree count must always travel with its tr
   - **L6.** The user, 2026-10-14, choosing this closure's scope from three options: **"Módulo tal cual
     (recomendado)"** (the orchestrator's label) over wiring the booth now and over docs-only — close the
     standalone opt-in module end to end; the wiring becomes a register row in another unit.
+  - **L7.** Closing readback after PR #64: the new test changed `tests/test_audio.py` from the creation blob
+    `ad77bae7…` (98 lines) to `9efc2df9…` (112 lines); the register's stale `same/current` cell was corrected.
+    `PROJECT-STATE.md` now names the delivered snapshot `45a81ba` and its 1026-test receipts. No source or
+    runtime behavior changed in this documentary correction.
