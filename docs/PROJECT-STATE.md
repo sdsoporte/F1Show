@@ -2,7 +2,7 @@
 
 One page for the question *what exists, what does not, and what is merely carried*. It is a **snapshot**, and it names the revision it was drawn at: `odd/tasks/f1show.md` stays the authority.
 
-**Snapshot:** `45a81ba` (the merge of PR #64): **F14** (wall-clock playback) and **F15** (standalone, opt-in speech synthesis) are delivered. The corpus holds **two** sessions; the full suite and Python 3.12 floor each passed **1026** tests, and CI passed on **3.12 and 3.14** with **Ruff 0.17.0** pinned. The Mermaid diagram below was drawn at `043d2a5` and has not been redrawn since; the tables describe this newer snapshot.
+**Snapshot:** `e0dff8a` (the merge of PR #68): **F14** (wall-clock playback), **F15** (standalone, opt-in speech synthesis) and **F06a** (the race tactical motor) are delivered. The corpus holds **two** sessions; the full suite and Python 3.12 floor each passed **1053** tests, and CI passed on **3.12 and 3.14** with **Ruff 0.17.0** pinned. The Mermaid diagram below was drawn at `043d2a5` and has not been redrawn since; the tables describe this newer snapshot.
 
 ## The map
 
@@ -109,6 +109,7 @@ Exports for readers who cannot render Mermaid: [`project-state.svg`](assets/proj
 | F09j | the second recorded window | session **9655** (the 2024 Qatar Grand Prix) recorded verbatim from the free tier with **no credential**: ten families, **574,894 bytes**, a dated provenance section, and five tests that pin its measured facts; the start rule now has a second, differently-shaped session behind it (zero null timestamps there, where 9617 has an orphan that sorts last) |
 | F14 | wall-clock playback | a recorded session is consumed **at the rate it happened** — one wait per event off the run's own earliest known instant, opt-in and injected both-or-neither, with the transcript **byte-identical** to the unpaced run at any scale |
 | F15 | speech synthesis, built and opt-in | `f1show.audio` turns a turn's text into audio per seat — declared voice catalogue per dialect, `+10%` rate on climax turns, blank text refused — behind a protocol with a fake; **nothing on the run's path calls it** (zero references in `booth.py` and `run.py`, no test opens a socket) |
+| F06a | the race tactical motor, standalone | `f1show.tactical` turns recorded payloads into a total-ordered tuple of source-referenced alerts — gap battles on the `interval` field, lapped readings kept as lap counts, declared unknowns and absences, freshness windows, clean-lap pace deficits against the session best median, and estimated tyre age per current stint — behind configurable, pinned thresholds; **nothing on the run's path calls it** (the booth, `run.py` and the collector are untouched), and it consumes the F04 `classify_gap` handoff, so the orphan deadline is met |
 
 ## Remaining, and why
 
