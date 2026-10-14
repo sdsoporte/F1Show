@@ -25,8 +25,10 @@ comparison exists.
 from __future__ import annotations
 
 import datetime as dt
+import math
 from collections.abc import Iterable, Mapping, Sequence
 from enum import Enum
+from statistics import median
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
@@ -36,6 +38,7 @@ from f1show.collector import GapKind, classify_gap
 #: construction: the recorded corpus holds it for session 9617 only, so its
 #: absence is declared analysis input, never an error.
 _INTERVALS = "intervals"
+_LAPS = "laps"
 
 
 class _Deterministic(BaseModel):
@@ -51,6 +54,7 @@ class TacticalKind(str, Enum):
     GAP_LAPPED = "gap_lapped"
     GAP_UNKNOWN = "gap_unknown"
     STALE_READING = "stale_reading"
+    PACE_DELTA = "pace_delta"
 
 
 class TacticalSettings(_Deterministic):
@@ -67,6 +71,14 @@ class TacticalSettings(_Deterministic):
     #: A driver whose newest reading is more than this many seconds behind the
     #: newest reading overall is stale and feeds no gap alert.
     staleness_seconds: float = Field(default=15.0, gt=0.0)
+
+    #: The number of recent clean laps each driver's pace median is taken
+    #: over. Drivers with fewer clean laps than this produce no pace claim.
+    pace_window_laps: int = Field(default=5, ge=1)
+
+    #: A driver whose clean-lap median exceeds the session best median by
+    #: strictly more than this many seconds gets a pace alert.
+    pace_delta_threshold_seconds: float = Field(default=0.5, gt=0.0)
 
 
 class SourceRef(_Deterministic):
@@ -208,6 +220,89 @@ def _gap_alerts(
         # ``ABSENT`` on both fields is declared absence: no alert, no claim.
 
 
+def _recent_pace_windows(
+    records: Sequence[Mapping[str, object]], session_key: int, settings: TacticalSettings
+) -> dict[int, tuple[float, tuple[tuple[int, float, int, dt.datetime | None], ...]]]:
+    """Each driver's clean-lap median over its most recent window.
+
+    A clean lap is a lap-2-or-later record with a positive finite duration
+    that is not a pit in/out lap: lap 1 is a standing start and is never
+    compared as a lap time, pit laps measure the pit lane, and a null or
+    corrupt duration is not a time. A driver with fewer clean laps than the
+    window produces no pace claim at all. The window is the driver's most
+    recent clean laps by lap number; ties break by record index.
+    """
+    per_driver: dict[int, list[tuple[int, Mapping[str, object]]]] = {}
+    for index, record in enumerate(records):
+        if record.get("session_key") != session_key:
+            continue
+        driver = record.get("driver_number")
+        if not isinstance(driver, int):
+            continue
+        per_driver.setdefault(driver, []).append((index, record))
+    windows: dict[int, tuple[float, tuple[tuple[int, float, int, dt.datetime | None], ...]]] = {}
+    for driver, rows in per_driver.items():
+        clean: list[tuple[int, float, int, dt.datetime | None]] = []
+        for index, record in rows:
+            lap = record.get("lap_number")
+            duration = record.get("lap_duration")
+            if isinstance(lap, bool) or not isinstance(lap, int) or lap < 2:
+                continue
+            if record.get("is_pit_out_lap"):
+                continue
+            if isinstance(duration, bool) or not isinstance(duration, int | float):
+                continue
+            seconds = float(duration)
+            if not math.isfinite(seconds) or seconds <= 0.0:
+                continue
+            clean.append((lap, seconds, index, _as_instant(record.get("date_start"))))
+        if len(clean) < settings.pace_window_laps:
+            continue
+        clean.sort(key=lambda item: (item[0], item[2]))
+        window = tuple(
+            (lap, seconds, index, when)
+            for lap, seconds, index, when in clean[-settings.pace_window_laps :]
+        )
+        windows[driver] = (median(item[1] for item in window), window)
+    return windows
+
+
+def _pace_alerts(
+    records: Sequence[Mapping[str, object]], session_key: int, settings: TacticalSettings
+) -> Iterable[TacticalAlert]:
+    """Pace alerts: a driver's clean-lap median vs the session best median.
+
+    The session best is the minimum of the drivers' medians, all computed
+    identically. Only a strictly-greater-than-threshold deficit alerts; the
+    best driver (and any driver tied with it) never alerts. No record,
+    best-ever or circuit comparison exists: the comparison corpus is exactly
+    this session's own clean laps.
+    """
+    windows = _recent_pace_windows(records, session_key, settings)
+    if not windows:
+        return
+    best = min(value for value, _ in windows.values())
+    for driver, (value, window) in sorted(windows.items()):
+        delta = value - best
+        if delta <= settings.pace_delta_threshold_seconds:
+            continue
+        yield TacticalAlert(
+            kind=TacticalKind.PACE_DELTA,
+            driver_number=driver,
+            timestamp=window[-1][2],
+            facts={
+                "median_seconds": value,
+                "best_median_seconds": best,
+                "delta_seconds": delta,
+                "window_laps": settings.pace_window_laps,
+            },
+            sources=tuple(
+                SourceRef(family=_LAPS, record_index=index, driver_number=driver, timestamp=when)
+                for _, _, index, when in window
+            ),
+        )
+
+
 def analyze_tactics(
     session_key: int,
     payloads: Mapping[str, Sequence[Mapping[str, object]]],
@@ -226,6 +321,9 @@ def analyze_tactics(
     interval_records = payloads.get(_INTERVALS, [])
     if interval_records:
         alerts.extend(_gap_alerts(_latest_readings(interval_records, session_key), settings))
+    lap_records = payloads.get(_LAPS, [])
+    if lap_records:
+        alerts.extend(_pace_alerts(lap_records, session_key, settings))
     return tuple(sorted(alerts, key=_sort_key))
 
 

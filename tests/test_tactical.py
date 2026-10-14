@@ -300,7 +300,13 @@ def test_recorded_fixture_mid_race_battle_with_a_wider_window() -> None:
     assert battles[0].facts["interval_seconds"] <= 1.0
     assert len(alerts_of_kind(alerts, TacticalKind.GAP_LAPPED)) == 7
     assert len(alerts_of_kind(alerts, TacticalKind.STALE_READING)) == 1
-    assert len(alerts) == 9
+    gap_kinds = {
+        TacticalKind.GAP_BATTLE,
+        TacticalKind.GAP_LAPPED,
+        TacticalKind.GAP_UNKNOWN,
+        TacticalKind.STALE_READING,
+    }
+    assert len([alert for alert in alerts if alert.kind in gap_kinds]) == 9
 
 
 def test_deterministic_total_order() -> None:
@@ -328,3 +334,139 @@ def test_classify_gap_is_the_consumed_surface() -> None:
 
     assert classify_gap("+1 LAP").kind is GapKind.LAPS
     assert classify_gap(None).kind is GapKind.ABSENT
+
+
+def lap_row(
+    driver: int, lap: int, duration: float | None, *, pit_out: bool = False
+) -> dict[str, Any]:
+    """One synthetic recorded lap row."""
+    return {
+        "session_key": SESSION_KEY,
+        "driver_number": driver,
+        "lap_number": lap,
+        "lap_duration": duration,
+        "is_pit_out_lap": pit_out,
+        "date_start": f"2024-10-20T19:{10 + lap:02d}:00.000000+00:00",
+    }
+
+
+PACE_SETTINGS = TacticalSettings(pace_window_laps=3, pace_delta_threshold_seconds=0.5)
+
+
+def test_pace_alert_fires_over_threshold_and_names_both_medians() -> None:
+    """A median slower than the session best by more than the threshold alerts."""
+    payloads = {
+        "laps": [
+            lap_row(4, 2, 100.0),
+            lap_row(4, 3, 100.25),
+            lap_row(4, 4, 100.5),
+            lap_row(14, 2, 101.0),
+            lap_row(14, 3, 101.25),
+            lap_row(14, 4, 101.5),
+        ]
+    }
+    alerts = analyze_tactics(SESSION_KEY, payloads, settings=PACE_SETTINGS)
+    pace = alerts_of_kind(alerts, TacticalKind.PACE_DELTA)
+    assert [alert.driver_number for alert in pace] == [14]
+    assert pace[0].facts["median_seconds"] == 101.25
+    assert pace[0].facts["best_median_seconds"] == 100.25
+    assert pace[0].facts["delta_seconds"] == 1.0
+    assert pace[0].facts["window_laps"] == 3
+    assert [source.family for source in pace[0].sources] == ["laps", "laps", "laps"]
+    assert pace[0].timestamp is not None
+
+
+def test_pace_median_excludes_lap1_pit_out_and_nulls() -> None:
+    """Lap 1, pit in/out laps and null durations never enter the median."""
+    payloads = {
+        "laps": [
+            lap_row(4, 2, 100.0),
+            lap_row(4, 3, 100.25),
+            lap_row(4, 4, 100.5),
+            lap_row(44, 1, 99.0),
+            lap_row(44, 2, 50.0, pit_out=True),
+            lap_row(44, 3, None),
+            lap_row(44, 4, 102.0),
+            lap_row(44, 5, 102.25),
+            lap_row(44, 6, 102.5),
+        ]
+    }
+    alerts = analyze_tactics(SESSION_KEY, payloads, settings=PACE_SETTINGS)
+    pace = alerts_of_kind(alerts, TacticalKind.PACE_DELTA)
+    assert [alert.driver_number for alert in pace] == [44]
+    assert pace[0].facts["median_seconds"] == 102.25
+    assert pace[0].facts["best_median_seconds"] == 100.25
+
+
+def test_drivers_with_fewer_clean_laps_than_the_window_are_excluded() -> None:
+    """A driver without a full clean window produces no pace claim at all."""
+    payloads = {
+        "laps": [
+            lap_row(4, 2, 100.0),
+            lap_row(4, 3, 100.25),
+            lap_row(4, 4, 100.5),
+            lap_row(90, 2, 130.0),
+            lap_row(90, 3, 130.25),
+        ]
+    }
+    alerts = analyze_tactics(SESSION_KEY, payloads, settings=PACE_SETTINGS)
+    assert alerts_of_kind(alerts, TacticalKind.PACE_DELTA) == []
+
+
+def test_delta_exactly_at_the_threshold_does_not_alert() -> None:
+    """The pace alert is strictly greater than the threshold."""
+    payloads = {
+        "laps": [
+            lap_row(4, 2, 100.0),
+            lap_row(4, 3, 100.25),
+            lap_row(4, 4, 100.5),
+            lap_row(14, 2, 100.5),
+            lap_row(14, 3, 100.75),
+            lap_row(14, 4, 101.0),
+        ]
+    }
+    alerts = analyze_tactics(SESSION_KEY, payloads, settings=PACE_SETTINGS)
+    assert alerts_of_kind(alerts, TacticalKind.PACE_DELTA) == []
+
+
+def test_tied_best_medians_alert_neither_tied_driver() -> None:
+    """Two drivers sharing the best median both escape; the rest measure vs it."""
+    payloads = {
+        "laps": [
+            lap_row(7, 2, 100.0),
+            lap_row(7, 3, 100.25),
+            lap_row(7, 4, 100.5),
+            lap_row(9, 2, 100.0),
+            lap_row(9, 3, 100.25),
+            lap_row(9, 4, 100.5),
+            lap_row(14, 2, 101.0),
+            lap_row(14, 3, 101.25),
+            lap_row(14, 4, 101.5),
+        ]
+    }
+    alerts = analyze_tactics(SESSION_KEY, payloads, settings=PACE_SETTINGS)
+    pace = alerts_of_kind(alerts, TacticalKind.PACE_DELTA)
+    assert [alert.driver_number for alert in pace] == [14]
+    assert pace[0].facts["best_median_seconds"] == 100.25
+
+
+def test_missing_laps_family_is_declared_absence() -> None:
+    """No laps payload means no pace alerts, and no exception."""
+    alerts = analyze_tactics(SESSION_KEY, {"intervals": load("intervals")})
+    assert alerts_of_kind(alerts, TacticalKind.PACE_DELTA) == []
+
+
+def test_recorded_fixture_pace_alerts_are_pinned() -> None:
+    """The recorded session's pace picture, measured and pinned.
+
+    With the declared defaults, twelve of the twenty drivers trail the
+    session's best clean-lap median (97.889 s) by strictly more than the
+    threshold; every alert carries the default five-lap window.
+    """
+    alerts = analyze_tactics(SESSION_KEY, full_payloads())
+    pace = alerts_of_kind(alerts, TacticalKind.PACE_DELTA)
+    assert len(pace) == 12
+    assert len({alert.driver_number for alert in pace}) == 12
+    assert all(alert.facts["window_laps"] == 5 for alert in pace)
+    assert all(alert.facts["delta_seconds"] > 0.5 for alert in pace)
+    assert {alert.facts["best_median_seconds"] for alert in pace} == {97.889}
