@@ -143,6 +143,13 @@ from f1show.session import (
 )
 from f1show.snapshot import SnapshotResult, write_session_snapshot
 from f1show.store import SQLiteStore
+from f1show.tactical import (
+    SourceRef,
+    TacticalAlert,
+    TacticalKind,
+    TacticalSettings,
+    analyze_tactics,
+)
 
 __all__ = [
     "DEFAULT_OPENF1_BASE_URL", "DEFAULT_REQUEST_TIMEOUT_SECONDS", "DEFAULT_STORE_PATH", "REDACTED",
@@ -179,4 +186,6 @@ __all__ = [
     # Audio synthesis
     "AudioSynthesizer", "EdgeTTSAudioSynthesizer", "FakeAudioSynthesizer",
     "VOICE_MAP", "rate_for_mode", "resolve_voice",
+    # F06a: the deterministic tactical motor over the recorded corpus.
+    "analyze_tactics", "TacticalAlert", "TacticalKind", "TacticalSettings", "SourceRef",
 ]
