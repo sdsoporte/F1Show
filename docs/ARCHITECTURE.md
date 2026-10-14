@@ -228,11 +228,21 @@ The first delivery produces a **plain text/CLI transcript**: the commentary stre
 sourced, written to standard output or a file. This is the only output the first
 delivery targets, and it is what F10's single-process run emits today.
 
+**Speech synthesis exists beside this path, not on it.** `f1show.audio` (F15) turns a
+turn's text into spoken audio per seat — Edge-TTS neural voices selected by speaker and
+dialect, rate following the turn mode — behind an injectable protocol with a fake for
+the suite. The run never calls it: `booth.py` and `run.py` carry zero references to
+audio, no test opens a socket, and synthesis reaches the network only when a caller
+explicitly invokes it. Putting it on a run's path is a separate unit; the register
+carries that row with its owner and trigger.
+
 ## Out of scope
 
 Deliberately excluded, and separate future scope rather than incomplete work:
 
-- **Audio and TTS** — no speech synthesis or multi-speaker voice output.
+- **Audio on the run's path** — the run emits text only. Speech synthesis exists as
+  the opt-in module `f1show.audio` (see *Output*, above), and wiring it into a run is
+  separate future scope rather than missing work.
 - **Dashboards and web UI** — no graphical or real-time visual interface.
 - **Social posting and publication** — no automated posting to any platform.
 - **Multi-session operation** — one session at a time; concurrent sessions are not
