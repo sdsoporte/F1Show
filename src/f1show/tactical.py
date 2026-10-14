@@ -39,6 +39,7 @@ from f1show.collector import GapKind, classify_gap
 #: absence is declared analysis input, never an error.
 _INTERVALS = "intervals"
 _LAPS = "laps"
+_STINTS = "stints"
 
 
 class _Deterministic(BaseModel):
@@ -55,6 +56,7 @@ class TacticalKind(str, Enum):
     GAP_UNKNOWN = "gap_unknown"
     STALE_READING = "stale_reading"
     PACE_DELTA = "pace_delta"
+    TYRE_AGE = "tyre_age"
 
 
 class TacticalSettings(_Deterministic):
@@ -79,6 +81,10 @@ class TacticalSettings(_Deterministic):
     #: A driver whose clean-lap median exceeds the session best median by
     #: strictly more than this many seconds gets a pace alert.
     pace_delta_threshold_seconds: float = Field(default=0.5, gt=0.0)
+
+    #: A computed tyre age at or over this many laps alerts. The age is a
+    #: declared estimate, never a fact.
+    tyre_age_threshold_laps: int = Field(default=25, ge=1)
 
 
 class SourceRef(_Deterministic):
@@ -303,6 +309,107 @@ def _pace_alerts(
         )
 
 
+def _last_completed_laps(
+    records: Sequence[Mapping[str, object]], session_key: int
+) -> dict[int, tuple[int, int, dt.datetime | None]]:
+    """Each driver's last completed clean lap: number, record index, instant.
+
+    A completed lap is a real lap: a non-null finite positive duration on a
+    non-pit in/out record. Pit in/out laps and null or corrupt durations are
+    not completed laps of racing; lap 1 is a completed lap and counts for
+    wear, though never as a comparable lap time.
+    """
+    last: dict[int, tuple[int, int, dt.datetime | None]] = {}
+    for index, record in enumerate(records):
+        if record.get("session_key") != session_key:
+            continue
+        driver = record.get("driver_number")
+        lap = record.get("lap_number")
+        duration = record.get("lap_duration")
+        if not isinstance(driver, int):
+            continue
+        if isinstance(lap, bool) or not isinstance(lap, int):
+            continue
+        if record.get("is_pit_out_lap"):
+            continue
+        if isinstance(duration, bool) or not isinstance(duration, int | float):
+            continue
+        seconds = float(duration)
+        if not math.isfinite(seconds) or seconds <= 0.0:
+            continue
+        current = last.get(driver)
+        if current is None or lap > current[0]:
+            last[driver] = (lap, index, _as_instant(record.get("date_start")))
+    return last
+
+
+def _tyre_alerts(
+    lap_records: Sequence[Mapping[str, object]],
+    stint_records: Sequence[Mapping[str, object]],
+    session_key: int,
+    settings: TacticalSettings,
+) -> Iterable[TacticalAlert]:
+    """Tyre-age alerts for each driver's latest stint.
+
+    The computed age is a declared estimate: ``tyre_age_at_start`` plus the
+    laps run on the stint up to the driver's last completed clean lap, never
+    clamped by the stint's recorded ``lap_end`` (the latest stint is the
+    current one) and never read as a fact. A stint with no recorded age at
+    start stays unknown. Only the highest stint number per driver is the
+    current stint; an ended earlier stint makes no end-state claim. The
+    alert fires at or over the threshold.
+    """
+    last_laps = _last_completed_laps(lap_records, session_key)
+    latest_stint: dict[int, tuple[int, int, Mapping[str, object]]] = {}
+    for index, record in enumerate(stint_records):
+        if record.get("session_key") != session_key:
+            continue
+        driver = record.get("driver_number")
+        stint = record.get("stint_number")
+        if not isinstance(driver, int):
+            continue
+        if isinstance(stint, bool) or not isinstance(stint, int):
+            continue
+        current = latest_stint.get(driver)
+        if current is None or stint > current[0]:
+            latest_stint[driver] = (stint, index, record)
+    for driver, (stint_number, stint_index, record) in sorted(latest_stint.items()):
+        age_at_start = record.get("tyre_age_at_start")
+        lap_start = record.get("lap_start")
+        if isinstance(age_at_start, bool) or not isinstance(age_at_start, int | float):
+            continue
+        if isinstance(lap_start, bool) or not isinstance(lap_start, int):
+            continue
+        completed = last_laps.get(driver)
+        stint_laps = max(0, completed[0] - lap_start + 1) if completed is not None else 0
+        age = float(age_at_start) + stint_laps
+        if age < settings.tyre_age_threshold_laps:
+            continue
+        sources = [
+            SourceRef(family=_STINTS, record_index=stint_index, driver_number=driver, timestamp=None)
+        ]
+        timestamp: dt.datetime | None = None
+        if completed is not None:
+            lap_number, lap_index, when = completed
+            timestamp = when
+            sources.append(
+                SourceRef(family=_LAPS, record_index=lap_index, driver_number=driver, timestamp=when)
+            )
+        yield TacticalAlert(
+            kind=TacticalKind.TYRE_AGE,
+            driver_number=driver,
+            timestamp=timestamp,
+            facts={
+                "tyre_age_laps": age,
+                "tyre_age_at_start": float(age_at_start),
+                "stint_laps": stint_laps,
+                "stint_number": stint_number,
+                "compound": record.get("compound"),
+            },
+            sources=tuple(sources),
+        )
+
+
 def analyze_tactics(
     session_key: int,
     payloads: Mapping[str, Sequence[Mapping[str, object]]],
@@ -324,6 +431,9 @@ def analyze_tactics(
     lap_records = payloads.get(_LAPS, [])
     if lap_records:
         alerts.extend(_pace_alerts(lap_records, session_key, settings))
+    stint_records = payloads.get(_STINTS, [])
+    if stint_records:
+        alerts.extend(_tyre_alerts(lap_records, stint_records, session_key, settings))
     return tuple(sorted(alerts, key=_sort_key))
 
 

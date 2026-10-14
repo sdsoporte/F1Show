@@ -470,3 +470,152 @@ def test_recorded_fixture_pace_alerts_are_pinned() -> None:
     assert all(alert.facts["window_laps"] == 5 for alert in pace)
     assert all(alert.facts["delta_seconds"] > 0.5 for alert in pace)
     assert {alert.facts["best_median_seconds"] for alert in pace} == {97.889}
+
+
+def stint_row(
+    driver: int,
+    stint: int,
+    lap_start: int,
+    lap_end: int,
+    *,
+    compound: str = "MEDIUM",
+    tyre_age_at_start: int | None = 0,
+) -> dict[str, Any]:
+    """One synthetic recorded stint row."""
+    return {
+        "session_key": SESSION_KEY,
+        "driver_number": driver,
+        "stint_number": stint,
+        "lap_start": lap_start,
+        "lap_end": lap_end,
+        "compound": compound,
+        "tyre_age_at_start": tyre_age_at_start,
+    }
+
+
+TYRE_SETTINGS = TacticalSettings(tyre_age_threshold_laps=25)
+
+
+def test_tyre_age_alerts_at_and_over_the_threshold() -> None:
+    """A computed age at or over the threshold alerts; below it does not."""
+    payloads = {
+        "laps": [
+            lap_row(4, 10, 100.0),
+            lap_row(4, 11, 100.25),
+            lap_row(4, 12, 100.5),
+        ],
+        "stints": [
+            stint_row(4, 2, 10, 12, tyre_age_at_start=15),
+            stint_row(14, 1, 2, 40, tyre_age_at_start=0),
+        ],
+    }
+    # Driver 4: laps on stint = 12 - 10 + 1 = 3, age = 15 + 3 = 18 < 25.
+    # Driver 14: a long first stint; age = 0 + 11 = 11 < 25. Neither alerts.
+    assert analyze_tactics(SESSION_KEY, payloads, settings=TYRE_SETTINGS) == ()
+    payloads["stints"][0] = stint_row(4, 2, 10, 12, tyre_age_at_start=22)
+    # Age = 22 + 3 = 25: exactly at the threshold alerts.
+    alerts = analyze_tactics(SESSION_KEY, payloads, settings=TYRE_SETTINGS)
+    ages = alerts_of_kind(alerts, TacticalKind.TYRE_AGE)
+    assert [alert.driver_number for alert in ages] == [4]
+    assert ages[0].facts["tyre_age_laps"] == 25
+    assert ages[0].facts["tyre_age_at_start"] == 22
+    assert ages[0].facts["stint_laps"] == 3
+    assert ages[0].facts["stint_number"] == 2
+    assert ages[0].facts["compound"] == "MEDIUM"
+    assert [source.family for source in ages[0].sources] == ["stints", "laps"]
+
+
+def test_tyre_age_counts_clean_laps_only() -> None:
+    """Lap 1, pit in/out laps and null durations never extend the age."""
+    payloads = {
+        "laps": [
+            lap_row(44, 9, 101.0),
+            lap_row(44, 10, 50.0, pit_out=True),
+            lap_row(44, 11, None),
+        ],
+        "stints": [stint_row(44, 3, 10, 30, tyre_age_at_start=20)],
+    }
+    # Last clean lap is 9, before the stint's lap_start 10: stint laps = 0,
+    # age = 20 + 0 = 20 < 25. A pit-out lap 10 or the null lap 11 would have
+    # pushed the count up.
+    assert analyze_tactics(SESSION_KEY, payloads, settings=TYRE_SETTINGS) == ()
+    payloads["laps"].insert(0, lap_row(44, 12, 101.25))
+    # Now the last clean lap is 12: stint laps = 3, age = 23. Still below.
+    assert analyze_tactics(SESSION_KEY, payloads, settings=TYRE_SETTINGS) == ()
+    payloads["laps"].append(lap_row(44, 13, 101.5))
+    # Last clean lap 13: stint laps = 4, age = 24. At the line but below.
+    assert analyze_tactics(SESSION_KEY, payloads, settings=TYRE_SETTINGS) == ()
+    payloads["laps"].append(lap_row(44, 14, 101.75))
+    # Last clean lap 14: stint laps = 5, age = 25: at the threshold, alerts.
+    alerts = analyze_tactics(SESSION_KEY, payloads, settings=TYRE_SETTINGS)
+    ages = alerts_of_kind(alerts, TacticalKind.TYRE_AGE)
+    assert [alert.driver_number for alert in ages] == [44]
+    assert ages[0].facts["tyre_age_laps"] == 25
+
+
+def test_only_the_latest_stint_is_evaluated() -> None:
+    """An already-ended earlier stint makes no end-state age claim."""
+    payloads = {
+        "laps": [lap_row(31, 40, 100.0)],
+        "stints": [
+            stint_row(31, 1, 1, 25, tyre_age_at_start=0),
+            stint_row(31, 2, 26, 50, tyre_age_at_start=0),
+        ],
+    }
+    # Stint 1 would read 25 laps of use, but it ended laps ago; only stint 2
+    # is current: laps on stint = 40 - 26 + 1 = 15, age 15 < 25.
+    assert analyze_tactics(SESSION_KEY, payloads, settings=TYRE_SETTINGS) == ()
+    payloads["stints"][1] = stint_row(31, 2, 26, 50, tyre_age_at_start=15)
+    alerts = analyze_tactics(SESSION_KEY, payloads, settings=TYRE_SETTINGS)
+    assert [alert.driver_number for alert in alerts_of_kind(alerts, TacticalKind.TYRE_AGE)] == [31]
+    assert alerts[0].facts["tyre_age_laps"] == 30
+
+
+def test_unknown_tyre_age_produces_no_claim() -> None:
+    """A stint with no tyre age at start stays unknown, never zero."""
+    payloads = {
+        "laps": [lap_row(77, 30, 100.0)],
+        "stints": [stint_row(77, 2, 10, 50, tyre_age_at_start=None)],
+    }
+    assert analyze_tactics(SESSION_KEY, payloads, settings=TYRE_SETTINGS) == ()
+
+
+def test_missing_stint_or_lap_families_are_declared_absence() -> None:
+    """No stints means no tyre alerts; laps alone cannot compute an age."""
+    assert (
+        alerts_of_kind(
+            analyze_tactics(SESSION_KEY, {"laps": load("laps")}, settings=TYRE_SETTINGS),
+            TacticalKind.TYRE_AGE,
+        )
+        == []
+    )
+    payloads = {"stints": [stint_row(4, 1, 1, 50, tyre_age_at_start=0)]}
+    # Laps absent: no completed lap is known, stint laps = 0, age 0 < 25.
+    assert analyze_tactics(SESSION_KEY, payloads, settings=TYRE_SETTINGS) == ()
+
+
+def test_recorded_fixture_tyre_age_alerts_are_pinned() -> None:
+    """The recorded session's end-of-race tyre picture, measured and pinned.
+
+    Eleven drivers' latest stints carry a computed age at or over the
+    declared 25-lap threshold, all on their second stint; the rest retired
+    earlier or pitted into stints whose age stays below the line.
+    """
+    alerts = analyze_tactics(SESSION_KEY, full_payloads())
+    ages = alerts_of_kind(alerts, TacticalKind.TYRE_AGE)
+    measured = sorted((alert.driver_number, alert.facts["tyre_age_laps"]) for alert in ages)
+    assert measured == [
+        (1, 31.0),
+        (4, 25.0),
+        (10, 38.0),
+        (11, 30.0),
+        (14, 30.0),
+        (16, 30.0),
+        (18, 28.0),
+        (22, 37.0),
+        (27, 29.0),
+        (55, 35.0),
+        (77, 40.0),
+    ]
+    assert all(alert.facts["stint_number"] == 2 for alert in ages)
+    assert all(alert.facts["tyre_age_laps"] >= 25.0 for alert in ages)
