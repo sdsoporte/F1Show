@@ -2,7 +2,7 @@
 
 One page for the question *what exists, what does not, and what is merely carried*. It is a **snapshot**, and it names the revision it was drawn at: `odd/tasks/f1show.md` stays the authority.
 
-**Snapshot:** drawn at the **F15 closure**, on `feat/audio-tts-booth` — the code at `deeaf4c` plus this record; `main` sits at `d23ee49` (PR #63), and **F14** (wall-clock playback) and **F15** (speech synthesis) are the units delivered since `043d2a5`. The corpus holds **two** sessions - suite **1025 passing** - CI on **3.12 and 3.14** with **Ruff 0.17.0** pinned. The Mermaid diagram below was drawn at `043d2a5` and has not been redrawn since; the tables are the current record.
+**Snapshot:** `45a81ba` (the merge of PR #64): **F14** (wall-clock playback) and **F15** (standalone, opt-in speech synthesis) are delivered. The corpus holds **two** sessions; the full suite and Python 3.12 floor each passed **1026** tests, and CI passed on **3.12 and 3.14** with **Ruff 0.17.0** pinned. The Mermaid diagram below was drawn at `043d2a5` and has not been redrawn since; the tables describe this newer snapshot.
 
 ## The map
 
