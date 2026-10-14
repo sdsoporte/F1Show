@@ -330,10 +330,10 @@ code's new home rather than a new number for the old one. And the test row moved
 | --- | --- | --- | --- | --- | --- |
 | `:245-249` | R3-unhashable-identity | WARNING | — | — | **CLOSED**: `cfbe614` made the dedup identity hashable for any payload value |
 | `:197-200` | R3-recursion-escape | WARNING | — | — | **DEAD RECORD**: reproduced by the parent and it does **not** crash; a pathologically deep programmatic payload is not reachable from a JSON parse |
-| `:198-199` | R3-canonical-not-faithful | WARNING | F06 | F06 consuming `classify_gap`, or any change to the intervals normalization | OPEN |
+| `:198` | R3-canonical-not-faithful | WARNING | — | — | **DEAD RECORD (re-derived by F06a, commit `d6d33a9`)**: the `default=repr` fallback is unreachable from recorded payloads — `json.loads` yields only JSON-representable values, so the encoder never falls back and `sort_keys` cannot raise. Measured: equal values with different key order render identically; `1`/`"1"` and `True`/`1` render distinctly; no probe value raised. The type-tagged `_identity_token` still separates residual programmatic types |
 | `:199-200` | R3-valueerror-branch-untested | SUGGESTION | issue #8 | promoting probe-only coverage into the suite | OPEN |
 | `:170-175` | R3-fromisoformat-version-tail | SUGGESTION | F11, or F07 | **the F10 trigger did NOT fire**: F10 feeds no timestamp parse from configuration — the only configuration-fed values on the path are the integer `session_key` and the base-URL string. The condition is still a timestamp arriving from configuration, which is packaging/CLI work or F07 | OPEN |
-| `:121-131` | R3-gapreading-cross-kind | SUGGESTION | F06 | F06 consuming `classify_gap` | OPEN |
+| `:113-131` | R3-gapreading-cross-kind | SUGGESTION | — | — | **CLOSED by consumption (F06a, commit `d6d33a9`)**: the tactical motor branches on `GapKind` and emits only the field its reading kind guarantees (`LAPS` → `laps`, `SECONDS` → seconds), never comparing across kinds; pinned by `tests/test_tactical.py` |
 | `tests/test_collector.py:26-33` | R3-fixtures-outside-candidate | SUGGESTION | — | — | **DEAD RECORD**: a note about the fixtures living outside the candidate; the fixtures are committed, so the condition it described has passed |
 
 **A concrete case of the over-flagging that the blob key admits, and the reason the subject is what decides.**
