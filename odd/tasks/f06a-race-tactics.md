@@ -63,7 +63,7 @@ strategy `ask-on-risk`, work-unit commits, no push/PR/merge. Test runner:
   stints, estimated ages 25-40 laps.
 - **T4** (S1,S8): carried-findings rows re-derived, suite + Ruff, and the
   `docs/PROJECT-STATE.md` row **deferred to delivery** (L3). Route: inline.
-  Commit: pending.
+  Commit: `fdfeff7`.
 
 ## Log
 
