@@ -70,6 +70,20 @@ async def test_fake_synthesizer_rejects_blank() -> None:
 
 
 @pytest.mark.anyio
+async def test_fake_synthesizer_rejects_blank_file(tmp_path: pathlib.Path) -> None:
+    # Fourth cell of the 2 implementations x 2 methods matrix: the fake's
+    # synthesize_to_file refuses blank text before creating anything, because
+    # it delegates to synthesize first. Without this test the refusal was
+    # asserted in only three of the four cells (found by the independent
+    # verifier of F15, claim 6).
+    fake = FakeAudioSynthesizer()
+    out_file = tmp_path / "blank.mp3"
+    with pytest.raises(ValueError, match="text must not be blank"):
+        await fake.synthesize_to_file("   ", out_file, speaker=Speaker.lead)
+    assert not out_file.exists()
+
+
+@pytest.mark.anyio
 async def test_fake_synthesizer_synthesize_to_file(tmp_path: pathlib.Path) -> None:
     fake = FakeAudioSynthesizer()
     out_file = tmp_path / "sub" / "turn.mp3"
