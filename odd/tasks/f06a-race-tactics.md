@@ -103,3 +103,20 @@ strategy `ask-on-risk`, work-unit commits, no push/PR/merge. Test runner:
   venv-resolved deps on both this module and the untouched `collector.py`
   — a tooling environment defect (Pyright does not resolve `.venv`),
   recorded as memory 6088; runtime resolution is authoritative.
+- **L6** (2026-10-14): Delivery record. PR #68 merged as `e0dff8a` after CI
+  run 38621665385 passed all four checks on head `4709945`; the native
+  review lineage `review-366e132d1d2a84b6` (medium, lens review-reliability)
+  closed **approved** and its acknowledgement burned the authority, with
+  three non-blocking findings (`R3-pace-timestamp-coverage` WARNING,
+  `R3-pace-timestamp-index` CRITICAL **refuted**, `R3-sortkey-offset-mixing`
+  SUGGESTION — separate later work, never a reopen). Issue #67 closed with
+  the merge. Local `main` = `origin/main` = the GitHub API at the merge
+  commit, clean tree. The docs slice (snapshot `e0dff8a`, 1053-test
+  receipts, the F06a row) was reviewed as lineage `review-ae65fd5b899e281d`
+  (low, no lenses required — the first START with a `readability` lens was
+  rejected in preflight without mutation, because a lens selection needs a
+  medium/high candidate), closed **approved**, acknowledged, and delivered
+  by PR #69 merged as `014e425`. The PROJECT-STATE row and snapshot landed
+  with integration exactly as L3 deferred. Full F06 stays open for the
+  deferred tiers: analyst/booth integration, qualifying rules, and the
+  telemetry source decision.
