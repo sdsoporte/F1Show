@@ -4229,3 +4229,105 @@ turned out to be two trees**, so a per-tree count must always travel with its tr
     los comentarios y obtener un dialogo entre Presentador y relator."*
   - **L2.** The user asked what the open item meant, was given the three timing concerns apart, and chose
     **"Unidad propia, offline y ahora"** over placing it inside F13 or leaving it declared open.
+
+### F15 — Speech synthesis: the two seats become audio
+
+- [ ] **Authorized.** The work itself was driven by the user's own prompts of 2026-10-13 (the Log quotes them
+  verbatim), and the **closure scope** was chosen on 2026-10-14: **"Módulo tal cual"** — close `audio.py` as a
+  standalone, opt-in module, with the booth wiring left to a later unit and carried in the register. This
+  closure covers documentation, the repository's own checks, independent verification, the native review and
+  delivery; it makes **no** live or model call, and the suite never reaches the network.
+- **Objective.** The booth's aired text becomes spoken broadcast audio, per speaker and dialect, with the
+  turn's prosody mode driving rate — as a module a caller can invoke, **not** as a step the pipeline performs
+  today.
+- **What exists, measured at the closure's start.** `src/f1show/audio.py` **212 lines**;
+  `tests/test_audio.py` **98 lines / 9 cases, green in 0.21 s**; six exports in `src/f1show/__init__.py`
+  (`VOICE_MAP`, `AudioSynthesizer`, `EdgeTTSAudioSynthesizer`, `FakeAudioSynthesizer`, `rate_for_mode`,
+  `resolve_voice`); `edge-tts>=7.3.1` in `pyproject.toml`, resolved to **7.3.1** in `uv.lock`. And the fact
+  that decides this unit's shape: **`booth.py` and `run.py` carry zero references to audio** — the module is
+  standalone, which is why this closure does not wire it.
+- **Design decisions, settled by the unit's author** (its record is Engram `booth-models-and-voices`, and the
+  implementation is the sibling session's work carried by its commit, never re-derived here).
+  1. **Edge-TTS over Kokoro, measured.** Kokoro's output was measured at **−26.5 dB RMS** — the complaint in
+     S2 — and it ships no Argentine native voice; Edge-TTS gives broadcast volume, natural voseo, zero cost
+     and <300 ms streaming latency.
+  2. **A declared voice catalogue.** `es-AR` is the default: Alex → `es-AR-TomasNeural`, Sam →
+     `es-UY-MateoNeural`. `es-419` declares `es-MX-JorgeNeural`/`es-US-AlonsoNeural`; `es-MX`, `es-ES` and
+     `en` declare their own pairs. An unmapped dialect falls back to `es-AR` (**declared, not silent**), an
+     explicit non-blank `override` wins, and a blank override falls through to the map.
+  3. **Rate follows the turn mode:** `TurnMode.CLIMAX` → `+10%`, everything else → `+0%`. Pace and loudness
+     are separate mechanisms and this unit names them apart.
+  4. **The network is reached only by an explicit call.** `edge_tts` is imported **inside** the two methods
+     that need it, so importing `f1show` opens no socket; the suite reaches the real class only through its
+     refusal path, which raises **before** that import.
+  5. **Offline testability by construction.** An `AudioSynthesizer` protocol, a `FakeAudioSynthesizer` that
+     records every call and returns deterministic bytes, and `ValueError("text must not be blank")` refused
+     identically in both implementations and both methods.
+  6. **Credentials stay out of the unit.** The NaN keys live in `.env.private/clients.env.sh`, which
+     `.gitignore:4` (`.env.*`) covers — measured with `git check-ignore` — so no commit of this unit can
+     carry them: the file is absent from `deeaf4c` and no `.mp3` is tracked (0 files).
+- **The offline contradiction, and how this closure resolves it.** `ARCHITECTURE.md` listed *"Audio and TTS —
+  no speech synthesis"* as out of scope while the module exists, and `edge-tts` is a live network path in a
+  project that declares itself offline by construction. Resolution: the document records the module as
+  **built and opt-in** — nothing on the replay/MVP path calls it (zero references measured in `booth.py` and
+  `run.py`), no test opens a socket, and synthesis reaches Microsoft's service only when a caller explicitly
+  invokes it. Putting it **on** the run's path is a separate unit and a register row (T2), not this one.
+- **Specs, quoted and not summarised.**
+  - **S1.** *"Me gustan mas los de Edge-TTS que los de Kokoro:"* — the engine is Edge-TTS. The line answers
+    two samples it names, `long_alex_edge_jorge_419.mp3` (Jorge - es-MX) and
+    `long_alex_edge_tomas_ar.mp3` (Tomás - es-AR) — `long_` files, i.e. the longer audios S3 asked for, kept
+    outside the repository where live material stays.
+  - **S2.** *"son las unicas dos voces de ? los noto con volumen vajo a pesar de tener al maximo mi
+    volumen."* — the voices must arrive at broadcast volume, and the dialect pair must be a declared set.
+  - **S3.** *"si ahora se escuchan mejor, tendriamos que probar con audios mas largos."*
+  - **S4.** *"Si. dejemoslo integrado, tambien revisa si debemos agregar a nan al archivo
+    .env.private/clients.env.sh o como hacemsos para qeu no dependa de la configuracion de pi."* — the unit
+    must not depend on Pi's configuration.
+  - **S5.** *"lo puedes commitear tu para hacerlo de forma correcta cuando te parezca."*
+- **Tasks, with what each one observed rather than what it promised.**
+  - [x] **T1** (S1, S2, S3) — the synthesis module and its offline tests, authored in the sibling session and
+    committed here under S5. **Observed:** the snapshot recorded bytes without changing them (sha256 of every
+    file identical before and after the commit), the suite reported **1025 passing** at the snapshot, the 9
+    cases run in **0.21 s** with no socket, and the formatter's `booth.py` reflow (+10/−3) was excluded as
+    noise rather than attributed to this unit. Commit `deeaf4c` on `feat/audio-tts-booth`.
+  - [x] **T2** (S4) — documentation and the register, applied and observed. **Observed:** `ARCHITECTURE.md`
+    now carries the opt-in paragraph in *Output* and the out-of-scope bullet reads **"Audio on the run's
+    path"** instead of the false "no speech synthesis"; `PROJECT-STATE.md`'s snapshot was redrawn at this
+    closure (with the Mermaid diagram named as drawn at `043d2a5`, not silently refreshed) and gained **F14**
+    and **F15** rows in *Built and delivered* plus the audio-wiring bullet; `CARRIED-FINDINGS.md` gained the
+    **two staleness keys** — `audio.py` `85772027…` and `test_audio.py` `ad77bae7…`, both anchored at their
+    creation commit `deeaf4c`, satisfying the register's own repair a second time — and the new section
+    **"The audio wiring — built as a module, wired into nothing"** with owner *the first unit asked to emit
+    audio from a run* and trigger *wiring it into `run.py` or the booth*. Every file reported Markdown clean.
+  - [x] **T3** — the checks at the closing revision, measured after the doc edits rather than before them.
+    **Observed:** the suite reports **1025 passed, 1 warning in 53.43 s** (the warning is the known third-party
+    `google/genai` `DeprecationWarning`), and the repository's own lint invocation —
+    `uvx ruff@0.17.0 check --no-cache src tests` — prints **"All checks passed!"**. The branch reconciliation
+    with `main` was moved to **T6**, where it belongs: it is a delivery step, and at the start of this
+    closure the merge-base was `78a0671` with `main` ahead by `d3f381a`, `e328072` and `d23ee49`.
+  - [ ] **T4** — independent verification, required by the risk line: the candidate adds a **dependency**
+    (risk item 5), so an independent verifier runs after the change's own checks, not instead of them.
+  - [ ] **T5** — the native review under RDD: `assess`, then the route it offers, with the acknowledgement
+    burning the authority.
+  - [ ] **T6** — delivery: push, PR, CI green, merge commit — each the user's separate decision. The branch is
+    reconciled with `main` **first** (merge-base `78a0671`; `main` ahead by `d3f381a`, `e328072`, `d23ee49`),
+    then delivered, so the PR carries the audio unit and this record and nothing else.
+- **Evidence budget and route.** The parent mapped the unit in bounded reads (module, tests, exports, docs
+  sites, git topology) and measured every number above itself; the implementation stays the sibling session's
+  work, carried by reference (Engram `booth-models-and-voices`) and by its commit. Closure runs the checks
+  inline, one independent verifier (T4), then the provider-offered native route (T5). Delivery stays a
+  separate user decision (T6).
+- **Log.**
+  - **L1.** The user, 2026-10-13 18:27, on the first samples: *"son las unicas dos voces de ? los noto con
+    volumen vajo a pesar de tener al maximo mi volumen."*
+  - **L2.** The user, 18:35: *"si ahora se escuchan mejor, tendriamos que probar con audios mas largos."*
+  - **L3.** The user, 18:44, choosing the engine: *"Me gustan mas los de Edge-TTS que los de Kokoro:"* naming
+    `Alex (Lead): long_alex_edge_jorge_419.mp3 (Jorge - es-MX)` and
+    `Alex (Lead): long_alex_edge_tomas_ar.mp3 (Tomás - es-AR)`.
+  - **L4.** The user, 18:46: *"Si. dejemoslo integrado, tambien revisa si debemos agregar a nan al archivo
+    .env.private/clients.env.sh o como hacemsos para qeu no dependa de la configuracion de pi."*
+  - **L5.** The user, 20:40: *"lo puedes commitear tu para hacerlo de forma correcta cuando te parezca."* —
+    the instruction under which `deeaf4c` was created, with hashes measured before and after it.
+  - **L6.** The user, 2026-10-14, choosing this closure's scope from three options: **"Módulo tal cual
+    (recomendado)"** (the orchestrator's label) over wiring the booth now and over docs-only — close the
+    standalone opt-in module end to end; the wiring becomes a register row in another unit.
