@@ -689,3 +689,20 @@ approved:
 
 Recording these as dead is the point of the section, not an admission: a register that cannot be left
 teaches that membership means nothing.
+
+## pacing.py — from the F14 review
+
+**Four informational findings, and not one of them is a hole.** F14 added this module so a run could consume a
+recorded session at the rate it happened; the review that approved it (`review-10e293380161d988`, tier medium, two
+lenses, 8 files, 765 lines, candidate tree `efd9e0f4…`) closed **approved** and offered **no** correction
+transition, so nothing here reopens it — the closure's own words call these "separate later work". The harness
+returns ids, severities and locations and **never bodies**, so every subject below is located by the parent in the
+source and the reading beside it is the parent's, carried as its own. Coordinates are measured on `78a0671`, the
+reviewed revision, whose tree is the tree that merged.
+
+| Location | Ids observed there | Severity | Owner | Trigger | Status |
+| --- | --- | --- | --- | --- | --- |
+| `src/f1show/pacing.py:119-127`, the finite-wait guard inside `Pacer.wait_seconds` | `R3-001` (this unit's review) | **WARNING**, informational, no body returned | the next unit touching the wait arithmetic | any change to the clamp, the finite check, or what that check refuses | **OPEN** — subject located: the lines that compute `target = offset / scale` and raise when it is not finite. **The hole this guard closes was real, was measured, and is closed**, so what remains is the guard's *shape*: it refuses a non-finite target and says nothing about the inputs that produced it, and it refuses with a plain `ValueError` where this project's convention elsewhere is a typed refusal. Nothing measured contradicts it |
+| `src/f1show/pacing.py:122-128`, the same five lines seen by the other lens | `R4-pacing-hang-guard` (same lineage) | **WARNING**, informational, no body returned | the next unit touching the guard, or the first observability work | any change to how a non-finite wait is refused | **OPEN, and worth its own row because two independent lenses landed on the same code** — this register's own rule is that a subject two reviewers reach separately weighs more than one reviewer's reading. The resilience reading adds the failure-mode view: a wait that cannot be expressed is refused at the point of **use** rather than at **declaration**, so a spec that can never succeed for a given event is accepted, and only fails once such an event arrives |
+| `src/f1show/pacing.py:45-50`, the module's imports and its `__all__` | `R3-002` (same lineage) | SUGGESTION, informational, no body returned | the next unit touching the module's public surface | any change to `__all__`, to those imports, or to what the module exposes | **OPEN** — subject located: the four exported names (`Pacer`, `PacingSpec`, `pacing_origin`, `release_at_offsets`) and the two imports above them. The reading: the module exports **both** the rule and the stream built on it, while nothing states which of the two a caller outside the unit is expected to use — a surface wider than the unit's own need |
+| `src/f1show/booth.py:850-854`, the cadence wait at the top of `run()` | `R4-pacing-observability` (same lineage) | SUGGESTION, informational, no body returned | the next unit touching the cadence wiring, or the first run-metrics work | any change to that block, or the introduction of run metrics | **OPEN** — subject located: the lines that read `self._cadence`, take `started`, and await `pacer.wait_seconds(...)` before each event. The reading: the waits are **invisible** — nothing counts them, exposes them or reports where a run spent its time, so an operator watching a paced run cannot tell a slow model call from a paced wait. The unit's own tests measure the waits exactly, which is why this is a finding about the product's eye rather than about its arithmetic |
