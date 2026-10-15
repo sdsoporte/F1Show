@@ -562,7 +562,8 @@ def render_tactical(
     lines.extend(_tactical_line(alert) for alert in shown)
     hidden = len(alerts) - len(shown)
     if hidden > 0:
-        lines.append(f"and {hidden} more alerts not shown.")
+        noun = "alert" if hidden == 1 else "alerts"
+        lines.append(f"and {hidden} more {noun} not shown.")
     return tuple(lines)
 
 
