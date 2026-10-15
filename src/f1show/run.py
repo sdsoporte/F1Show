@@ -50,6 +50,7 @@ from f1show.fakes import ScriptedModelClient
 from f1show.gemini import GoogleGenAIClient
 from f1show.pacing import PacingSpec
 from f1show.ports import Clock, ModelClient, ModelResponse, MonotonicClock
+from f1show.tactical import build_tactical_source
 
 __all__ = [
     "DEFAULT_FIXTURE_DIR",
@@ -84,6 +85,12 @@ _LOADED_FAMILIES = (
     _DRIVER_DIRECTORY_FAMILY,
     *_CHAMPIONSHIP_FAMILIES,
 )
+
+#: The one family a recorded session may omit: the recorded corpus holds
+#: ``intervals`` for session 9617 only, and session 9655 deliberately has none
+#: (the user's own reduction). The analyst's tactical context reads it whenever
+#: the corpus carries the file; its absence is declared, never an error.
+_OPTIONAL_FAMILIES = ("intervals",)
 
 #: A trailing path segment that names an API version, e.g. ``v1``, ``v2`` or ``v1beta``.
 #: The native SDK supplies its own, so exactly this segment is stripped before it is
@@ -128,14 +135,18 @@ def load_recorded_session(
 
     The corpus is the project's production artifact: one JSON file per family under
     ``fixtures/openf1/``. The five families ``collect_session_events`` consumes are
-    loaded, ``intervals`` and ``sessions`` are deliberately not because nothing reads
-    them, and the session's ``drivers`` entry list is loaded too under its own key: it
+    loaded, ``sessions`` is deliberately not because nothing reads it, and the session's
+    ``drivers`` entry list is loaded too under its own key: it
     derives no event, but the booth joins ``full_name`` and ``team_name`` from it so the
     prompt names the driver, so it belongs to the declared loaded contract rather than to
     a run path that reads the corpus twice. The three championship families -
     ``championship_drivers``, ``championship_teams`` and ``session_result`` - are loaded
     for the same reason and under the same rule: they derive no event either, and the
-    booth's bounded championship block derives its per-moment picture from them. Every
+    booth's bounded championship block derives its per-moment picture from them. F06b
+    makes ``intervals`` the one **optional** family: the analyst's tactical context
+    derives from it, so it is loaded whenever the corpus carries the file, and its
+    absence - session 9655's deliberate reduction - is a declared absence rather than an
+    error. Every
     record is filtered to ``session_key`` here rather than assumed to be, because a recorded
     ``sessions.json`` may hold far more than one session's rows: the first corpus's file is the whole
     season listing while the second's holds a single row. A missing directory, a missing family file or
@@ -148,9 +159,13 @@ def load_recorded_session(
             "at a fixtures/openf1 directory, or omit it for the project default"
         )
     payloads: dict[str, list[dict[str, object]]] = {}
-    for family in _LOADED_FAMILIES:
+    for family in (*_LOADED_FAMILIES, *_OPTIONAL_FAMILIES):
         path = directory / f"{family}.json"
         if not path.is_file():
+            if family in _OPTIONAL_FAMILIES:
+                # The one family a corpus may omit: declared absence for the
+                # consumer, never a silent hole in a required contract.
+                continue
             raise RecordedSourceMissingError(
                 f"the recorded family file {path} is missing; the corpus must hold one JSON "
                 f"file per loaded family ({', '.join(_LOADED_FAMILIES)})"
@@ -251,6 +266,7 @@ async def run_session(
         pacing=pacing,
         driver_directory=_driver_directory(payloads),
         championship=build_championship_source(payloads),
+        tactical=build_tactical_source(session_key, payloads),
     )
     return await booth.run()
 

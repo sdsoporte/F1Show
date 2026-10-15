@@ -208,6 +208,7 @@ from f1show.pacing import Pacer, PacingSpec
 from f1show.ports import Clock, ModelClient, ModelRequest, MonotonicClock
 from f1show.salience import SalienceSummary, render_salience, salience_summary
 from f1show.start import START_LAP_NUMBER, StartGroup, group_start_events
+from f1show.tactical import TacticalSource, render_tactical
 
 __all__ = [
     "COLOR_PERSONA",
@@ -761,6 +762,7 @@ class CommentaryBooth:
         timeout_seconds: float,
         driver_directory: Mapping[int, tuple[str, str]],
         championship: ChampionshipSource,
+        tactical: TacticalSource | None = None,
         monotonic: MonotonicClock | None = None,
         pacing: PacingSpec | None = None,
     ) -> None:
@@ -770,6 +772,7 @@ class CommentaryBooth:
             number: team for number, (_, team) in self._driver_directory.items()
         }
         self._championship = championship
+        self._tactical = tactical
         self._events = tuple(events)
         if not self._events:
             raise ValueError(
@@ -904,6 +907,18 @@ class CommentaryBooth:
                 continue
             speaker = self._speaker_for(event, turns)
             prefix = self._events[: index + 1]
+            # The analyst's per-moment tactical state: only the past of this
+            # event's own instant reaches the prompt, and an event with no
+            # instant cannot be placed, so its turn declares no block at all.
+            rendered = (
+                None
+                if self._tactical is None or event.timestamp_value is None
+                else render_tactical(
+                    self._tactical.context(event.timestamp_value),
+                    self._tactical.settings.tactical_context_max_alerts,
+                )
+            )
+            tactical_lines = rendered if rendered else None
             request = ModelRequest(
                 model_id=self._settings.model_id,
                 prompt=self._prompt(
@@ -920,6 +935,7 @@ class CommentaryBooth:
                         team_of_driver=self._team_of_driver,
                     ),
                     group=group,
+                    tactical_lines=tactical_lines,
                 ),
                 max_output_tokens=self._max_output_tokens,
                 timeout_seconds=self._timeout_seconds,
@@ -1111,6 +1127,7 @@ class CommentaryBooth:
         mode: TurnMode,
         championship: ChampionshipContext,
         group: StartGroup | None = None,
+        tactical_lines: Sequence[str] | None = None,
     ) -> str:
         """Assemble the whole prompt from the supplied references, history and window story.
 
@@ -1123,7 +1140,11 @@ class CommentaryBooth:
         salience projection as plain prose; it carries no bracket and no reference-shaped
         token, so it adds no citable reference either. The CHAMPIONSHIP block states the
         moment's bounded championship picture as plain prose under the same no-bracket,
-        no-token rule, so it too is context and never a source. The MODE block declares
+        no-token rule, so it too is context and never a source. The TACTICAL block, when a
+        tactical source is wired, states the moment's bounded tactical picture -- the
+        analyst's motor read only up to this event's own instant -- under the same
+        no-bracket, no-token rule, so it adds no citable reference either. The MODE block
+        declares
         this turn's prosody as instruction text, beside the persona register and under the
         same no-bracket, no-token rule. A declared Spanish variant adds a LANGUAGE
         block with its address forms and motorsport vocabulary; other languages keep
@@ -1196,6 +1217,11 @@ class CommentaryBooth:
                 *render_championship(championship, self._driver_directory).splitlines(),
             ]
         )
+        if tactical_lines is not None:
+            # Context, never a source: plain prose with no bracket and no
+            # reference-shaped token, rendered from the recorded corpus, so the
+            # block adds no citable reference and the acceptance is unchanged.
+            lines.extend(["", *tactical_lines])
         if group is not None:
             # Emitted for the start turn only, as instruction text: it names no reference and
             # carries no bracket, so it adds no citable surface and the scanner sees nothing

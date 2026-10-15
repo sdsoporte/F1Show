@@ -843,6 +843,9 @@ RECORDED_FAMILY_COUNTS = {
     "championship_drivers": 23,
     "championship_teams": 10,
     "session_result": 20,
+    # F06b: the optional tactical family, loaded when the corpus carries the
+    # file (session 9617 does; 9655 deliberately does not).
+    "intervals": 21041,
 }
 
 #: The F09g U2 consequence, measured on the recorded session (1,648 detected events): the
@@ -872,14 +875,17 @@ def test_recorded_source_loads_the_collector_families_with_the_session_filter() 
     # F09f: the loaded contract is the five collector families plus the session's driver
     # directory, which the booth joins to name the driver. F09g U3b deliberately changed
     # this pin a second time rather than deleting it: the contract now also carries the
-    # three championship families the bounded championship block derives from. The set is
-    # still asserted exactly, so a tenth accidental family fails here rather than riding
-    # along.
+    # three championship families the bounded championship block derives from. F06b
+    # changed it a third time, again rather than deleting it: ``intervals`` is loaded
+    # when the corpus carries the file, because the analyst's tactical context reads it.
+    # The set is still asserted exactly, so a further accidental family fails here
+    # rather than riding along.
     assert set(loaded) == set(FAMILY_ORDER) | {
         "drivers",
         "championship_drivers",
         "championship_teams",
         "session_result",
+        "intervals",
     }
     assert {
         family: len(records) for family, records in loaded.items()
@@ -906,7 +912,9 @@ def test_recorded_source_loads_the_driver_directory_but_derives_no_event_from_it
     invariant that actually matters is strengthened instead: the directory is available
     from the loader, and ``collect_session_events`` still derives **zero** extra events
     from it, which is proved by collecting the loaded payload with and without the family.
-    ``intervals`` and ``sessions`` are still excluded, because nothing reads them.
+    ``sessions`` is still excluded, because nothing reads it. F06b loads ``intervals``
+    when the corpus carries the file - the analyst's tactical context derives from it -
+    and its absence (session 9655's deliberate reduction) is declared, never an error.
     """
     loaded = load_recorded_session(SESSION_KEY)
 
@@ -924,7 +932,10 @@ def test_recorded_source_loads_the_driver_directory_but_derives_no_event_from_it
     assert collect_session_events(SESSION_KEY, loaded) == collect_session_events(
         SESSION_KEY, collector_payloads
     ), "the drivers family must derive no event when it is present"
-    assert "intervals" not in loaded
+    assert "intervals" in loaded, (
+        "the recorded 9617 corpus carries intervals.json, so the tactical context's "
+        "family must load with it"
+    )
     assert "sessions" not in loaded
     intervals = load("intervals")
     assert len(intervals) == 21041
@@ -1324,3 +1335,113 @@ async def test_no_reference_shaped_token_leaks_from_the_championship_block() -> 
         assert set(REFERENCE_TOKEN.findall(request.prompt)) == set(
             REFERENCE_TOKEN.findall(without)
         ), "the championship block must not change the prompt's reference-token set"
+
+
+# --- F06b: the optional intervals family and the run path's tactical wiring ------
+
+
+def test_recorded_source_loads_intervals_when_the_corpus_carries_the_file(
+    tmp_path: Path,
+) -> None:
+    """F06b's declared contract change: ``intervals`` is optional but read when present.
+
+    The synthetic corpus spans two session keys, so the family is proved session-filtered
+    like every other loaded family rather than merely trusted because the file exists.
+    """
+    _write_synthetic_corpus(
+        tmp_path,
+        drivers=[
+            {
+                "session_key": SESSION_KEY,
+                "driver_number": 4,
+                "full_name": "Lando Norris",
+                "team_name": "McLaren",
+            }
+        ],
+    )
+    wanted: Mapping[str, object] = {
+        "session_key": SESSION_KEY,
+        "date": "2024-03-02T15:00:00+00:00",
+        "driver_number": 4,
+        "gap_to_leader": 1.0,
+        "interval": 0.5,
+    }
+    other: Mapping[str, object] = {
+        "session_key": SESSION_KEY + 1,
+        "date": "2024-03-02T15:00:00+00:00",
+        "driver_number": 44,
+        "gap_to_leader": 2.0,
+        "interval": 1.5,
+    }
+    (tmp_path / "intervals.json").write_text(
+        json.dumps([wanted, other]), encoding="utf-8"
+    )
+
+    loaded = load_recorded_session(SESSION_KEY, fixtures_dir=tmp_path)
+
+    assert loaded["intervals"] == [wanted], (
+        "the loader keeps only the requested session's interval rows; got "
+        f"{loaded['intervals']!r}"
+    )
+
+
+def test_recorded_source_tolerates_a_corpus_without_intervals(tmp_path: Path) -> None:
+    """Session 9655 deliberately has no intervals file: declared absence, never an error."""
+    _write_synthetic_corpus(
+        tmp_path,
+        drivers=[
+            {
+                "session_key": SESSION_KEY,
+                "driver_number": 4,
+                "full_name": "Lando Norris",
+                "team_name": "McLaren",
+            }
+        ],
+    )
+
+    loaded = load_recorded_session(SESSION_KEY, fixtures_dir=tmp_path)
+
+    assert "intervals" not in loaded
+
+
+def test_the_second_session_loads_without_intervals() -> None:
+    """The recorded 9655 corpus holds no intervals.json by the user's own reduction."""
+    loaded = load_recorded_session(9655, fixtures_dir=DEFAULT_FIXTURE_DIR / "9655")
+
+    assert "intervals" not in loaded
+    assert loaded["laps"], "the second session's laps must still load"
+
+
+@pytest.mark.anyio
+async def test_run_session_wires_the_tactical_source_into_the_prompt() -> None:
+    """F06b: the run path builds the tactical source from the payloads it already holds.
+
+    The recorded corpus (session 9617) carries intervals, so the run's prompts carry the
+    TACTICAL block; the block stays context, never a source, so the acceptance is
+    unchanged and no reference-shaped token may ride in with it.
+    """
+    model = EvidenceEchoModelClient()
+
+    await bounded(
+        run_session(
+            payloads=load_recorded_session(SESSION_KEY),
+            session_key=SESSION_KEY,
+            model=model,
+            clock=FrozenClock(T0),
+            settings=booth_settings(),
+        ),
+        hazard="the tactical wiring run",
+    )
+
+    tacticals = [
+        request.prompt
+        for request in model.requests
+        if "TACTICAL:" in request.prompt
+    ]
+    assert tacticals, (
+        "the recorded run must wire the tactical source: no prompt carried the block"
+    )
+    block = tacticals[0].split("TACTICAL:", 1)[1].split("\n\n", 1)[0]
+    assert block.strip(), block
+    assert not any(character in block for character in "[](){}"), block
+    assert re.search(r"[a-z_]+\[\d+\]\.[a-z0-9_]+", block) is None, block

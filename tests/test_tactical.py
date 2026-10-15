@@ -10,6 +10,7 @@ fixtures cannot support.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,8 @@ from f1show import (
     TacticalKind,
     TacticalSettings,
     analyze_tactics,
+    build_tactical_source,
+    render_tactical,
 )
 
 SESSION_KEY = 9617
@@ -619,3 +622,197 @@ def test_recorded_fixture_tyre_age_alerts_are_pinned() -> None:
     ]
     assert all(alert.facts["stint_number"] == 2 for alert in ages)
     assert all(alert.facts["tyre_age_laps"] >= 25.0 for alert in ages)
+
+
+# --- F06b: the tactical source layer -----------------------------------------
+
+
+def test_source_context_at_the_newest_instant_reproduces_the_end_state() -> None:
+    """As-of the newest reading overall, the context equals the end state."""
+    source = build_tactical_source(SESSION_KEY, full_payloads())
+    instants = [
+        dt.datetime.fromisoformat(row["date"])
+        for row in load("intervals")
+        if row.get("session_key") == SESSION_KEY
+    ] + [
+        dt.datetime.fromisoformat(row["date_start"])
+        for row in load("laps")
+        if row.get("session_key") == SESSION_KEY and isinstance(row.get("date_start"), str)
+    ]
+    newest = max(instants)
+    assert source.context(newest) == analyze_tactics(SESSION_KEY, full_payloads())
+
+
+def test_context_only_reads_the_past_of_each_instant() -> None:
+    """An instant before a driver's reading yields no alert for that driver."""
+    payloads = {
+        "intervals": [
+            {
+                "session_key": SESSION_KEY,
+                "date": "2024-10-20T18:00:00.000000+00:00",
+                "driver_number": 10,
+                "gap_to_leader": 3.0,
+                "interval": 0.2,
+            },
+            {
+                "session_key": SESSION_KEY,
+                "date": "2024-10-20T18:05:00.000000+00:00",
+                "driver_number": 16,
+                "gap_to_leader": 3.2,
+                "interval": 0.3,
+            },
+        ]
+    }
+    source = build_tactical_source(SESSION_KEY, payloads)
+    early = dt.datetime.fromisoformat("2024-10-20T18:02:00+00:00")
+    mid = dt.datetime.fromisoformat("2024-10-20T18:05:00+00:00")
+    assert [alert.driver_number for alert in source.context(early)] == [10]
+    mid_alerts = source.context(mid)
+    # At mid, only the past counts: driver 10's lone old reading is stale and
+    # driver 16's fresh 0.3 s interval is a legitimate battle.
+    assert [
+        alert.driver_number
+        for alert in alerts_of_kind(mid_alerts, TacticalKind.STALE_READING)
+    ] == [10]
+    assert [
+        alert.driver_number
+        for alert in alerts_of_kind(mid_alerts, TacticalKind.GAP_BATTLE)
+    ] == [16]
+
+
+def test_context_freshness_is_measured_within_the_past() -> None:
+    """The staleness window compares against the newest reading at or before the instant."""
+    payloads = {
+        "intervals": [
+            {
+                "session_key": SESSION_KEY,
+                "date": "2024-10-20T18:00:00.000000+00:00",
+                "driver_number": 10,
+                "gap_to_leader": 3.0,
+                "interval": 0.2,
+            },
+            {
+                "session_key": SESSION_KEY,
+                "date": "2024-10-20T18:00:30.000000+00:00",
+                "driver_number": 16,
+                "gap_to_leader": 3.2,
+                "interval": 0.3,
+            },
+        ]
+    }
+    source = build_tactical_source(
+        SESSION_KEY, payloads, TacticalSettings(staleness_seconds=15.0)
+    )
+    at = dt.datetime.fromisoformat("2024-10-20T18:00:40+00:00")
+    stale = alerts_of_kind(source.context(at), TacticalKind.STALE_READING)
+    assert [alert.driver_number for alert in stale] == [10]
+    assert stale[0].facts["age_seconds"] == 30.0
+
+
+def test_context_before_any_reading_is_empty() -> None:
+    """An instant before every reading makes no claim at all."""
+    source = build_tactical_source(SESSION_KEY, full_payloads())
+    early = dt.datetime.fromisoformat("2024-10-20T17:00:00+00:00")
+    assert source.context(early) == ()
+
+
+def test_source_without_intervals_declares_absence() -> None:
+    """No intervals payload: the context yields no gap-family claim."""
+    source = build_tactical_source(SESSION_KEY, {"laps": load("laps")})
+    gap_kinds = {
+        TacticalKind.GAP_BATTLE,
+        TacticalKind.GAP_LAPPED,
+        TacticalKind.GAP_UNKNOWN,
+        TacticalKind.STALE_READING,
+    }
+    newest = max(
+        dt.datetime.fromisoformat(row["date_start"])
+        for row in load("laps")
+        if row.get("session_key") == SESSION_KEY and isinstance(row.get("date_start"), str)
+    )
+    assert [alert for alert in source.context(newest) if alert.kind in gap_kinds] == []
+
+
+def test_render_tactical_is_bounded_and_carries_no_reference_token() -> None:
+    """Lines are plain prose under a TACTICAL header, capped and bracket-free."""
+    payloads = {
+        "intervals": [
+            {
+                "session_key": SESSION_KEY,
+                "date": "2024-10-20T18:00:00.000000+00:00",
+                "driver_number": 10,
+                "gap_to_leader": "+1 LAP",
+                "interval": 0.2,
+            },
+            {
+                "session_key": SESSION_KEY,
+                "date": "2024-10-20T18:00:30.000000+00:00",
+                "driver_number": 16,
+                "gap_to_leader": 3.2,
+                "interval": 0.3,
+            },
+        ]
+    }
+    source = build_tactical_source(
+        SESSION_KEY, payloads, TacticalSettings(staleness_seconds=600.0)
+    )
+    lines = render_tactical(source.context(dt.datetime.fromisoformat("2024-10-20T18:01:00+00:00")))
+    assert lines[0] == "TACTICAL:"
+    assert len(lines) - 1 <= 8
+    assert all("[" not in line and "]" not in line for line in lines)
+    assert any("driver 16" in line and "behind the car ahead" in line for line in lines)
+    assert any("driver 10" in line and "1 lap" in line for line in lines)
+
+
+def test_render_tactical_truncates_with_an_honest_count() -> None:
+    """More alerts than the cap truncates and states how many are not shown."""
+    intervals = []
+    for number in range(1, 13):
+        intervals.append(
+            {
+                "session_key": SESSION_KEY,
+                "date": f"2024-10-20T18:00:{number:02d}.000000+00:00",
+                "driver_number": number,
+                "gap_to_leader": float(number),
+                "interval": 0.5,
+            }
+        )
+    source = build_tactical_source(SESSION_KEY, {"intervals": intervals})
+    lines = render_tactical(
+        source.context(dt.datetime.fromisoformat("2024-10-20T18:01:00+00:00"))
+    )
+    assert lines[0] == "TACTICAL:"
+    assert lines[-1] == "and 4 more alerts not shown."
+    assert len(lines) == 10
+
+
+def test_source_defaults_pin_the_context_cap() -> None:
+    """The declared cap lives in the settings with its default of 8."""
+    assert TacticalSettings().tactical_context_max_alerts == 8
+
+
+def test_pace_alert_timestamp_uses_the_windows_last_known_instant() -> None:
+    """A window ending on a lap with no recorded instant still yields a placed alert.
+
+    Regression for the F06b review's frozen finding: the window's instant slot
+    is None for such a lap, and the alert must carry the latest instant the
+    window can prove instead of an unplaced None.
+    """
+    laps = []
+    for n in range(2, 8):
+        laps.append(lap_row(14, n, 100.0 + n))
+        laps.append(lap_row(4, n, 110.0 + n))
+    unplaced = lap_row(4, 8, 117.0)
+    unplaced["date_start"] = None
+    laps.append(unplaced)
+
+    alerts = analyze_tactics(
+        SESSION_KEY, {"laps": laps}, TacticalSettings(pace_delta_threshold_seconds=0.01)
+    )
+
+    pace = alerts_of_kind(alerts, TacticalKind.PACE_DELTA)
+    assert [alert.driver_number for alert in pace] == [4]
+    assert pace[0].timestamp == dt.datetime.fromisoformat("2024-10-20T19:17:00+00:00"), (
+        "the alert is placed at the window's last known instant (lap 7), never None "
+        "while its window still holds placed laps"
+    )

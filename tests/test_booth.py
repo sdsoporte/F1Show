@@ -49,6 +49,7 @@ from f1show.booth import (
     event_reference,
     evidence_references,
 )
+from f1show import TacticalSettings, TacticalSource, build_tactical_source
 from f1show.championship import (
     RECORDED_SEASON,
     ChampionshipSource,
@@ -228,6 +229,7 @@ def make_booth(
     timeout_seconds: float = 3.0,
     driver_directory: dict[int, tuple[str, str]] | None = None,
     championship: ChampionshipSource | None = None,
+    tactical: TacticalSource | None = None,
     monotonic: FakeMonotonicClock | None = None,
     pacing: PacingSpec | None = None,
 ) -> CommentaryBooth:
@@ -250,6 +252,7 @@ def make_booth(
         timeout_seconds=timeout_seconds,
         driver_directory={} if driver_directory is None else driver_directory,
         championship=EMPTY_CHAMPIONSHIP if championship is None else championship,
+        tactical=tactical,
         monotonic=monotonic,
         pacing=pacing,
     )
@@ -3665,3 +3668,121 @@ async def test_a_paced_run_and_an_unpaced_run_agree_turn_for_turn() -> None:
     assert [(item.kind, item.reason) for item in paced_result.outcomes] == [
         (item.kind, item.reason) for item in unpaced.outcomes
     ]
+
+
+# --- F06b: the analyst's TACTICAL context block --------------------------------
+
+
+def tactical_payloads() -> dict[str, list[dict[str, object]]]:
+    """Synthetic recorded payloads: two drivers' interval rows for the block."""
+    return {
+        "intervals": [
+            {
+                "session_key": SESSION_KEY,
+                "date": "2024-03-02T15:00:00+00:00",
+                "driver_number": 4,
+                "gap_to_leader": 5.0,
+                "interval": 0.5,
+            },
+            {
+                "session_key": SESSION_KEY,
+                "date": "2024-03-02T15:05:00+00:00",
+                "driver_number": 16,
+                "gap_to_leader": 6.0,
+                "interval": 0.3,
+            },
+        ]
+    }
+
+
+@pytest.mark.anyio
+async def test_a_booth_without_tactical_source_carries_no_tactical_block() -> None:
+    """The declared absence: no source, no block, no claim."""
+    events = [detected(index=0), detected(index=1)]
+    model = ScriptedModelClient(answered(events, ["Lead line.", "Colour line."]))
+    booth = make_booth(events, model)
+
+    result = await bounded(booth.run(), hazard="the no-tactical run")
+
+    assert [turn.speaker for turn in result.transcript.turns] == [
+        Speaker.lead,
+        Speaker.color,
+    ]
+    assert all("TACTICAL:" not in request.prompt for request in model.requests)
+
+
+@pytest.mark.anyio
+async def test_the_tactical_block_reads_only_each_events_past() -> None:
+    """Each turn's block is the state at that event's own instant, never the future."""
+    events = [
+        detected(index=0, timestamp=dt.datetime(2024, 3, 2, 15, 0, 0, tzinfo=UTC)),
+        detected(index=1, timestamp=dt.datetime(2024, 3, 2, 15, 5, 0, tzinfo=UTC)),
+    ]
+    model = ScriptedModelClient(answered(events, ["Lead line.", "Colour line."]))
+    booth = make_booth(
+        events, model, tactical=build_tactical_source(SESSION_KEY, tactical_payloads())
+    )
+
+    result = await bounded(booth.run(), hazard="the per-moment tactical run")
+
+    assert [turn.speaker for turn in result.transcript.turns] == [
+        Speaker.lead,
+        Speaker.color,
+    ]
+    first, second = model.requests[0].prompt, model.requests[1].prompt
+    assert "TACTICAL:" in first
+    assert "driver 4 is 0.5 s behind the car ahead." in first
+    assert "driver 16" not in first
+    assert "driver 16 is 0.3 s behind the car ahead." in second
+    assert "driver 4 has not reported for 300 s." in second
+
+
+@pytest.mark.anyio
+async def test_the_tactical_block_never_becomes_a_citable_reference() -> None:
+    """The block is context: the citation surface stays exactly the event's own."""
+    events = [detected(index=0, timestamp=dt.datetime(2024, 3, 2, 15, 0, 0, tzinfo=UTC))]
+    model = ScriptedModelClient(answered(events, ["Lead line."]))
+    booth = make_booth(
+        events, model, tactical=build_tactical_source(SESSION_KEY, tactical_payloads())
+    )
+
+    result = await bounded(booth.run(), hazard="the tactical citation run")
+
+    assert [list(turn.evidence) for turn in result.transcript.turns] == [
+        [ref(events[0])]
+    ]
+
+
+@pytest.mark.anyio
+async def test_the_tactical_block_respects_the_declared_cap() -> None:
+    """The bounded block truncates at the settings' cap and says how many are hidden."""
+    events = [detected(index=0, timestamp=dt.datetime(2024, 3, 2, 15, 5, 0, tzinfo=UTC))]
+    model = ScriptedModelClient(answered(events, ["Lead line."]))
+    source = build_tactical_source(
+        SESSION_KEY,
+        tactical_payloads(),
+        TacticalSettings(tactical_context_max_alerts=1, staleness_seconds=600.0),
+    )
+    booth = make_booth(events, model, tactical=source)
+
+    await bounded(booth.run(), hazard="the tactical cap run")
+
+    prompt = model.requests[0].prompt
+    assert "driver 4 is 0.5 s behind the car ahead." in prompt
+    assert "driver 16 is 0.3 s behind the car ahead." not in prompt
+    assert "and 1 more alert not shown." in prompt
+
+
+@pytest.mark.anyio
+async def test_an_event_without_an_instant_declares_no_tactical_block() -> None:
+    """A turn whose event carries no instant cannot be placed; no block is invented."""
+    events = [detected(index=0, timestamp=None)]
+    model = ScriptedModelClient(answered(events, ["Lead line."]))
+    booth = make_booth(
+        events, model, tactical=build_tactical_source(SESSION_KEY, tactical_payloads())
+    )
+
+    result = await bounded(booth.run(), hazard="the timeless event run")
+
+    assert [turn.speaker for turn in result.transcript.turns] == [Speaker.lead]
+    assert "TACTICAL:" not in model.requests[0].prompt

@@ -706,3 +706,17 @@ reviewed revision, whose tree is the tree that merged.
 | `src/f1show/pacing.py:122-128`, the same five lines seen by the other lens | `R4-pacing-hang-guard` (same lineage) | **WARNING**, informational, no body returned | the next unit touching the guard, or the first observability work | any change to how a non-finite wait is refused | **OPEN, and worth its own row because two independent lenses landed on the same code** — this register's own rule is that a subject two reviewers reach separately weighs more than one reviewer's reading. The resilience reading adds the failure-mode view: a wait that cannot be expressed is refused at the point of **use** rather than at **declaration**, so a spec that can never succeed for a given event is accepted, and only fails once such an event arrives |
 | `src/f1show/pacing.py:45-50`, the module's imports and its `__all__` | `R3-002` (same lineage) | SUGGESTION, informational, no body returned | the next unit touching the module's public surface | any change to `__all__`, to those imports, or to what the module exposes | **OPEN** — subject located: the four exported names (`Pacer`, `PacingSpec`, `pacing_origin`, `release_at_offsets`) and the two imports above them. The reading: the module exports **both** the rule and the stream built on it, while nothing states which of the two a caller outside the unit is expected to use — a surface wider than the unit's own need |
 | `src/f1show/booth.py:850-854`, the cadence wait at the top of `run()` | `R4-pacing-observability` (same lineage) | SUGGESTION, informational, no body returned | the next unit touching the cadence wiring, or the first run-metrics work | any change to that block, or the introduction of run metrics | **OPEN** — subject located: the lines that read `self._cadence`, take `started`, and await `pacer.wait_seconds(...)` before each event. The reading: the waits are **invisible** — nothing counts them, exposes them or reports where a run spent its time, so an operator watching a paced run cannot tell a slow model call from a paced wait. The unit's own tests measure the waits exactly, which is why this is a finding about the product's eye rather than about its arithmetic |
+
+## tactical.py — from the F06b fix
+
+**One delivered defect, caught while building the per-moment layer.** F06b T1's renderer needed
+typed fact access, and the type check flagged what the review's refuter had marked *refuted*: the
+pace alert's `timestamp` was read from `window[-1][2]` — the record index, not the instant — and
+pydantic coerced that integer to an epoch datetime (1970), sorting every pace alert first without
+crashing anything. The effect was subtle, which is why neither the receipt tests (none pinned the
+value) nor the reviewer's refutation caught it as a failure. F06b T1 fixed it and the fix landed
+with the F06a receipt tests unchanged and green.
+
+| Location | Ids | Severity | Owner | Trigger | Status |
+| --- | --- | --- | --- | --- | --- |
+| `_pace_alerts` timestamp | R3-pace-timestamp-index | CRITICAL | — | — | **CLOSED**: F06b T1 (`dc31251`) reads the window's own instant (`window[-1][3]`); the F06a receipts stayed green, so the wrong value was never load-bearing |
