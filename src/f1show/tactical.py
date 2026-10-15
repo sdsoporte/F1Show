@@ -26,9 +26,10 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+from bisect import bisect_left
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
 from enum import Enum
+from functools import cache
 from statistics import median
 from typing import cast
 
@@ -112,10 +113,15 @@ class TacticalAlert(_Deterministic):
     sources: tuple[SourceRef, ...] = Field(min_length=1)
 
 
-def _as_instant(value: object) -> dt.datetime | None:
-    """Parse a recorded timestamp, or report the unknown rather than guessing."""
-    if not isinstance(value, str):
-        return None
+@cache
+def _cached_instant(value: str) -> dt.datetime | None:
+    """Parse one recorded timestamp string once; the corpus repeats it per turn.
+
+    The per-moment context re-reads the same recorded rows for every aired
+    turn, so parsing them again each time is the difference between seconds
+    and minutes on the recorded session. The parse is pure and the datetime
+    immutable, so the cache is safe.
+    """
     try:
         parsed = dt.datetime.fromisoformat(value)
     except ValueError:
@@ -123,6 +129,13 @@ def _as_instant(value: object) -> dt.datetime | None:
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         return None
     return parsed
+
+
+def _as_instant(value: object) -> dt.datetime | None:
+    """Parse a recorded timestamp, or report the unknown rather than guessing."""
+    if not isinstance(value, str):
+        return None
+    return _cached_instant(value)
 
 
 def _sort_key(alert: TacticalAlert) -> tuple[str, str, int, int]:
@@ -485,7 +498,6 @@ def analyze_tactics(
     return tuple(sorted(alerts, key=_sort_key))
 
 
-@dataclass(frozen=True)
 class TacticalSource:
     """The booth's per-moment tactical context, built once from recorded payloads.
 
@@ -493,15 +505,81 @@ class TacticalSource:
     returns the alerts as of one instant, each derived from the readings that
     existed at or before it. The end state and every earlier moment come from
     the same classification, so a turn's prompt can never see the future.
+
+    The interval rows are parsed and ordered per driver **once**, at build
+    time, and each ``context`` call bisects for the cutoff instead of
+    re-scanning the family: a recorded run asks for a context per aired
+    turn, and re-reading 21,041 rows per turn is the difference between
+    seconds and minutes. The classification itself is not duplicated -- the
+    per-driver selections feed the motor's own ``_gap_alerts``, and pace and
+    stint age still run through the motor's helpers over the laps and stints.
     """
 
-    session_key: int
-    payloads: Mapping[str, Sequence[Mapping[str, object]]]
-    settings: TacticalSettings
+    def __init__(
+        self,
+        session_key: int,
+        payloads: Mapping[str, Sequence[Mapping[str, object]]],
+        settings: TacticalSettings,
+    ) -> None:
+        self.session_key = session_key
+        self.settings = settings
+        per_driver: dict[int, list[tuple[dt.datetime, int, Mapping[str, object]]]] = {}
+        for index, record in enumerate(payloads.get(_INTERVALS, ())):
+            if record.get("session_key") != session_key:
+                continue
+            when = _as_instant(record.get("date"))
+            driver = record.get("driver_number")
+            if when is None or not isinstance(driver, int):
+                continue
+            per_driver.setdefault(driver, []).append((when, index, record))
+        self._readings: dict[
+            int,
+            tuple[list[dt.datetime], list[tuple[int, Mapping[str, object], dt.datetime]]],
+        ] = {}
+        for driver, rows in per_driver.items():
+            rows.sort(key=lambda row: (row[0], row[1]))
+            self._readings[driver] = (
+                [row[0] for row in rows],
+                [(row[1], row[2], row[0]) for row in rows],
+            )
+        self._lap_records = tuple(payloads.get(_LAPS, ()))
+        self._stint_records = tuple(payloads.get(_STINTS, ()))
 
     def context(self, at: dt.datetime) -> tuple[TacticalAlert, ...]:
-        """The alerts as of ``at``, from the same deterministic motor."""
-        return analyze_tactics(self.session_key, self.payloads, self.settings, as_of=at)
+        """The alerts as of ``at``, from the same deterministic classification.
+
+        Each driver's newest reading at or before ``at`` is selected by
+        bisection over the build-time ordering -- the same
+        newest-then-lowest-index choice the motor's end state makes -- and
+        feeds the same ``_gap_alerts`` branch. Pace and stint age read the
+        laps and stints as of ``at`` through the motor's helpers.
+        """
+        alerts: list[TacticalAlert] = []
+        readings: dict[int, tuple[int, Mapping[str, object], dt.datetime]] = {}
+        for driver, (whens, rows) in self._readings.items():
+            pos = bisect_left(whens, at)
+            if pos < len(whens) and whens[pos] == at:
+                picked = pos
+            elif pos > 0:
+                # The newest reading strictly before ``at``: among the rows
+                # sharing that instant, the lowest record index, exactly the
+                # end state's tie-break.
+                picked = bisect_left(whens, whens[pos - 1])
+            else:
+                continue
+            index, record, when = rows[picked]
+            readings[driver] = (index, record, when)
+        if readings:
+            alerts.extend(_gap_alerts(readings, self.settings))
+        if self._lap_records:
+            alerts.extend(_pace_alerts(self._lap_records, self.session_key, self.settings, at))
+        if self._stint_records:
+            alerts.extend(
+                _tyre_alerts(
+                    self._lap_records, self._stint_records, self.session_key, self.settings, at
+                )
+            )
+        return tuple(sorted(alerts, key=_sort_key))
 
 
 def build_tactical_source(
@@ -555,8 +633,12 @@ def render_tactical(
     At most ``max_alerts`` lines after the header, in the motor's declared
     total order, each plain prose with no bracket and no reference-shaped
     token, so the block stays context and never a source. A truncated block
-    states honestly how many alerts are not shown.
+    states honestly how many alerts are not shown. An empty context renders
+    no block at all -- an empty tuple, a declared absence rather than an
+    empty header.
     """
+    if not alerts:
+        return ()
     lines = ["TACTICAL:"]
     shown = list(alerts[:max_alerts])
     lines.extend(_tactical_line(alert) for alert in shown)
