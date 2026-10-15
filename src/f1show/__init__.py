@@ -148,7 +148,10 @@ from f1show.tactical import (
     TacticalAlert,
     TacticalKind,
     TacticalSettings,
+    TacticalSource,
     analyze_tactics,
+    build_tactical_source,
+    render_tactical,
 )
 
 __all__ = [
@@ -188,4 +191,6 @@ __all__ = [
     "VOICE_MAP", "rate_for_mode", "resolve_voice",
     # F06a: the deterministic tactical motor over the recorded corpus.
     "analyze_tactics", "TacticalAlert", "TacticalKind", "TacticalSettings", "SourceRef",
+    # F06b: the booth's per-moment tactical context source and its renderer.
+    "build_tactical_source", "TacticalSource", "render_tactical",
 ]

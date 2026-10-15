@@ -27,8 +27,10 @@ from __future__ import annotations
 import datetime as dt
 import math
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from enum import Enum
 from statistics import median
+from typing import cast
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
@@ -86,6 +88,10 @@ class TacticalSettings(_Deterministic):
     #: declared estimate, never a fact.
     tyre_age_threshold_laps: int = Field(default=25, ge=1)
 
+    #: The rendered TACTICAL context block shows at most this many alerts
+    #: and states honestly how many are not shown.
+    tactical_context_max_alerts: int = Field(default=8, ge=1)
+
 
 class SourceRef(_Deterministic):
     """One traceable reference to the source record an alert came from."""
@@ -130,7 +136,9 @@ def _sort_key(alert: TacticalAlert) -> tuple[str, str, int, int]:
 
 
 def _latest_readings(
-    records: Sequence[Mapping[str, object]], session_key: int
+    records: Sequence[Mapping[str, object]],
+    session_key: int,
+    as_of: dt.datetime | None = None,
 ) -> dict[int, tuple[int, Mapping[str, object], dt.datetime]]:
     """Each driver's newest attributed interval row, with its position in time.
 
@@ -138,6 +146,8 @@ def _latest_readings(
     parseable aware timestamp cannot be placed in time and cannot take part in
     freshness ordering, so it is not a reading; the row is not silently turned
     into a zero-age one. Ties break by record index, the family's own order.
+    With ``as_of``, rows after that instant are simply not yet known: the
+    per-moment state reads only the past of the instant.
     """
     readings: dict[int, tuple[int, Mapping[str, object], dt.datetime]] = {}
     for index, record in enumerate(records):
@@ -146,6 +156,8 @@ def _latest_readings(
         when = _as_instant(record.get("date"))
         driver = record.get("driver_number")
         if when is None or not isinstance(driver, int):
+            continue
+        if as_of is not None and when > as_of:
             continue
         current = readings.get(driver)
         if current is None or (when, -index) > (current[2], -current[0]):
@@ -227,7 +239,10 @@ def _gap_alerts(
 
 
 def _recent_pace_windows(
-    records: Sequence[Mapping[str, object]], session_key: int, settings: TacticalSettings
+    records: Sequence[Mapping[str, object]],
+    session_key: int,
+    settings: TacticalSettings,
+    as_of: dt.datetime | None = None,
 ) -> dict[int, tuple[float, tuple[tuple[int, float, int, dt.datetime | None], ...]]]:
     """Each driver's clean-lap median over its most recent window.
 
@@ -261,7 +276,12 @@ def _recent_pace_windows(
             seconds = float(duration)
             if not math.isfinite(seconds) or seconds <= 0.0:
                 continue
-            clean.append((lap, seconds, index, _as_instant(record.get("date_start"))))
+            when = _as_instant(record.get("date_start"))
+            if as_of is not None and (when is None or when > as_of):
+                # With a cutoff, a lap without a known instant cannot be
+                # placed in the past and is not yet comparable.
+                continue
+            clean.append((lap, seconds, index, when))
         if len(clean) < settings.pace_window_laps:
             continue
         clean.sort(key=lambda item: (item[0], item[2]))
@@ -274,7 +294,10 @@ def _recent_pace_windows(
 
 
 def _pace_alerts(
-    records: Sequence[Mapping[str, object]], session_key: int, settings: TacticalSettings
+    records: Sequence[Mapping[str, object]],
+    session_key: int,
+    settings: TacticalSettings,
+    as_of: dt.datetime | None = None,
 ) -> Iterable[TacticalAlert]:
     """Pace alerts: a driver's clean-lap median vs the session best median.
 
@@ -284,7 +307,7 @@ def _pace_alerts(
     best-ever or circuit comparison exists: the comparison corpus is exactly
     this session's own clean laps.
     """
-    windows = _recent_pace_windows(records, session_key, settings)
+    windows = _recent_pace_windows(records, session_key, settings, as_of)
     if not windows:
         return
     best = min(value for value, _ in windows.values())
@@ -295,7 +318,7 @@ def _pace_alerts(
         yield TacticalAlert(
             kind=TacticalKind.PACE_DELTA,
             driver_number=driver,
-            timestamp=window[-1][2],
+            timestamp=window[-1][3],
             facts={
                 "median_seconds": value,
                 "best_median_seconds": best,
@@ -310,7 +333,9 @@ def _pace_alerts(
 
 
 def _last_completed_laps(
-    records: Sequence[Mapping[str, object]], session_key: int
+    records: Sequence[Mapping[str, object]],
+    session_key: int,
+    as_of: dt.datetime | None = None,
 ) -> dict[int, tuple[int, int, dt.datetime | None]]:
     """Each driver's last completed clean lap: number, record index, instant.
 
@@ -337,9 +362,12 @@ def _last_completed_laps(
         seconds = float(duration)
         if not math.isfinite(seconds) or seconds <= 0.0:
             continue
+        when = _as_instant(record.get("date_start"))
+        if as_of is not None and (when is None or when > as_of):
+            continue
         current = last.get(driver)
         if current is None or lap > current[0]:
-            last[driver] = (lap, index, _as_instant(record.get("date_start")))
+            last[driver] = (lap, index, when)
     return last
 
 
@@ -348,6 +376,7 @@ def _tyre_alerts(
     stint_records: Sequence[Mapping[str, object]],
     session_key: int,
     settings: TacticalSettings,
+    as_of: dt.datetime | None = None,
 ) -> Iterable[TacticalAlert]:
     """Tyre-age alerts for each driver's latest stint.
 
@@ -357,9 +386,12 @@ def _tyre_alerts(
     current one) and never read as a fact. A stint with no recorded age at
     start stays unknown. Only the highest stint number per driver is the
     current stint; an ended earlier stint makes no end-state claim. The
-    alert fires at or over the threshold.
+    alert fires at or over the threshold. With ``as_of``, a stint counts as
+    current only once it has started: its ``lap_start`` must not exceed the
+    driver's last completed lap at that instant, and a driver with no
+    completed lap yet makes no tyre claim.
     """
-    last_laps = _last_completed_laps(lap_records, session_key)
+    last_laps = _last_completed_laps(lap_records, session_key, as_of)
     latest_stint: dict[int, tuple[int, int, Mapping[str, object]]] = {}
     for index, record in enumerate(stint_records):
         if record.get("session_key") != session_key:
@@ -370,6 +402,16 @@ def _tyre_alerts(
             continue
         if isinstance(stint, bool) or not isinstance(stint, int):
             continue
+        if as_of is not None:
+            completed = last_laps.get(driver)
+            lap_start = record.get("lap_start")
+            if completed is None:
+                continue
+            if isinstance(lap_start, bool) or not isinstance(lap_start, int):
+                continue
+            if lap_start > completed[0]:
+                # The stint has not started yet at this instant.
+                continue
         current = latest_stint.get(driver)
         if current is None or stint > current[0]:
             latest_stint[driver] = (stint, index, record)
@@ -414,6 +456,7 @@ def analyze_tactics(
     session_key: int,
     payloads: Mapping[str, Sequence[Mapping[str, object]]],
     settings: TacticalSettings | None = None,
+    as_of: dt.datetime | None = None,
 ) -> tuple[TacticalAlert, ...]:
     """Analyze one recorded session and return its tactical alerts.
 
@@ -421,20 +464,106 @@ def analyze_tactics(
     :func:`f1show.collector.collect_session_events`. Only families this motor
     reads are consulted; a missing family is declared absence. The result is
     sorted by the declared total order of :func:`_sort_key`, so identical
-    payloads always produce an identical tuple.
+    payloads always produce an identical tuple. With ``as_of``, the analysis
+    reads only the past of that instant -- each family's rows at or before
+    it -- so the same call yields the per-moment state a turn's prompt can
+    carry; the end state is exactly ``as_of=None``.
     """
     settings = settings or TacticalSettings()
     alerts: list[TacticalAlert] = []
     interval_records = payloads.get(_INTERVALS, [])
     if interval_records:
-        alerts.extend(_gap_alerts(_latest_readings(interval_records, session_key), settings))
+        alerts.extend(
+            _gap_alerts(_latest_readings(interval_records, session_key, as_of), settings)
+        )
     lap_records = payloads.get(_LAPS, [])
     if lap_records:
-        alerts.extend(_pace_alerts(lap_records, session_key, settings))
+        alerts.extend(_pace_alerts(lap_records, session_key, settings, as_of))
     stint_records = payloads.get(_STINTS, [])
     if stint_records:
-        alerts.extend(_tyre_alerts(lap_records, stint_records, session_key, settings))
+        alerts.extend(_tyre_alerts(lap_records, stint_records, session_key, settings, as_of))
     return tuple(sorted(alerts, key=_sort_key))
+
+
+@dataclass(frozen=True)
+class TacticalSource:
+    """The booth's per-moment tactical context, built once from recorded payloads.
+
+    The source is the F06a motor viewed at a moving cutoff: ``context``
+    returns the alerts as of one instant, each derived from the readings that
+    existed at or before it. The end state and every earlier moment come from
+    the same classification, so a turn's prompt can never see the future.
+    """
+
+    session_key: int
+    payloads: Mapping[str, Sequence[Mapping[str, object]]]
+    settings: TacticalSettings
+
+    def context(self, at: dt.datetime) -> tuple[TacticalAlert, ...]:
+        """The alerts as of ``at``, from the same deterministic motor."""
+        return analyze_tactics(self.session_key, self.payloads, self.settings, as_of=at)
+
+
+def build_tactical_source(
+    session_key: int,
+    payloads: Mapping[str, Sequence[Mapping[str, object]]],
+    settings: TacticalSettings | None = None,
+) -> TacticalSource:
+    """Build the per-moment tactical source from the recorded payloads.
+
+    Only the families the motor reads are consulted; a missing family is
+    declared absence -- the recorded corpus holds intervals for session 9617
+    only, and session 9655 deliberately has none.
+    """
+    return TacticalSource(
+        session_key=session_key,
+        payloads=payloads,
+        settings=settings or TacticalSettings(),
+    )
+
+
+def _tactical_line(alert: TacticalAlert) -> str:
+    """One plain-prose line for the block: no bracket, no reference-shaped token."""
+    d = alert.driver_number
+    facts = alert.facts
+    if alert.kind is TacticalKind.GAP_BATTLE:
+        seconds = cast(float, facts["interval_seconds"])
+        return f"driver {d} is {seconds:.1f} s behind the car ahead."
+    if alert.kind is TacticalKind.GAP_LAPPED:
+        laps = cast(int, facts["laps"])
+        noun = "lap" if laps == 1 else "laps"
+        return f"driver {d} is {laps} {noun} behind the leader."
+    if alert.kind is TacticalKind.GAP_UNKNOWN:
+        return f"driver {d}'s gap could not be read."
+    if alert.kind is TacticalKind.STALE_READING:
+        age = cast(float, facts["age_seconds"])
+        return f"driver {d} has not reported for {age:.0f} s."
+    if alert.kind is TacticalKind.PACE_DELTA:
+        delta = cast(float, facts["delta_seconds"])
+        return (
+            f"driver {d}'s recent pace is {delta:.1f} s off the session's best."
+        )
+    age = cast(float, facts["tyre_age_laps"])
+    return f"driver {d} is on an estimated {age:.0f}-lap tyre age."
+
+
+def render_tactical(
+    alerts: Sequence[TacticalAlert], max_alerts: int = 8
+) -> tuple[str, ...]:
+    """Render the bounded TACTICAL context block.
+
+    At most ``max_alerts`` lines after the header, in the motor's declared
+    total order, each plain prose with no bracket and no reference-shaped
+    token, so the block stays context and never a source. A truncated block
+    states honestly how many alerts are not shown.
+    """
+    lines = ["TACTICAL:"]
+    shown = list(alerts[:max_alerts])
+    lines.extend(_tactical_line(alert) for alert in shown)
+    hidden = len(alerts) - len(shown)
+    if hidden > 0:
+        lines.append(f"and {hidden} more alerts not shown.")
+    return tuple(lines)
 
 
 __all__ = [
@@ -442,6 +571,9 @@ __all__ = [
     "TacticalAlert",
     "TacticalKind",
     "TacticalSettings",
+    "TacticalSource",
     "analyze_tactics",
+    "build_tactical_source",
+    "render_tactical",
 ]
 
