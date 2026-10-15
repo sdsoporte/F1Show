@@ -53,7 +53,10 @@ session's established push → PR → CI verde → merge flow. Test runner:
 - **T1** (S3,S2,S6): `tactical.py` source layer — `TacticalSource`,
   `build_tactical_source`, `tactical_context`, `render_tactical` — plus
   `tests/test_tactical.py` additions, RED→GREEN. Route: inline. Commit:
-  pending.
+  `dc31251` (35 focused tests passed; ruff 0.17.0 clean). Implementation note: the per-moment layer is the motor itself at
+  a moving cutoff — `analyze_tactics(..., as_of=...)` threads the instant
+  through every family filter, so end state is exactly `as_of=None` and no
+  reviewed logic is duplicated.
 - **T2** (S2,S4,S6): booth TACTICAL block — construction parameter, per-turn
   context derivation, prompt insertion, `None` absence — plus booth test
   updates, RED→GREEN. Route: inline. Commit: pending.
@@ -79,3 +82,13 @@ session's established push → PR → CI verde → merge flow. Test runner:
   contract change names this explicitly. `ChampionshipSource` is a frozen
   dataclass built from payloads (`championship.py:191,268`), the pattern
   S3 mirrors.
+- **L3** (2026-10-14): A real delivered defect surfaced during T1, caught by
+  Pyright while fixing the new `render_tactical` type blockers:
+  `_pace_alerts` set a pace alert's `timestamp` from `window[-1][2]` — the
+  record index, not the instant — so pydantic coerced it to an epoch
+  datetime. This was the delivered F06a code, and it corresponds to the
+  reviewer's CRITICAL finding `R3-pace-timestamp-index` (tactical.py:298),
+  which the refuter had marked refuted; the effect was subtle (wrong
+  timestamp value, no crash) but real. Fixed in this unit: `window[-1][3]`,
+  and the F06a receipt tests still pass because none pinned the wrong
+  value. The register row is re-derived at T3.
