@@ -106,3 +106,23 @@ session's established push → PR → CI verde → merge flow. Test runner:
   interval reading) renders no block at all, not an empty header. (3) The
   pace-timestamp defect's register row landed in
   `docs/CARRIED-FINDINGS.md` as CLOSED with the fix's identity.
+- **L5** (2026-10-15): Delivery record. PR #71 merged as `5aa8c51` after CI
+  run 38730786946 passed all four checks on the corrected head `0d5a906`.
+  The native review of the functional candidate (`review-9171bc97a22a1a98`,
+  medium, readability + reliability) completed both lens captures after the
+  maintainer's authorized retry round — the first attempts failed on the
+  relay reviewer's output budget — and the refuter closed the lineage into
+  `correction_required` with one frozen finding (`R3-pace-timestamp-none`).
+  Reproduction disproved the finding's crash claim (the field accepts
+  `None`), but the underlying None-instant inconsistency was real; the
+  provider's correction-plan capture was then mechanically refused four
+  times (binding rejected as stale even byte-exact after fresh STATUS), so
+  the maintainer explicitly authorized abandoning the lineage
+  (`operator_disposition`) and fixing the substance as an ordinary commit
+  (`0d5a906`, regression test included, 1071 tests green). The docs slice
+  (snapshot `5aa8c51`, 1071-test receipts, the F06b row) was reviewed as
+  lineage `review-e51c189c11d6d3c1` (low, approved, acknowledged) and
+  delivered by PR #72 merged as `18f5eea`. Local `main` = `origin/main` =
+  the GitHub API at the merge commit, clean tree. F06's deferred tiers
+  (qualifying rules, the telemetry source decision, Redis/F05) stay open for
+  separate authorizations.
