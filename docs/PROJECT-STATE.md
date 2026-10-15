@@ -2,7 +2,7 @@
 
 One page for the question *what exists, what does not, and what is merely carried*. It is a **snapshot**, and it names the revision it was drawn at: `odd/tasks/f1show.md` stays the authority.
 
-**Snapshot:** `e0dff8a` (the merge of PR #68): **F14** (wall-clock playback), **F15** (standalone, opt-in speech synthesis) and **F06a** (the race tactical motor) are delivered. The corpus holds **two** sessions; the full suite and Python 3.12 floor each passed **1053** tests, and CI passed on **3.12 and 3.14** with **Ruff 0.17.0** pinned. The Mermaid diagram below was drawn at `043d2a5` and has not been redrawn since; the tables describe this newer snapshot.
+**Snapshot:** `5aa8c51` (the merge of PR #71): **F14** (wall-clock playback), **F15** (standalone, opt-in speech synthesis), **F06a** (the race tactical motor) and **F06b** (the analyst's TACTICAL context) are delivered. The corpus holds **two** sessions; the full suite and Python 3.12 floor each passed **1071** tests, and CI passed on **3.12 and 3.14** with **Ruff 0.17.0** pinned. The Mermaid diagram below was drawn at `043d2a5` and has not been redrawn since; the tables describe this newer snapshot.
 
 ## The map
 
@@ -110,6 +110,7 @@ Exports for readers who cannot render Mermaid: [`project-state.svg`](assets/proj
 | F14 | wall-clock playback | a recorded session is consumed **at the rate it happened** — one wait per event off the run's own earliest known instant, opt-in and injected both-or-neither, with the transcript **byte-identical** to the unpaced run at any scale |
 | F15 | speech synthesis, built and opt-in | `f1show.audio` turns a turn's text into audio per seat — declared voice catalogue per dialect, `+10%` rate on climax turns, blank text refused — behind a protocol with a fake; **nothing on the run's path calls it** (zero references in `booth.py` and `run.py`, no test opens a socket) |
 | F06a | the race tactical motor, standalone | `f1show.tactical` turns recorded payloads into a total-ordered tuple of source-referenced alerts — gap battles on the `interval` field, lapped readings kept as lap counts, declared unknowns and absences, freshness windows, clean-lap pace deficits against the session best median, and estimated tyre age per current stint — behind configurable, pinned thresholds; **nothing on the run's path calls it** (the booth, `run.py` and the collector are untouched), and it consumes the F04 `classify_gap` handoff, so the orphan deadline is met |
+| F06b | the analyst's TACTICAL context, wired | the booth accepts an optional `TacticalSource` and, when `run.py` wires it from the recorded payloads, every turn's prompt carries a per-moment `TACTICAL:` block — the motor read only up to that event's own instant — after CHAMPIONSHIP, under the same context-never-a-source rule (plain prose, no bracket, no reference-shaped token); `intervals` is the loader's one optional family (session 9655 deliberately has none, declared absence), an empty context renders no block, and the source layer bisects build-time-ordered readings so a per-turn context is cheap |
 
 ## Remaining, and why
 
