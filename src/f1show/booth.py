@@ -910,16 +910,15 @@ class CommentaryBooth:
             # The analyst's per-moment tactical state: only the past of this
             # event's own instant reaches the prompt, and an event with no
             # instant cannot be placed, so its turn declares no block at all.
-            tactical_lines = (
+            rendered = (
                 None
                 if self._tactical is None or event.timestamp_value is None
-                else list(
-                    render_tactical(
-                        self._tactical.context(event.timestamp_value),
-                        self._tactical.settings.tactical_context_max_alerts,
-                    )
+                else render_tactical(
+                    self._tactical.context(event.timestamp_value),
+                    self._tactical.settings.tactical_context_max_alerts,
                 )
             )
+            tactical_lines = rendered if rendered else None
             request = ModelRequest(
                 model_id=self._settings.model_id,
                 prompt=self._prompt(
