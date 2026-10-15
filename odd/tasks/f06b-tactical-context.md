@@ -59,7 +59,9 @@ session's established push → PR → CI verde → merge flow. Test runner:
   reviewed logic is duplicated.
 - **T2** (S2,S4,S6): booth TACTICAL block — construction parameter, per-turn
   context derivation, prompt insertion, `None` absence — plus booth test
-  updates, RED→GREEN. Route: inline. Commit: pending.
+  updates, RED→GREEN. Route: inline. Commit: `c5af2cf` (5 new booth tests;
+  213 booth+tactical tests passed; ruff 0.17.0 clean; existing prompt pins
+  untouched — the block exists only when a source is wired).
 - **T3** (S5,S6,S7): `run.py` wiring and the declared intervals-loading
   contract change, 9655 absence, full suite + Ruff. Route: inline. Commit:
   pending.
