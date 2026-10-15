@@ -64,7 +64,7 @@ session's established push → PR → CI verde → merge flow. Test runner:
   untouched — the block exists only when a source is wired).
 - **T3** (S5,S6,S7): `run.py` wiring and the declared intervals-loading
   contract change, 9655 absence, full suite + Ruff. Route: inline. Commit:
-  pending.
+  `30430e1` (5 new loader/wiring tests; 1070 passed; ruff 0.17.0 clean).
 
 ## Log
 
@@ -94,3 +94,15 @@ session's established push → PR → CI verde → merge flow. Test runner:
   timestamp value, no crash) but real. Fixed in this unit: `window[-1][3]`,
   and the F06a receipt tests still pass because none pinned the wrong
   value. The register row is re-derived at T3.
+- **L4** (2026-10-14): T3's measured tradeoffs, recorded rather than hidden.
+  (1) Performance: the naive per-turn context re-read 21,041 interval rows
+  per aired turn and took the suite from ~35 s to ~300 s; TacticalSource now
+  parses and orders the readings once at build time and bisects per turn,
+  feeding the motor's own `_gap_alerts` — end-state equality re-proved after
+  the change, 50 end-state contexts in 0.13 s, full suite 1070 passed in
+  141 s. The residual per-turn cost is the laps/stints scan (memoized
+  parsing), declared acceptable for an offline product whose replay is
+  wall-clock paced. (2) An empty tactical context (events before the first
+  interval reading) renders no block at all, not an empty header. (3) The
+  pace-timestamp defect's register row landed in
+  `docs/CARRIED-FINDINGS.md` as CLOSED with the fix's identity.
