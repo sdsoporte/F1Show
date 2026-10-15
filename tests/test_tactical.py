@@ -789,3 +789,30 @@ def test_render_tactical_truncates_with_an_honest_count() -> None:
 def test_source_defaults_pin_the_context_cap() -> None:
     """The declared cap lives in the settings with its default of 8."""
     assert TacticalSettings().tactical_context_max_alerts == 8
+
+
+def test_pace_alert_timestamp_uses_the_windows_last_known_instant() -> None:
+    """A window ending on a lap with no recorded instant still yields a placed alert.
+
+    Regression for the F06b review's frozen finding: the window's instant slot
+    is None for such a lap, and the alert must carry the latest instant the
+    window can prove instead of an unplaced None.
+    """
+    laps = []
+    for n in range(2, 8):
+        laps.append(lap_row(14, n, 100.0 + n))
+        laps.append(lap_row(4, n, 110.0 + n))
+    unplaced = lap_row(4, 8, 117.0)
+    unplaced["date_start"] = None
+    laps.append(unplaced)
+
+    alerts = analyze_tactics(
+        SESSION_KEY, {"laps": laps}, TacticalSettings(pace_delta_threshold_seconds=0.01)
+    )
+
+    pace = alerts_of_kind(alerts, TacticalKind.PACE_DELTA)
+    assert [alert.driver_number for alert in pace] == [4]
+    assert pace[0].timestamp == dt.datetime.fromisoformat("2024-10-20T19:17:00+00:00"), (
+        "the alert is placed at the window's last known instant (lap 7), never None "
+        "while its window still holds placed laps"
+    )

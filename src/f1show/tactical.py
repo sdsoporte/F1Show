@@ -328,10 +328,18 @@ def _pace_alerts(
         delta = value - best
         if delta <= settings.pace_delta_threshold_seconds:
             continue
+        # The window's last KNOWN instant: a window ending on a lap with no
+        # recorded date_start cannot place the alert at that lap, and a bare
+        # None would misorder it; the alert carries the latest instant it can
+        # prove, or None only when its whole window lacks one.
+        timestamp = next(
+            (item[3] for item in reversed(window) if item[3] is not None),
+            None,
+        )
         yield TacticalAlert(
             kind=TacticalKind.PACE_DELTA,
             driver_number=driver,
-            timestamp=window[-1][3],
+            timestamp=timestamp,
             facts={
                 "median_seconds": value,
                 "best_median_seconds": best,
