@@ -55,7 +55,13 @@ separate user decision taken at the end of the unit.
   missing families are **declared**, never coerced. Phase boundaries come from the data where the
   source carries them and from the declared rules where it does not, and which of the two
   produced a value must be visible in the result. Estimates are labelled as estimates; no
-  strategy claim and no circuit-specific constant.
+  strategy claim and no circuit-specific constant. **Placement, decided here:** a second pure
+  entry point in `src/f1show/tactical.py` beside `analyze_tactics`, with its tests in
+  `tests/test_tactical.py` — not a new module, because `ARCHITECTURE` already attributes qualifying
+  cutoffs to the **Tactical analyst** role implemented by that module, because the declared rules it
+  reads live in `standings.py` (the same engine/rules split `championship.py`/`standings.py` already
+  uses), and because extending it keeps `tactical.py`'s staleness key valid where a new module would
+  owe a key **and** a register row in its closure commit.
 - **S6** (contracts that change deliberately, not silently): `src/f1show/tactical.py`'s module
   docstring declares the unit race-only — `:1` *"(F06a)"*, `:8-11` *"Scope of this unit (F06a).
   Race-only, recorded-corpus-only analysis of gaps, freshness, pace and stint age. Qualifying
@@ -83,11 +89,17 @@ separate user decision taken at the end of the unit.
   writer in **this** worktree, surface-confined to `src/f1show/standings.py` and
   `tests/test_standings.py`; the parent commits. Commit: `019d43a` — **178 + 140 authored lines,
   0 removed**, full suite **1078 passed** measured on the live bytes.
-- **T3** (S5,S2): the cutoff motor over the captured payloads, RED → GREEN against the spec's
-  boundary, missing-data and pit-interference cases, with the provenance of each value pinned.
-  Route: writer in its own worktree; independent verification after. Commit: pending.
-- **T4** (S6,S7): the deliberate docstring/contract edits, the docs rows and the register row.
-  Route: parent, then verified. Commit: pending.
+- **T3** (S5, S2, **and the S6 docstring sentences it invalidates**): the cutoff motor over the
+  captured payloads, RED → GREEN against the spec's boundary, missing-data and pit-interference
+  cases, with the provenance of each value pinned — plus the `tactical.py` scope sentences updated
+  **in the same commit**, so no committed revision claims qualifying is out of scope while the module
+  performs it. Route: one writer in **this** worktree, surface-confined to `src/f1show/tactical.py`
+  and `tests/test_tactical.py`; the parent commits. Commit: `9e45b8c` — **589/20 + 451/11** live
+  (960 authored + formatter reflow), suite **1097 passed**, Ruff clean.
+- **T4** (S7, plus the S6 sentences T3 does not own): the cross-document rows — the PROJECT-STATE row
+  and snapshot, ARCHITECTURE's *Tactical analyst* row, the CARRIED-FINDINGS row including the L11
+  advisory, and the F06c record in `odd/tasks/f1show.md`. No new module is created, so no new
+  staleness key is owed. Route: parent, then verified. Commit: pending.
 - **T5** (all): independent verification, native review under RDD, local integration, and the
   delivery decision put to the user. Route: parent. Commit: pending.
 
@@ -103,16 +115,35 @@ decisions of the user.
 **Budget rule:** ~400 authored changed lines is a planning heuristic, not a cap — never delete
 tests, comments or whitespace to meet it, split cohesive behaviour instead.
 
-**Boundary measured before this commit: 628 authored lines across 3 commits**, so every slice
-below is bounded from here rather than inherited on assumption.
+**Boundary measured as work lands: 628 authored lines across 3 commits before this record and
+691 across 4 after it** — slice 1 closed at **310** and slice 2 at **381** (`019d43a` 318 +
+`4f360b9` 63). Every slice below is bounded before it is coded, never inherited on assumption.
+**Slice 3, measured before its commit: 1040 authored additions live** — 589 in `tactical.py` and
+451 in its tests — of which the child authored **960** and the harness formatter added **80** more
+(plus 25 formatter removals) after the child measured; the six intentional removals are exactly the
+two S6 sentences. Disclosed as review workload, the same way F09e disclosed ~379 lines of formatter
+reflow.
 
 | Slice | Deliverable work unit | Commits | Authored lines |
 | --- | --- | --- | --- |
 | 1 | the recorded qualifying window and this spec (T1 + registration) | `9396187`, `963ef64` | 164 + 146 = **310** |
-| 2 | the declared per-season rules (T2 + this record) | `019d43a`, this commit | **318** committed, plus this record |
-| 3 | the cutoff motor (T3) | pending | bounded before coding; one honest slicing pass if it cannot fit |
+| 2 | the declared per-season rules (T2 + this record) | `019d43a`, `4f360b9` | 318 + 63 = **381** |
+| 3 | the cutoff motor (T3) | `9e45b8c` | **1040** live additions (960 authored + 80 formatter); kept cohesive, see the slicing pass below |
 | 4 | contracts, docs and the register row (T4) | pending | bounded before coding |
 | 5 | verification, native review and delivery (T5) | pending | bounded before coding |
+
+**Slice 3 — one honest slicing pass, made and recorded rather than assumed.** The arithmetic
+settles the two-way cut without needing it: **960 authored additions cannot become two slices of
+≤400 each**, since that totals at most 800. A three-way cut would reach the budget only by slicing
+one behaviour three ways, leaving two of the three with no end-to-end capability — artificial
+slicing, which this heuristic exists to prevent. The vertical cut on offer (phase windows +
+eligible-lap counting / standings + verdict + the S6 prose) additionally needs a public entry point
+the first half would have **no caller** for — orphan code, the very defect F06's `classify_gap`
+deadline exists to prevent — and would change `QualifyingCutoffReading`'s shape between commits.
+**Decision: keep one cohesive commit, report the overage, trim nothing.** No test, comment or
+whitespace was removed to fit; the 19 tests each cover a distinct clause of S2, and the child
+reported two of its own expectations corrected from measured values rather than the implementation
+being bent to them.
 
 One deliverable work unit per child PR, each carrying the tests and docs it verifies; the tracker
 PR stays draft/no-merge until every child is reviewed. Counts are re-measured before each commit,
@@ -207,3 +238,38 @@ never carried forward.
   dataclass, a non-numeric `points` would raise a bare `ValueError` instead of the module's typed
   `StandingsInputError` — **T4 owns the register row; owner: whoever next touches `_start_points`;
   trigger: any change to start-checkpoint parsing.**
+- **L12** (2026-10-19): **placement decided and the T3/T4 split corrected — both before any T3 code.**
+  The motor becomes a second entry point in `src/f1show/tactical.py` rather than a new module, for the
+  three reasons now written into S5. **Consequence: the S6 docstring sentences move from T4 to T3**,
+  because a commit must never leave `tactical.py` saying *"Qualifying cutoffs … are out of scope"* while
+  the module performs them — prose travels with the behaviour it describes. Only `:1` and `:8-11` need
+  the edit: the `intervals` corpus claims at `:40-44` and `build_tactical_source:599-602` stay true,
+  because 9608 and 9655 both lack that family. T4 keeps the cross-document rows and the register row.
+- **L13** (2026-10-19): **the inputs T3 reads, measured rather than assumed.** `position` carries only
+  `date`, `driver_number`, `position`, `meeting_key`, `session_key` — **no `lap_number` and no phase** —
+  so per-phase classification is `date` filtered into the `race_control` phase windows. The acceptance's
+  *pit interference* is now exact: `is_pit_out_lap` is true on **99 of 282** laps, and those **99** keys
+  are **identical** to the 99 `pit` records for the same drivers (measured set equality, not a
+  coincidence), so an out-lap and a pit record describe one event. Laps per driver span **6 to 20**,
+  consistent with the measured 20 → 15 → 10 elimination. Of the three pit duration fields
+  `stop_duration` is **null on 99/99** while `lane_duration` and `pit_duration` are populated on
+  **79/99** (25.8–892.3) — recorded because one sample row looked null and would have produced a false
+  generalisation in **both** directions.
+- **L14** (2026-10-19): **T3 closed as `9e45b8c`** — suite **1097 passed**, Ruff clean, S6's two
+  sentences moved with the behaviour in the same commit while the two `intervals` claims were
+  verified unchanged (`grep -c` on the diff = 0). The load-bearing design fact: **the verdict rests on
+  best-eligible-lap classification, not on the live `position` order**, and that is measured rather
+  than preferred — at phase 1's close the source's own top fifteen contains drivers 23 and 43, who
+  never entered phase 2, and at phase 2's close its top ten contains 22 and 27, who never entered
+  phase 3; best-in-window lap order reproduces both entrant sets exactly, and phase 3's ten equal
+  `session_result` P1–P10. `position` is therefore reported as a declared source fact with
+  `position_agrees` flagging the disagreement instead of being trusted. **Three limitations carried
+  to T4 for register rows** (each declared in code and pinned, none silent): (1) **deleted laps are not
+  applied** — the nine `race_control` deletion notices are free text with no phase and no lap key, and
+  exactly one matches a driver's best in-window lap (driver 11, 93.26 s, phase 3), so the verdict does
+  not move but the reported best time is a deleted lap; owner: whoever next touches the lap
+  classifier, trigger: any change to how race-control messages are parsed. (2) **`as_of` is not
+  validated as timezone-aware** — a naive instant raises `TypeError`, the same exposure
+  `analyze_tactics` already carries. (3) **declared boundary windows are not enforced** — a declared end
+  past the next phase's start would silently become an overlap resolved by *last window wins*;
+  unreachable with 2024's 7- and 8-minute breaks.
