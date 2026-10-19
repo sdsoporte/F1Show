@@ -15,6 +15,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from f1show import (
     GapKind,
     TacticalKind,
@@ -22,6 +24,16 @@ from f1show import (
     analyze_tactics,
     build_tactical_source,
     render_tactical,
+)
+from f1show import tactical as tactical_module
+from f1show.standings import QualifyingRulesError, QualifyingSessionKind
+from f1show.tactical import (
+    QualifyingBoundarySource,
+    QualifyingCutoffReading,
+    QualifyingPhaseRule,
+    QualifyingPhaseWindow,
+    QualifyingStanding,
+    analyze_qualifying_cutoffs,
 )
 
 SESSION_KEY = 9617
@@ -39,9 +51,7 @@ def full_payloads() -> dict[str, list[dict[str, Any]]]:
     return {name: load(name) for name in ("intervals", "laps", "stints")}
 
 
-def alerts_of_kind(
-    alerts: tuple[Any, ...], kind: TacticalKind
-) -> list[Any]:
+def alerts_of_kind(alerts: tuple[Any, ...], kind: TacticalKind) -> list[Any]:
     return [alert for alert in alerts if alert.kind is kind]
 
 
@@ -97,7 +107,9 @@ def test_battle_threshold_is_configurable_and_inclusive() -> None:
     alerts = analyze_tactics(
         SESSION_KEY, payloads, settings=TacticalSettings(battle_threshold_seconds=1.0)
     )
-    assert [alert.driver_number for alert in alerts_of_kind(alerts, TacticalKind.GAP_BATTLE)] == [4]
+    assert [
+        alert.driver_number for alert in alerts_of_kind(alerts, TacticalKind.GAP_BATTLE)
+    ] == [4]
 
 
 def test_leader_row_never_battles_itself() -> None:
@@ -570,7 +582,9 @@ def test_only_the_latest_stint_is_evaluated() -> None:
     assert analyze_tactics(SESSION_KEY, payloads, settings=TYRE_SETTINGS) == ()
     payloads["stints"][1] = stint_row(31, 2, 26, 50, tyre_age_at_start=15)
     alerts = analyze_tactics(SESSION_KEY, payloads, settings=TYRE_SETTINGS)
-    assert [alert.driver_number for alert in alerts_of_kind(alerts, TacticalKind.TYRE_AGE)] == [31]
+    assert [
+        alert.driver_number for alert in alerts_of_kind(alerts, TacticalKind.TYRE_AGE)
+    ] == [31]
     assert alerts[0].facts["tyre_age_laps"] == 30
 
 
@@ -587,7 +601,9 @@ def test_missing_stint_or_lap_families_are_declared_absence() -> None:
     """No stints means no tyre alerts; laps alone cannot compute an age."""
     assert (
         alerts_of_kind(
-            analyze_tactics(SESSION_KEY, {"laps": load("laps")}, settings=TYRE_SETTINGS),
+            analyze_tactics(
+                SESSION_KEY, {"laps": load("laps")}, settings=TYRE_SETTINGS
+            ),
             TacticalKind.TYRE_AGE,
         )
         == []
@@ -606,7 +622,9 @@ def test_recorded_fixture_tyre_age_alerts_are_pinned() -> None:
     """
     alerts = analyze_tactics(SESSION_KEY, full_payloads())
     ages = alerts_of_kind(alerts, TacticalKind.TYRE_AGE)
-    measured = sorted((alert.driver_number, alert.facts["tyre_age_laps"]) for alert in ages)
+    measured = sorted(
+        (alert.driver_number, alert.facts["tyre_age_laps"]) for alert in ages
+    )
     assert measured == [
         (1, 31.0),
         (4, 25.0),
@@ -637,7 +655,8 @@ def test_source_context_at_the_newest_instant_reproduces_the_end_state() -> None
     ] + [
         dt.datetime.fromisoformat(row["date_start"])
         for row in load("laps")
-        if row.get("session_key") == SESSION_KEY and isinstance(row.get("date_start"), str)
+        if row.get("session_key") == SESSION_KEY
+        and isinstance(row.get("date_start"), str)
     ]
     newest = max(instants)
     assert source.context(newest) == analyze_tactics(SESSION_KEY, full_payloads())
@@ -728,7 +747,8 @@ def test_source_without_intervals_declares_absence() -> None:
     newest = max(
         dt.datetime.fromisoformat(row["date_start"])
         for row in load("laps")
-        if row.get("session_key") == SESSION_KEY and isinstance(row.get("date_start"), str)
+        if row.get("session_key") == SESSION_KEY
+        and isinstance(row.get("date_start"), str)
     )
     assert [alert for alert in source.context(newest) if alert.kind in gap_kinds] == []
 
@@ -756,7 +776,9 @@ def test_render_tactical_is_bounded_and_carries_no_reference_token() -> None:
     source = build_tactical_source(
         SESSION_KEY, payloads, TacticalSettings(staleness_seconds=600.0)
     )
-    lines = render_tactical(source.context(dt.datetime.fromisoformat("2024-10-20T18:01:00+00:00")))
+    lines = render_tactical(
+        source.context(dt.datetime.fromisoformat("2024-10-20T18:01:00+00:00"))
+    )
     assert lines[0] == "TACTICAL:"
     assert len(lines) - 1 <= 8
     assert all("[" not in line and "]" not in line for line in lines)
@@ -812,7 +834,425 @@ def test_pace_alert_timestamp_uses_the_windows_last_known_instant() -> None:
 
     pace = alerts_of_kind(alerts, TacticalKind.PACE_DELTA)
     assert [alert.driver_number for alert in pace] == [4]
-    assert pace[0].timestamp == dt.datetime.fromisoformat("2024-10-20T19:17:00+00:00"), (
+    assert pace[0].timestamp == dt.datetime.fromisoformat(
+        "2024-10-20T19:17:00+00:00"
+    ), (
         "the alert is placed at the window's last known instant (lap 7), never None "
         "while its window still holds placed laps"
     )
+
+
+# --- F06c: the qualifying cutoff motor over the recorded session 9608 ---------
+#
+# The declared rules live in ``f1show.standings`` and are read here, never re-stated;
+# what these tests pin is that the motor consumes them, that every value it reports is
+# traceable to the record that produced it, and that what the capture cannot support is
+# declared as an absence instead of being coerced into a zero or a guess.
+
+QUALIFYING_SESSION_KEY = 9608
+QUALIFYING_DIR = FIXTURE_DIR / "9608"
+QUALIFYING_FAMILIES = ("laps", "position", "race_control")
+
+
+def load_qualifying(name: str) -> list[dict[str, Any]]:
+    """Read one recorded qualifying payload verbatim."""
+    return json.loads((QUALIFYING_DIR / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def qualifying_payloads(*drop: str) -> dict[str, list[dict[str, Any]]]:
+    """The recorded qualifying payloads; ``intervals`` is deliberately not one of them."""
+    return {
+        name: load_qualifying(name) for name in QUALIFYING_FAMILIES if name not in drop
+    }
+
+
+def at(value: str) -> dt.datetime:
+    """One recorded instant, parsed the way the motor parses it."""
+    return dt.datetime.fromisoformat(value)
+
+
+def qualifying_cutoff(
+    payloads: dict[str, list[dict[str, Any]]] | None = None,
+    as_of: str = "2024-10-19T23:00:00.262000+00:00",
+    season: int = 2024,
+    session_kind: QualifyingSessionKind | str = QualifyingSessionKind.MAIN_QUALIFYING,
+) -> QualifyingCutoffReading:
+    """The cutoff reading of one instant over the recorded capture by default."""
+    return analyze_qualifying_cutoffs(
+        QUALIFYING_SESSION_KEY,
+        season,
+        session_kind,
+        qualifying_payloads() if payloads is None else payloads,
+        at(as_of),
+    )
+
+
+def window(reading: QualifyingCutoffReading, phase: int) -> QualifyingPhaseWindow:
+    """The declared phase ``phase`` of a reading."""
+    return next(candidate for candidate in reading.phases if candidate.phase == phase)
+
+
+def advancing(reading: QualifyingCutoffReading) -> set[int]:
+    """The drivers the reading places inside the line."""
+    return {
+        row.driver_number
+        for row in reading.standings
+        if row.standing is QualifyingStanding.ADVANCING
+    }
+
+
+def control(instant: str, message: str, phase: int | None) -> dict[str, Any]:
+    """One minimal ``race_control`` row."""
+    return {
+        "session_key": QUALIFYING_SESSION_KEY,
+        "date": instant,
+        "message": message,
+        "qualifying_phase": phase,
+    }
+
+
+def lap_at(
+    instant: str | None,
+    driver: int,
+    seconds: float | None,
+    *,
+    pit_out: bool = False,
+    lap_number: int = 3,
+) -> dict[str, Any]:
+    """One minimal ``laps`` row."""
+    return {
+        "session_key": QUALIFYING_SESSION_KEY,
+        "date_start": instant,
+        "driver_number": driver,
+        "lap_number": lap_number,
+        "lap_duration": seconds,
+        "is_pit_out_lap": pit_out,
+    }
+
+
+def position_at(instant: str, driver: int, place: int) -> dict[str, Any]:
+    """One minimal ``position`` row: no lap number, no phase, only the date."""
+    return {
+        "session_key": QUALIFYING_SESSION_KEY,
+        "date": instant,
+        "driver_number": driver,
+        "position": place,
+    }
+
+
+def test_an_undeclared_season_is_refused_by_the_declared_rules() -> None:
+    """The motor refuses through ``qualifying_rules`` before reading a payload."""
+    with pytest.raises(QualifyingRulesError) as refusal:
+        qualifying_cutoff(season=2025)
+    assert str(refusal.value) == (
+        "no declared qualifying rules for season 2025; declared qualifying seasons: [2024]"
+    )
+
+
+def test_an_undeclared_session_kind_is_refused_by_the_declared_rules() -> None:
+    """A kind nobody measured is refused, never defaulted to the main format."""
+    with pytest.raises(QualifyingRulesError) as refusal:
+        qualifying_cutoff(session_kind="Sprint Qualifying")
+    assert str(refusal.value) == (
+        "no declared qualifying rules for season 2024 and session kind "
+        "'Sprint Qualifying'; declared session kinds for 2024: ['Qualifying']"
+    )
+
+
+def test_the_phase_windows_are_measured_and_carry_both_boundary_sources() -> None:
+    """The windows come from ``race_control``; the declared length stays visible."""
+    reading = qualifying_cutoff()
+    assert [phase.rule for phase in reading.phases] == [
+        QualifyingPhaseRule.ELIMINATES,
+        QualifyingPhaseRule.ELIMINATES,
+        QualifyingPhaseRule.CLASSIFIES,
+    ]
+    assert [phase.participants for phase in reading.phases] == [20, 15, 10]
+    assert [phase.advancing for phase in reading.phases] == [15, 10, 0]
+    assert [phase.declared_duration_minutes for phase in reading.phases] == [18, 15, 12]
+    first = window(reading, 1)
+    assert first.start == at("2024-10-19T22:00:00.234000+00:00")
+    assert first.measured_end == at("2024-10-19T22:18:00.241000+00:00")
+    assert first.declared_end == at("2024-10-19T22:18:00.234000+00:00")
+    assert first.end == first.measured_end
+    assert first.start_source is QualifyingBoundarySource.SOURCE
+    assert first.end_source is QualifyingBoundarySource.SOURCE, (
+        "the recording states this boundary; the declared length is still reported"
+    )
+    assert first.measured_end != first.declared_end, (
+        "the two sources really do disagree here, by 7 ms, which is why both are reported"
+    )
+    assert [(source.family, source.record_index) for source in first.sources] == [
+        ("race_control", 1),
+        ("race_control", 11),
+    ]
+    assert [phase.phase for phase in reading.phases] == [1, 2, 3]
+
+
+def test_a_window_without_a_recorded_end_uses_the_declared_duration() -> None:
+    """The rule fills the boundary the source does not state, and says so."""
+    payloads = {
+        "race_control": [
+            control("2024-10-19T22:00:00+00:00", "SESSION STARTED", 1),
+            control("2024-10-19T22:05:00+00:00", "CAR 10 (GAS) LAP DELETED", None),
+        ]
+    }
+    reading = qualifying_cutoff(payloads, as_of="2024-10-19T22:30:00+00:00")
+    first, second, third = reading.phases
+    assert first.measured_end is None
+    assert first.declared_end == at("2024-10-19T22:18:00+00:00")
+    assert first.end == first.declared_end
+    assert first.end_source is QualifyingBoundarySource.DECLARED
+    assert second.start is None and second.end is None
+    assert second.start_source is QualifyingBoundarySource.ABSENT
+    assert second.end_source is QualifyingBoundarySource.ABSENT
+    assert third.hot_laps is None, "an unknown window is never counted as zero hot laps"
+    assert reading.active_phase == 1
+
+
+def test_the_boundary_between_advancing_and_eliminated_is_the_declared_count() -> None:
+    """Boundary values: the last advancing place and the first eliminated one."""
+    reading = qualifying_cutoff(as_of="2024-10-19T22:18:00.241000+00:00")
+    assert reading.active_phase == 1
+    assert reading.line == 15
+    rows = reading.standings
+    assert len(rows) == 20
+    inside = [row for row in rows if row.standing is QualifyingStanding.ADVANCING]
+    outside = [row for row in rows if row.standing is QualifyingStanding.ELIMINATED]
+    assert len(inside) == 15 and len(outside) == 5
+    assert (inside[-1].lap_position, inside[-1].driver_number) == (15, 18)
+    assert (outside[0].lap_position, outside[0].driver_number) == (16, 23)
+    assert inside[-1].best_lap_seconds is not None
+    assert outside[0].best_lap_seconds is not None
+    assert inside[-1].best_lap_seconds < outside[0].best_lap_seconds
+
+
+def test_the_declared_advancement_reproduces_the_measured_entrants() -> None:
+    """The declared count is checked against who actually drove the next phase."""
+    first = qualifying_cutoff(as_of="2024-10-19T22:18:00.241000+00:00")
+    second = qualifying_cutoff(as_of="2024-10-19T22:40:00.257000+00:00")
+    third = qualifying_cutoff(as_of="2024-10-19T23:00:00.262000+00:00")
+    assert len(advanced := advancing(first)) == 15
+    assert advanced == {row.driver_number for row in second.standings}
+    assert len(advanced := advancing(second)) == 10
+    assert advanced == {row.driver_number for row in third.standings}
+
+
+def test_the_live_position_order_is_reported_and_marks_its_disagreement() -> None:
+    """The live order and the lap-time order are both stated, and they disagree."""
+    reading = qualifying_cutoff(as_of="2024-10-19T22:18:00.241000+00:00")
+    rows = {row.driver_number: row for row in reading.standings}
+    agreed = rows[18]
+    assert (agreed.position, agreed.lap_position) == (15, 15)
+    assert agreed.position_agrees is True
+    assert agreed.position_source is not None
+    assert agreed.position_source.family == "position"
+    lagged = rows[23]
+    assert (lagged.position, lagged.lap_position) == (13, 16)
+    assert lagged.position_agrees is False
+    assert lagged.standing is QualifyingStanding.ELIMINATED
+    assert lagged.reading_age_seconds is not None
+
+
+def test_a_pit_out_lap_is_not_a_hot_lap_and_is_counted_as_excluded() -> None:
+    """Pit interference: an out-lap measures the pit lane, never a qualifying lap."""
+    reading = qualifying_cutoff(as_of="2024-10-19T22:40:00.257000+00:00")
+    second = window(reading, 2)
+    assert second.hot_laps == 47
+    assert second.pit_out_laps_excluded == 30
+    assert second.unreadable_laps_excluded == 0
+    driver_laps = [
+        lap
+        for lap in load_qualifying("laps")
+        if lap["driver_number"] == 30
+        and lap.get("date_start") is not None
+        and at(lap["date_start"]) >= at("2024-10-19T22:25:00.239000+00:00")
+        and at(lap["date_start"]) <= at("2024-10-19T22:40:00.257000+00:00")
+    ]
+    assert len(driver_laps) == 3
+    assert all(lap["is_pit_out_lap"] is True for lap in driver_laps)
+    row = {row.driver_number: row for row in reading.standings}[30]
+    assert row.best_lap_seconds is None
+    assert row.lap_source is None
+    assert row.lap_position is None
+    assert row.position == 15
+    assert row.standing is QualifyingStanding.UNRANKED
+
+
+def test_a_lap_with_no_duration_is_excluded_and_counted_not_dropped() -> None:
+    """A null duration is not a time: it is excluded, and the exclusion is declared."""
+    reading = qualifying_cutoff()
+    third = window(reading, 3)
+    assert third.hot_laps == 27
+    assert third.pit_out_laps_excluded == 19
+    assert third.unreadable_laps_excluded == 2
+    nulls = [lap for lap in load_qualifying("laps") if lap.get("lap_duration") is None]
+    assert len(nulls) == 22, "measured on the capture; 20 of them are also out-laps"
+    assert reading.laps_without_instant == 1
+    assert reading.laps_outside_every_window == 14
+
+
+def test_the_absent_intervals_family_is_declared_absence_never_zero() -> None:
+    """S2's lapped/null intervals: the family is absent, and that is what is said."""
+    payloads = qualifying_payloads()
+    assert "intervals" not in payloads, "the capture deliberately holds no intervals"
+    reading = qualifying_cutoff(payloads)
+    assert reading.absences == (
+        "the intervals family is absent from these payloads: lapped and null intervals "
+        "are declared unknown, never zero",
+    )
+    assert reading.line == 0 or reading.line is None
+
+
+def test_each_missing_telemetry_family_is_declared_with_its_own_absence() -> None:
+    """Missing telemetry is declared per family, never coerced into an empty claim."""
+    reading = qualifying_cutoff(qualifying_payloads("position", "laps"))
+    assert reading.absences == (
+        "the intervals family is absent from these payloads: lapped and null intervals "
+        "are declared unknown, never zero",
+        "the position family is absent from these payloads: no driver's place is read",
+        "the laps family is absent from these payloads: no hot lap is counted",
+    )
+    assert reading.standings == ()
+    assert reading.active_phase == 3
+    assert window(reading, 3).hot_laps == 0
+
+
+def test_a_driver_with_no_reading_inside_the_window_is_unranked() -> None:
+    """Stale data: a position row outside the window is no reading inside it."""
+    payloads = {
+        "race_control": [
+            control("2024-10-19T10:00:00+00:00", "SESSION STARTED", 1),
+            control("2024-10-19T10:18:00+00:00", "SESSION FINISHED", 1),
+        ],
+        "position": [
+            position_at("2024-10-19T09:59:00+00:00", 4, 1),
+            position_at("2024-10-19T10:05:00+00:00", 1, 2),
+        ],
+        "laps": [lap_at("2024-10-19T10:04:00+00:00", 4, 93.0)],
+    }
+    reading = qualifying_cutoff(payloads, as_of="2024-10-19T10:10:00+00:00")
+    rows = {row.driver_number: row for row in reading.standings}
+    assert rows[4].position is None
+    assert rows[4].position_source is None
+    assert rows[4].reading_age_seconds is None
+    assert rows[4].lap_position == 1
+    assert rows[1].position == 2 and rows[1].lap_position is None
+    assert rows[1].standing is QualifyingStanding.UNRANKED
+
+
+def test_a_lap_exactly_on_a_window_boundary_is_inside_it() -> None:
+    """Boundary instants: both ends of a window are closed, and one tick past is out."""
+    payloads = {
+        "race_control": [
+            control("2024-10-19T10:00:00+00:00", "SESSION STARTED", 1),
+            control("2024-10-19T10:18:00+00:00", "SESSION FINISHED", 1),
+        ],
+        "laps": [
+            lap_at("2024-10-19T10:00:00+00:00", 4, 90.0),
+            lap_at("2024-10-19T10:18:00+00:00", 1, 89.0),
+            lap_at("2024-10-19T10:18:00.000001+00:00", 16, 88.0),
+            lap_at("2024-10-19T10:09:00+00:00", 4, None),
+            lap_at("2024-10-19T10:10:00+00:00", 16, 95.0, pit_out=True),
+        ],
+        "position": [position_at("2024-10-19T10:17:00+00:00", 1, 1)],
+    }
+    reading = qualifying_cutoff(payloads, as_of="2024-10-19T10:20:00+00:00")
+    first = window(reading, 1)
+    assert first.hot_laps == 2
+    assert first.pit_out_laps_excluded == 1
+    assert first.unreadable_laps_excluded == 1
+    assert reading.laps_outside_every_window == 1
+    assert [row.driver_number for row in reading.standings] == [1, 4], (
+        "driver 16's only laps are an out-lap and a lap past the window, so it holds "
+        "no reading inside the window and gets no row at all"
+    )
+
+
+def test_the_instant_cuts_the_lap_corpus_and_the_position_readings() -> None:
+    """The reading is the state at the instant, never the end state in disguise."""
+    early = qualifying_cutoff(as_of="2024-10-19T22:09:00+00:00")
+    late = qualifying_cutoff(as_of="2024-10-19T22:18:00.241000+00:00")
+    assert window(early, 1).hot_laps == 40
+    assert window(late, 1).hot_laps == 93
+    assert [phase.hot_laps for phase in early.phases] == [40, None, None]
+    assert [row.lap_position for row in early.standings] == list(range(1, 21))
+    assert early.standings != late.standings
+    early_pole = early.standings[0].best_lap_seconds
+    late_pole = late.standings[0].best_lap_seconds
+    assert early_pole is not None and late_pole is not None
+    assert early_pole > late_pole
+
+
+def test_before_the_first_window_starts_no_line_exists() -> None:
+    """A declared phase that has not started has no window and no line."""
+    reading = qualifying_cutoff(as_of="2024-10-19T21:59:59.999999+00:00")
+    assert reading.active_phase is None
+    assert reading.line is None
+    assert reading.standings == ()
+    assert [phase.end_source for phase in reading.phases] == [
+        QualifyingBoundarySource.ABSENT,
+        QualifyingBoundarySource.ABSENT,
+        QualifyingBoundarySource.ABSENT,
+    ]
+
+
+def test_the_last_phase_classifies_ten_and_eliminates_nobody() -> None:
+    """Ten classified, no eliminated driver, and no line to be outside of."""
+    reading = qualifying_cutoff()
+    assert reading.active_phase == 3
+    assert reading.line is None
+    third = window(reading, 3)
+    assert third.rule is QualifyingPhaseRule.CLASSIFIES
+    assert third.participants == 10 and third.advancing == 0
+    assert len(reading.standings) == 10
+    assert {row.standing for row in reading.standings} == {
+        QualifyingStanding.CLASSIFIED
+    }
+    assert [row.lap_position for row in reading.standings] == list(range(1, 11))
+
+
+def test_the_cutoff_reading_is_a_function_of_its_inputs_alone() -> None:
+    """Purity: identical payloads and instants produce an identical reading."""
+    assert qualifying_cutoff() == qualifying_cutoff()
+    assert (
+        qualifying_cutoff(as_of="2024-10-19T22:18:00.241000+00:00")
+        != qualifying_cutoff()
+    )
+
+
+def test_the_module_carries_no_circuit_name_and_no_capture_constant() -> None:
+    """S2's last clause: no hardcoded venue, and no per-capture constant."""
+    source = (Path(tactical_module.__file__)).read_text(encoding="utf-8")
+    for token in (
+        "circuit_key",
+        "circuit_short_name",
+        "meeting_key",
+        "Austin",
+        "Monza",
+        "Lusail",
+        "Silverstone",
+        "9608",
+        "1247",
+    ):
+        assert token not in source, (
+            f"the module names the capture-specific token {token!r}"
+        )
+
+
+def test_a_deleted_lap_is_not_applied_and_that_limitation_is_pinned() -> None:
+    """Declared limitation: a deletion notice is free text, so no lap is disqualified.
+
+    ``race_control`` states nine deletions, each in a message that carries no
+    ``qualifying_phase`` and no lap key the motor can bind to a lap, so this motor reads
+    durations and not the judgements passed on them. Measured on the capture: exactly
+    one deletion matches a driver's best lap inside a window -- driver 11, 93.26 s,
+    deleted for track limits at turn 9 in phase 3 -- and the phase-3 verdict does not
+    move, because that phase classifies every driver in it. Pinned so the limitation is
+    a stated fact rather than an assumption a later reader makes.
+    """
+    reading = qualifying_cutoff()
+    row = {candidate.driver_number: candidate for candidate in reading.standings}[11]
+    assert row.best_lap_seconds is not None
+    assert abs(row.best_lap_seconds - 93.26) < 0.001
+    assert row.standing is QualifyingStanding.CLASSIFIED
