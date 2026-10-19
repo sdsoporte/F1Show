@@ -100,7 +100,8 @@ separate user decision taken at the end of the unit.
   ARCHITECTURE's *Tactical analyst* row (its "qualifying cutoffs … remain" is now false), the
   CARRIED-FINDINGS rows (the loader-conformance limitation of L5, the L11 advisory, and L14's three
   carried limitations), and the F06c record in `odd/tasks/f1show.md`. **The PROJECT-STATE row and
-  snapshot are not T4's** — see L15. Route: parent, then verified. Commit: pending.
+  snapshot are not T4's** — see L15. Route: parent, then verified. Commit: `a359650` — **71**
+  additions (2 + 15 + 15 + 39), register guard **19 passed**, tree clean.
 - **T5** (all): independent verification, native review under RDD, local integration, and the
   delivery decision put to the user. Route: parent. Commit: pending.
 
@@ -130,7 +131,7 @@ reflow.
 | 1 | the recorded qualifying window and this spec (T1 + registration) | `9396187`, `963ef64` | 164 + 146 = **310** |
 | 2 | the declared per-season rules (T2 + this record) | `019d43a`, `4f360b9` | 318 + 63 = **381** |
 | 3 | the cutoff motor (T3) | `9e45b8c` | **1040** live additions (960 authored + 80 formatter); kept cohesive, see the slicing pass below |
-| 4 | contracts, docs and the register row (T4) | pending | bounded before coding |
+| 4 | cross-document rows (T4) | `a359650` | **71** additions; register guard 19 passed |
 | 5 | verification, native review and delivery (T5) | pending | bounded before coding |
 
 **Slice 3 — one honest slicing pass, made and recorded rather than assumed.** The arithmetic
@@ -284,3 +285,14 @@ never carried forward.
   ARCHITECTURE stays in T4: unlike PROJECT-STATE it names no snapshot revision, so it ships with the
   code the way `tactical.py`'s own docstring does, and its *Tactical analyst* row — which says
   qualifying cutoffs remain — is precisely a claim this unit made false.
+- **L16** (2026-10-19): **T4 closed as `a359650`** — 71 additions across four files, register guard
+  **19 passed**, tree clean, and both mirrors current (the nine-part `f1show` mirror re-read byte-exact
+  at **398,765 B**). **The incident, recorded because it is the second of its kind:** the nine-part sync
+  wrote all nine observations and *then* failed verification, because its builder used
+  `c.slice(0, c.indexOf("-->"))` for the header — and `indexOf` returns the **start** of the arrow, so
+  the slice excluded it and every header lost its `-->`. The same mistake had corrupted this very
+  mirror once earlier in this session. Diagnosed read-only first (all nine showed
+  `first400HasArrow=false`, with the footer's arrow exactly 36 characters after its start), repaired by
+  inserting `-->` after the measured `full file: … bytes; sha256: …. ` needle — and the actual lesson:
+  **verification was moved before the write**, each observation's body proven equal to its expected
+  slice *pre*-write, so a bad rebuild can no longer land at all.
