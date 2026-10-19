@@ -28,18 +28,32 @@ as it was measured:
 A test that adjusted those last two to fit the code would hide the only evidence the
 derivation has against the source, so they are pinned as recorded findings and the code is
 left alone.
+
+The module also carries the **second declared per-season dataset** it states: the
+qualifying rules of F06c T2 (three phases, 18/15/12 minutes, 20 → 15 → 10 participants for
+2024 main qualifying). The tests for it are the last section of this file and they read
+**no fixture at all**, deliberately: the declared table must not be derived from, or pinned
+to, the captured session, because it is the input the cutoff motor is checked *against*.
+The capture's role was to measure the values once; the values are declared here.
 """
 
 from __future__ import annotations
 
 import json
+from dataclasses import FrozenInstanceError, fields
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
 
+from f1show.championship import RECORDED_SEASON
 from f1show.standings import (
+    QUALIFYING_RULES,
     SEASON_RULES,
+    QualifyingPhase,
+    QualifyingRules,
+    QualifyingRulesError,
+    QualifyingSessionKind,
     RaceResult,
     Standing,
     StandingsInputError,
@@ -49,6 +63,7 @@ from f1show.standings import (
     order_standings,
     points_for_position,
     provisional_table,
+    qualifying_rules,
     race_points_scale,
     season_rules,
 )
@@ -549,3 +564,128 @@ def test_recorded_team_totals_disagree_with_the_recorded_driver_rows() -> None:
     }
     assert unmapped == {2: 0.0, 3: 12.0, 50: 7.0}
     assert sum(divergence.values()) == sum(unmapped.values()) == 19.0
+
+
+# --- the declared qualifying rules (F06c T2) -----------------------------------------
+#
+# Nothing in this section reads a fixture, on purpose. The declared table must not be
+# derived from, or pinned to, the captured session: it is the input the cutoff motor will
+# be checked *against*, so every value below is a pin on the declaration itself. The
+# capture's only role was to measure these values once (F06c L9), and the numbers asserted
+# here are that measurement written down as a rule - 3 phases, 18/15/12 minutes,
+# 20 -> 15 -> 10 participants - not a value read at runtime.
+
+
+def test_the_declared_qualifying_rules_resolve_for_the_recorded_season() -> None:
+    """2024 main qualifying is declared, and it is the season the corpus declares."""
+    rules = qualifying_rules(2024, QualifyingSessionKind.MAIN_QUALIFYING)
+    assert isinstance(rules, QualifyingRules)
+    assert rules.season == 2024
+    assert rules.session_kind == QualifyingSessionKind.MAIN_QUALIFYING
+    # The declared kind's value *is* the source's own `sessions.session_type` literal for
+    # 9608, so the recorded payload reaches the declaration with no mapping in between.
+    assert QualifyingSessionKind.MAIN_QUALIFYING == "Qualifying"
+    assert qualifying_rules(2024, "Qualifying") is rules
+    assert QUALIFYING_RULES[(2024, QualifyingSessionKind.MAIN_QUALIFYING)] is rules
+    # S4's injected default: the declared qualifying season is the recorded season
+    # `championship.py` declares, so a caller passing that default lands on this row.
+    assert rules.season == RECORDED_SEASON
+
+
+def test_the_declared_phase_structure_is_the_measured_one() -> None:
+    """Three phases of 18, 15 and 12 minutes, with 20, 15 and 10 participants."""
+    phases = qualifying_rules(2024, QualifyingSessionKind.MAIN_QUALIFYING).phases
+    assert [
+        (phase.phase, phase.duration_minutes, phase.participants) for phase in phases
+    ] == [(1, 18, 20), (2, 15, 15), (3, 12, 10)]
+    assert all(isinstance(phase, QualifyingPhase) for phase in phases)
+
+
+def test_the_advancement_boundary_is_the_last_advancing_position() -> None:
+    """The boundary the declared counts draw: P15 advances out of phase 1, P16 does not.
+
+    The declared rules carry phase *lengths*, not absolute windows, so the boundary they
+    state is the advancement one - twenty participants, fifteen of which continue - and the
+    instant-level boundary (the last instant of a phase versus the first of the next) can
+    only be drawn once a start instant arrives from the data, which is T3's business. Here
+    the boundary is exact rather than approximate: 15 is inside the advancing set and 16 is
+    the first position outside it, twice over, and the last phase classifies its ten.
+    """
+    first, second, third = qualifying_rules(
+        2024, QualifyingSessionKind.MAIN_QUALIFYING
+    ).phases
+
+    advancing_after_phase_one = set(range(1, second.participants + 1))
+    assert 15 in advancing_after_phase_one
+    assert 16 not in advancing_after_phase_one
+    assert set(range(1, first.participants + 1)) - advancing_after_phase_one == {
+        16,
+        17,
+        18,
+        19,
+        20,
+    }
+
+    advancing_after_phase_two = set(range(1, third.participants + 1))
+    assert 10 in advancing_after_phase_two
+    assert 11 not in advancing_after_phase_two
+    assert set(range(1, second.participants + 1)) - advancing_after_phase_two == {
+        11,
+        12,
+        13,
+        14,
+        15,
+    }
+
+    assert third.participants == 10  # the classified field of the last declared phase
+
+
+def test_the_declared_qualifying_shape_declares_no_inter_phase_gap() -> None:
+    """The 7- and 8-minute breaks are measured, not uniform, and deliberately not a rule."""
+    assert tuple(field.name for field in fields(QualifyingRules)) == (
+        "season",
+        "session_kind",
+        "phases",
+    )
+    assert tuple(field.name for field in fields(QualifyingPhase)) == (
+        "phase",
+        "duration_minutes",
+        "participants",
+    )
+
+
+def test_an_undeclared_qualifying_season_is_refused() -> None:
+    """Only 2024 is declared; any other season is an error naming what is declared."""
+    assert issubclass(QualifyingRulesError, StandingsInputError)
+    for season in (2023, 2025, 9612):
+        with pytest.raises(QualifyingRulesError) as raised:
+            qualifying_rules(season, QualifyingSessionKind.MAIN_QUALIFYING)
+        message = str(raised.value)
+        assert repr(season) in message
+        assert "declared qualifying seasons: [2024]" in message
+
+
+def test_an_undeclared_session_kind_is_refused() -> None:
+    """Sprint Qualifying was never captured, so it is refused, never defaulted."""
+    for kind in ("Sprint Qualifying", "Sprint", "Practice", "Race", ""):
+        with pytest.raises(QualifyingRulesError) as raised:
+            qualifying_rules(2024, kind)
+        message = str(raised.value)
+        assert repr(kind) in message
+        assert "declared session kinds for 2024: ['Qualifying']" in message
+
+
+def test_the_declared_qualifying_dataset_is_read_only() -> None:
+    """Neither the table nor a declared rule can be edited in place by any caller."""
+    assert not isinstance(QUALIFYING_RULES, dict)
+    read_only: Any = QUALIFYING_RULES
+    with pytest.raises(TypeError):
+        read_only[(2024, QualifyingSessionKind.MAIN_QUALIFYING)] = None
+
+    rules = qualifying_rules(2024, QualifyingSessionKind.MAIN_QUALIFYING)
+    with pytest.raises(FrozenInstanceError):
+        rules.season = 2025  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        rules.phases = ()  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        rules.phases[0].duration_minutes = 20  # type: ignore[misc]
