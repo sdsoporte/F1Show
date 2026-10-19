@@ -118,8 +118,8 @@ Exports for readers who cannot render Mermaid: [`project-state.svg`](assets/proj
 | --- | --- |
 | F05 delivery (Redis Streams, fan-out) | deferred on purpose: transport lands after the packaging decision |
 | F11 packaging (Docker Compose) | the pair with F05 |
-| F06 tactical analysis | precedes F07 |
-| F07 historical enrichment | follows F06 |
+| F06, its deferred tiers (qualifying rules, the telemetry source) | the motor (F06a) and its booth wiring (F06b) are delivered; qualifying rules need a new fixture capture, and FastF1 is evaluated but **not adopted** |
+| F07 historical enrichment | its declared dependency is F01/F05 — F01 is closed, F05 is the deferred pair above — and it shares the FastF1 decision with F06 |
 | F13 live pilot | gated on a purchased subscription; zero calls made |
 | The **live** half of the citation-form row | needs a live run; the deterministic half is fixed, reviewed and delivered |
 
