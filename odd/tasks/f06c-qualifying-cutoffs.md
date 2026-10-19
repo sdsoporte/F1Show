@@ -96,10 +96,11 @@ separate user decision taken at the end of the unit.
   performs it. Route: one writer in **this** worktree, surface-confined to `src/f1show/tactical.py`
   and `tests/test_tactical.py`; the parent commits. Commit: `9e45b8c` — **589/20 + 451/11** live
   (960 authored + formatter reflow), suite **1097 passed**, Ruff clean.
-- **T4** (S7, plus the S6 sentences T3 does not own): the cross-document rows — the PROJECT-STATE row
-  and snapshot, ARCHITECTURE's *Tactical analyst* row, the CARRIED-FINDINGS row including the L11
-  advisory, and the F06c record in `odd/tasks/f1show.md`. No new module is created, so no new
-  staleness key is owed. Route: parent, then verified. Commit: pending.
+- **T4** (S7, minus what S7 defers to delivery): the cross-document rows on **this branch** —
+  ARCHITECTURE's *Tactical analyst* row (its "qualifying cutoffs … remain" is now false), the
+  CARRIED-FINDINGS rows (the loader-conformance limitation of L5, the L11 advisory, and L14's three
+  carried limitations), and the F06c record in `odd/tasks/f1show.md`. **The PROJECT-STATE row and
+  snapshot are not T4's** — see L15. Route: parent, then verified. Commit: pending.
 - **T5** (all): independent verification, native review under RDD, local integration, and the
   delivery decision put to the user. Route: parent. Commit: pending.
 
@@ -273,3 +274,13 @@ never carried forward.
   `analyze_tactics` already carries. (3) **declared boundary windows are not enforced** — a declared end
   past the next phase's start would silently become an overlap resolved by *last window wins*;
   unreachable with 2024's 7- and 8-minute breaks.
+- **L15** (2026-10-19): **T4's scope corrected against its own spec before T4 started.** S7 already
+  carried the *L3 precedent* for PROJECT-STATE, but the T4 task line listed "the PROJECT-STATE row and
+  snapshot" as T4's work — the decomposition contradicted the spec it was derived from.
+  PROJECT-STATE's built table declares *"todo en main"* and names the revision it snapshots, so
+  writing F06c into it while F06c exists only on `feat/f06c-qualifying-cutoffs` would claim a delivery
+  that has not happened. **Moved to T5**, where it lands with the delivery and names that revision —
+  exactly what F06a did (`docs/f06a-state`, PR #69, after L3 deferred it) and F06b did (PR #72).
+  ARCHITECTURE stays in T4: unlike PROJECT-STATE it names no snapshot revision, so it ships with the
+  code the way `tactical.py`'s own docstring does, and its *Tactical analyst* row — which says
+  qualifying cutoffs remain — is precisely a claim this unit made false.
