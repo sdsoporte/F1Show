@@ -722,7 +722,7 @@ with the F06a receipt tests unchanged and green.
 | --- | --- | --- | --- | --- | --- |
 | `_pace_alerts` timestamp | R3-pace-timestamp-index | CRITICAL | — | — | **CLOSED**: F06b T1 (`dc31251`) reads the window's own instant (`window[-1][3]`); the F06a receipts stayed green, so the wrong value was never load-bearing |
 | `_standings`, deleted laps | F06c-deleted-laps-not-applied | SUGGESTION | whoever next touches the lap classifier | any change to how race-control messages are parsed: the nine deletion notices are free text with **no phase and no lap key**, so a deleted lap still counts — measured on 9608, exactly one matches a driver's best in-window lap (driver 11, 93.26 s, phase 3). The verdict does not move, but the reported best time is a deleted lap | **OPEN** (F06c L14), declared in the entry point's docstring and pinned by `test_a_deleted_lap_is_not_applied_and_that_limitation_is_pinned` |
-| `analyze_qualifying_cutoffs` and `analyze_tactics`, `as_of` | F06c-as-of-naive | SUGGESTION | whoever next touches either entry point | a timezone-unaware `as_of`: it raises a bare `TypeError` from comparison instead of a typed refusal — the same exposure `analyze_tactics` carried before F06c, now inherited by the second entry point | **OPEN** (F06c L14) |
+| `analyze_qualifying_cutoffs`, `analyze_tactics` and `analyze_pit_windows`, `as_of` | F06c-as-of-naive | SUGGESTION | whoever next touches any of the three entry points | a timezone-unaware `as_of`: it raises a bare `TypeError` from comparison instead of a typed refusal — the same exposure `analyze_tactics` carried before F06c, inherited by the second entry point (F06c) and now by the third (F06d) | **OPEN** (F06c L14, extended by F06d L6) |
 | `_phase_markers`, declared window ends | F06c-declared-window-overlap | SUGGESTION | whoever next edits `QUALIFYING_RULES` | a season table whose declared phase duration would run past the next phase's start: windows are **declared, not enforced**, so such an overlap would resolve silently as *last window wins* — unreachable with 2024's 7- and 8-minute breaks | **OPEN** (F06c L14) |
 
 ## standings.py — from the F06c T2 unit
@@ -735,3 +735,17 @@ the parent's inference, stated the same way the F10 rows above declare theirs.
 | Location | Ids | Severity | Owner | Trigger | Status |
 | --- | --- | --- | --- | --- | --- |
 | `_start_points`, `float(row.points)` | F06c-untyped-float | SUGGESTION | whoever next touches `_start_points` | any change to start-checkpoint parsing: `StartStanding` is an **unvalidated frozen dataclass**, so a non-numeric `points` raises a bare `ValueError` where this module's convention is a typed `StandingsInputError` | **OPEN** (F06c L11), pre-existing — T2 only shifted the line from `:401` to `:562` and added no `int()`/`float()` call |
+
+## tactical.py — from the F06d unit
+
+**Origin of the `F06d-` ids below:** the parent's own measurements and declared decisions during
+F06d, not reviewer findings — no lens produced them, hence no `R<n>-` prefix. The unit's native
+review (medium, four lenses, approved and burned) carried three informational findings of its own
+(`R2-criterion-prose-only`, `R2-norm-derivation-asymmetry`, `R3-docstring-terminology` in a test),
+kept as later work in the review receipt rather than duplicated here.
+
+| Location | Ids | Severity | Owner | Trigger | Status |
+| --- | --- | --- | --- | --- | --- |
+| `_projection`, the ceil rule | F06d-half-lap-ceil | SUGGESTION | whoever next touches the projection arithmetic | any change to how `norm_laps` becomes a lap number: the declared rule is **ceiling** (25.5 → 26, 37.5 → 38 — a tyre is replaced on the following lap, never half a lap earlier) and it is pinned by a test *named* so ceil≠floor is load-bearing | **DECLARED** (F06d L6), pinned by `test_the_declared_norm_becomes_a_lap_number_by_ceiling_never_by_floor` |
+| `_one_lap_batch`, the lap boundary | F06d-batch-lap-boundary | SUGGESTION | whoever next touches the caution-batch detection | any change to `_one_lap_batch`: the `lap_start >= 2` boundary is **load-bearing and measured** — 9655 carries two one-lap openings at lap 1 that would otherwise declare a phantom batch ([1, 36, 37] instead of the declared [36, 37]) — and the batch is context, never a norm input, and never suppresses a member's projection | **DECLARED** (F06d L6), pinned by `test_the_caution_batch_is_declared_as_a_batch_never_averaged_into_a_norm` |
+| compound handling, the null/`UNKNOWN` branch | F06d-null-unknown-synthetic | SUGGESTION | whoever next touches compound handling | the branch that treats a null or `"UNKNOWN"` compound as `NO_COMPOUND` is **pinned only with a synthetic payload**: on real data 9655's 4 null-bound stint records are exactly its 2 `UNKNOWN`-compound records, so they count as `stints_unplaceable` and `NO_COMPOUND` is 0 — measured and stated rather than smoothed | **OPEN** as a coverage note (F06d L6) |
