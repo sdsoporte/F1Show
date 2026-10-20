@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
+from dataclasses import FrozenInstanceError
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 import pytest
@@ -28,12 +31,24 @@ from f1show import (
 from f1show import tactical as tactical_module
 from f1show.standings import QualifyingRulesError, QualifyingSessionKind
 from f1show.tactical import (
+    PIT_NORM_RULES,
+    PitDurationSupport,
+    PitNormRulesError,
+    PitOneLapBatch,
+    PitWindowProjection,
+    PitWindowReading,
+    PitWindowRefusal,
+    PitWindowStatus,
     QualifyingBoundarySource,
     QualifyingCutoffReading,
     QualifyingPhaseRule,
     QualifyingPhaseWindow,
     QualifyingStanding,
+    StintNorm,
+    analyze_pit_windows,
     analyze_qualifying_cutoffs,
+    pit_norm_rules,
+    stint_norm,
 )
 
 SESSION_KEY = 9617
@@ -1256,3 +1271,764 @@ def test_a_deleted_lap_is_not_applied_and_that_limitation_is_pinned() -> None:
     assert row.best_lap_seconds is not None
     assert abs(row.best_lap_seconds - 93.26) < 0.001
     assert row.standing is QualifyingStanding.CLASSIFIED
+
+
+# --- the declared per-season stint norms (F06d T1) -----------------------------------
+#
+# The declared table is an *estimate* measured once on the recorded stint corpus of
+# session 9617, then written down here as a declaration. Nothing in this section is read
+# at runtime or at import time by `src/f1show/tactical.py`: the module holds the numbers,
+# and the fixture's only role is the census below, which recomputes them so the pin fails
+# if either side drifts.
+#
+# The declared criterion (F06d L4, definition 2b): only opening stints of **four laps or
+# more** corroborate a norm. The two shorter openings of 9617 are the early-stop/DNF
+# outliers - driver 44's lap-1 HARD stint (the genuine DNF) and driver 23's laps-1-3
+# MEDIUM stint (an early stop: 23 ran three stints to lap 55) - and neither is a stint
+# length a pit window may be projected from.
+
+DECLARED_NORM_SEASON = 2024
+MINIMUM_CORROBORATING_STINT_LAPS = 4
+
+
+def measured_stint_census(
+    minimum_laps: int = MINIMUM_CORROBORATING_STINT_LAPS,
+) -> dict[str, tuple[int, int, int, float]]:
+    """Recompute the declared census from the recorded stints, under the criterion.
+
+    One row per compound of the opening stints: the count of corroborating stints, the
+    minimum and maximum stint length in laps, and the median length. Opening stints are
+    the transition-terminated ones - every recorded stint of this corpus carries an end
+    lap, and the later ones that end at the race's last laps are right-censored at race
+    end, which is why they corroborate nothing.
+    """
+    opening = [row for row in load("stints") if row["stint_number"] == 1]
+    # The corpus's own shape, measured: 43 stint records, 20 opening stints, no null end.
+    assert len(opening) == 20
+    by_compound: dict[str, list[int]] = {}
+    for row in opening:
+        lap_end = row["lap_end"]
+        assert lap_end is not None
+        laps = int(lap_end) - int(row["lap_start"]) + 1
+        if laps < minimum_laps:
+            continue
+        by_compound.setdefault(str(row["compound"]), []).append(laps)
+    return {
+        compound: (len(laps), min(laps), max(laps), median(laps))
+        for compound, laps in by_compound.items()
+    }
+
+
+def test_the_declared_stint_norms_resolve_for_the_recorded_season() -> None:
+    """2024 MEDIUM and HARD are the declared rows, and 2024 is the recorded season."""
+    norms = pit_norm_rules(DECLARED_NORM_SEASON)
+    assert set(norms) == {"HARD", "MEDIUM"}
+    medium = stint_norm(DECLARED_NORM_SEASON, "MEDIUM")
+    assert isinstance(medium, StintNorm)
+    assert (medium.season, medium.compound) == (DECLARED_NORM_SEASON, "MEDIUM")
+    # One way to read a declared row: the accessor, the per-season view and the table
+    # all resolve to the same frozen row.
+    assert stint_norm(DECLARED_NORM_SEASON, "MEDIUM") is medium
+    assert norms["MEDIUM"] is medium
+    assert PIT_NORM_RULES[(DECLARED_NORM_SEASON, "MEDIUM")] is medium
+    assert pit_norm_rules(DECLARED_NORM_SEASON) == norms
+
+
+def test_the_declared_stint_norms_carry_the_measured_counts_medians_and_ranges() -> (
+    None
+):
+    """The pinned declaration: n=14 (13-32, median 25.5) and n=4 (27-40, median 37.5)."""
+    medium = stint_norm(DECLARED_NORM_SEASON, "MEDIUM")
+    assert (
+        medium.corroborating_stints,
+        medium.norm_laps,
+        medium.min_laps,
+        medium.max_laps,
+    ) == (14, 25.5, 13, 32)
+    hard = stint_norm(DECLARED_NORM_SEASON, "HARD")
+    assert (
+        hard.corroborating_stints,
+        hard.norm_laps,
+        hard.min_laps,
+        hard.max_laps,
+    ) == (4, 37.5, 27, 40)
+    # The norm *is* the derived median of the corroborating stints, and the declared
+    # min-max are the tolerance anchors around it - not a midpoint and not an endpoint.
+    for norm in (medium, hard):
+        assert norm.min_laps < norm.norm_laps < norm.max_laps
+    assert medium.corroborating_stints + hard.corroborating_stints == 18
+
+
+def test_the_declared_norms_reproduce_the_measured_census_of_the_recorded_stints() -> (
+    None
+):
+    """The declaration and the fixture agree; either side drifting fails this pin."""
+    census = measured_stint_census()
+    assert census == {"HARD": (4, 27, 40, 37.5), "MEDIUM": (14, 13, 32, 25.5)}
+    assert set(census) == set(pit_norm_rules(DECLARED_NORM_SEASON))
+    for compound, (count, low, high, middle) in census.items():
+        norm = stint_norm(DECLARED_NORM_SEASON, compound)
+        assert (
+            norm.corroborating_stints,
+            norm.min_laps,
+            norm.max_laps,
+            norm.norm_laps,
+        ) == (count, low, high, middle)
+
+
+def test_the_sub_four_lap_criterion_is_load_bearing_not_decorative() -> None:
+    """Without the exclusion the same corpus reads 15/5, so the criterion moved the pin."""
+    raw = measured_stint_census(minimum_laps=1)
+    assert raw == {"HARD": (5, 1, 40, 36), "MEDIUM": (15, 3, 32, 25)}
+    assert raw != measured_stint_census()
+    # The two excluded openings are the short ones, and only those: 20 - 18 = 2.
+    assert raw["MEDIUM"][0] - measured_stint_census()["MEDIUM"][0] == 1
+    assert raw["HARD"][0] - measured_stint_census()["HARD"][0] == 1
+
+
+def test_an_undeclared_season_is_refused_naming_seasons_and_compounds() -> None:
+    """A season nobody declared is refused, and the refusal names what *is* declared."""
+    with pytest.raises(PitNormRulesError) as refusal:
+        pit_norm_rules(2025)
+    assert str(refusal.value) == (
+        "no declared stint norms for season 2025; declared stint-norm seasons: [2024]; "
+        "declared stint-norm compounds: ['HARD', 'MEDIUM']"
+    )
+    # The row accessor refuses through the same season check, so one `except` covers both.
+    with pytest.raises(PitNormRulesError):
+        stint_norm(2025, "MEDIUM")
+
+
+def test_an_undeclared_compound_is_refused_naming_the_declared_compounds() -> None:
+    """SOFT was recorded but corroborates no norm, so it is refused, never defaulted."""
+    with pytest.raises(PitNormRulesError) as refusal:
+        stint_norm(DECLARED_NORM_SEASON, "SOFT")
+    assert str(refusal.value) == (
+        "no declared stint norm for season 2024 and compound 'SOFT'; "
+        "declared stint-norm compounds for 2024: ['HARD', 'MEDIUM']"
+    )
+    assert issubclass(PitNormRulesError, ValueError)
+
+
+def test_the_declared_stint_norm_table_is_read_only() -> None:
+    """Neither the table, nor a season view, nor a declared row can be edited in place."""
+    assert not isinstance(PIT_NORM_RULES, dict)
+    table: Any = PIT_NORM_RULES
+    with pytest.raises(TypeError):
+        table[(DECLARED_NORM_SEASON, "MEDIUM")] = None
+    view: Any = pit_norm_rules(DECLARED_NORM_SEASON)
+    with pytest.raises(TypeError):
+        view["SOFT"] = None
+    norm = stint_norm(DECLARED_NORM_SEASON, "MEDIUM")
+    with pytest.raises(FrozenInstanceError):
+        norm.norm_laps = 1.0  # type: ignore[misc]
+
+
+# --- F06d T2: the pit-window motor over the recorded races ----------------------------
+#
+# The motor projects a driver's next stop from the *declared* stint norms and the stint's
+# own recorded start, so what these tests pin is: the race-only gate refuses before any
+# projection payload is read, the declared median becomes a lap number by a stated rule,
+# every number in a row is traceable to the stint and lap records that produced it, and
+# every driver the corpus cannot project is a *declared* row with a counted reason -
+# never a coerced zero and never a dropped driver.
+#
+# Both recorded races are used: 9617 (complete stints, complete stop durations) for the
+# projection itself, and 9655 (the 1-lap caution batch, the undeclared SOFT compound, 33
+# null stop durations) for the boundaries a projection has to survive.
+
+RACE_FAMILIES = ("laps", "stints", "pit", "sessions")
+SECOND_RACE_KEY = 9655
+PIT_AS_OF = "2024-10-20T19:35:00+00:00"
+SECOND_RACE_AS_OF = "2024-12-01T17:20:00+00:00"
+
+
+def race_payloads(*drop: str) -> dict[str, list[dict[str, Any]]]:
+    """The recorded 9617 payloads the pit-window motor reads, minus any named family."""
+    return {name: load(name) for name in RACE_FAMILIES if name not in drop}
+
+
+def load_corpus(corpus: str, family: str) -> list[dict[str, Any]]:
+    """Read one family of one recorded corpus verbatim."""
+    path = FIXTURE_DIR / corpus / f"{family}.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def second_race_payloads(*drop: str) -> dict[str, list[dict[str, Any]]]:
+    """The recorded 9655 payloads the pit-window motor reads, minus any named family."""
+    return {
+        name: load_corpus(str(SECOND_RACE_KEY), name)
+        for name in RACE_FAMILIES
+        if name not in drop
+    }
+
+
+def pit_windows(
+    payloads: dict[str, list[dict[str, Any]]] | None = None,
+    *,
+    session_key: int = SESSION_KEY,
+    season: int = DECLARED_NORM_SEASON,
+    as_of: str = PIT_AS_OF,
+) -> PitWindowReading:
+    """The pit-window reading of one instant, over the recorded first race by default."""
+    return analyze_pit_windows(
+        session_key,
+        season,
+        race_payloads() if payloads is None else payloads,
+        at(as_of),
+    )
+
+
+def second_race_windows(
+    payloads: dict[str, list[dict[str, Any]]] | None = None,
+    as_of: str = SECOND_RACE_AS_OF,
+) -> PitWindowReading:
+    """The pit-window reading of one instant over the second recorded race."""
+    return analyze_pit_windows(
+        SECOND_RACE_KEY,
+        DECLARED_NORM_SEASON,
+        second_race_payloads() if payloads is None else payloads,
+        at(as_of),
+    )
+
+
+def by_driver(reading: PitWindowReading) -> dict[int, PitWindowProjection]:
+    """Each declared row by driver, in the reading's own driver-number order."""
+    return {row.driver_number: row for row in reading.projections}
+
+
+def projected(reading: PitWindowReading) -> list[PitWindowProjection]:
+    """The rows that carry a projection, in the reading's own order."""
+    return [
+        row for row in reading.projections if row.status is PitWindowStatus.PROJECTED
+    ]
+
+
+def race_session_row(
+    session_type: str, session_key: int = SESSION_KEY
+) -> dict[str, Any]:
+    """One minimal ``sessions`` row: the only family the race-only gate reads."""
+    return {"session_key": session_key, "session_type": session_type}
+
+
+def pit_lap(instant: str | None, driver: int, lap_number: int) -> dict[str, Any]:
+    """One minimal ``laps`` row: this family is where an instant becomes a lap."""
+    return {
+        "session_key": SESSION_KEY,
+        "date_start": instant,
+        "driver_number": driver,
+        "lap_number": lap_number,
+    }
+
+
+def pit_stint(
+    driver: int | None,
+    stint_number: int | None,
+    lap_start: int | None,
+    lap_end: int | None,
+    compound: str | None,
+) -> dict[str, Any]:
+    """One minimal ``stints`` row: this family carries no timestamp by construction."""
+    return {
+        "session_key": SESSION_KEY,
+        "driver_number": driver,
+        "stint_number": stint_number,
+        "lap_start": lap_start,
+        "lap_end": lap_end,
+        "compound": compound,
+    }
+
+
+def measured_one_lap_stints(
+    stints: list[dict[str, Any]], first_lap: int = 2
+) -> tuple[int, list[int]]:
+    """Recompute the single-lap stints and the laps that hold at least two drivers.
+
+    The declared batch rule: a lap qualifies when two or more *different drivers* start a
+    single-lap stint on it, on or after ``first_lap``, because a first-lap stint is a start
+    rather than a pit cycle. Recomputing it here is what keeps the declaration and the
+    fixture from drifting apart silently.
+    """
+    one_lap = [
+        row
+        for row in stints
+        if row["lap_start"] is not None and row["lap_start"] == row["lap_end"]
+    ]
+    by_lap: dict[int, set[int]] = {}
+    for row in one_lap:
+        if int(row["lap_start"]) < first_lap:
+            continue
+        by_lap.setdefault(int(row["lap_start"]), set()).add(int(row["driver_number"]))
+    shared = sorted(lap for lap, drivers in by_lap.items() if len(drivers) > 1)
+    return len(one_lap), shared
+
+
+def test_a_qualifying_session_is_refused_before_any_projection_payload_is_read() -> (
+    None
+):
+    """S3: a pit window is a race reading, and the refusal names what is supported.
+
+    The payload set carries the recorded qualifying ``sessions`` row and no other family
+    at all: if the gate read a projection payload first, this call could not raise this
+    refusal from an otherwise empty payload set.
+    """
+    with pytest.raises(PitWindowRefusal) as refusal:
+        analyze_pit_windows(
+            QUALIFYING_SESSION_KEY,
+            DECLARED_NORM_SEASON,
+            {"sessions": load_qualifying("sessions")},
+            at("2024-10-19T22:30:00+00:00"),
+        )
+    assert str(refusal.value) == (
+        "pit windows are a race-only reading: session 9608 is a 'Qualifying' session, and "
+        "the supported session types are ['Race']"
+    )
+    # A declared-dataset refusal, so one handler covers the pit-window motor too.
+    assert issubclass(PitWindowRefusal, ValueError)
+
+
+def test_a_session_whose_type_is_unstated_is_refused_never_assumed() -> None:
+    """No stated ``Race`` means no window: the gate never assumes the supported case."""
+    with pytest.raises(PitWindowRefusal) as missing_family:
+        pit_windows(race_payloads("sessions"))
+    assert str(missing_family.value) == (
+        "the sessions family does not state the session type of session 9617; pit windows "
+        "are a race-only reading, and the supported session types are ['Race']"
+    )
+    # A sessions family that states another session's row states nothing about this one.
+    with pytest.raises(PitWindowRefusal) as other_session:
+        pit_windows({"sessions": [race_session_row("Race", SECOND_RACE_KEY)]})
+    assert str(other_session.value) == str(missing_family.value)
+
+
+def test_contradictory_session_types_are_refused_and_both_are_named() -> None:
+    """Two rows that disagree are not resolved silently in favour of either."""
+    payloads = race_payloads("laps", "stints", "pit")
+    payloads["sessions"] = [
+        race_session_row("Race"),
+        race_session_row("Qualifying"),
+    ]
+    with pytest.raises(PitWindowRefusal) as refusal:
+        pit_windows(payloads)
+    assert str(refusal.value) == (
+        "the sessions family states more than one session type for session 9617: "
+        "['Qualifying', 'Race']; pit windows are a race-only reading, and the supported "
+        "session types are ['Race']"
+    )
+
+
+def test_an_undeclared_season_is_refused_through_the_declared_table() -> None:
+    """The norms are refused by the declared accessor, and the race gate runs first."""
+    with pytest.raises(PitNormRulesError) as refusal:
+        pit_windows(season=2025)
+    assert str(refusal.value) == (
+        "no declared stint norms for season 2025; declared stint-norm seasons: [2024]; "
+        "declared stint-norm compounds: ['HARD', 'MEDIUM']"
+    )
+    # The declared order, pinned: a qualifying session AND an undeclared season refuse as
+    # a session, because the race gate is checked before a norm is looked up.
+    with pytest.raises(PitWindowRefusal):
+        pit_windows(
+            {"sessions": [race_session_row("Qualifying")]},
+            season=2025,
+        )
+
+
+def test_the_recorded_race_projection_is_pinned_per_driver() -> None:
+    """One row per driver the stints family mentions, with the numbers it is built from."""
+    reading = pit_windows()
+    assert (reading.season, reading.session_key) == (
+        DECLARED_NORM_SEASON,
+        SESSION_KEY,
+    )
+    assert reading.session_type == "Race"
+    assert len(reading.projections) == 20
+    assert [row.driver_number for row in reading.projections] == sorted(
+        by_driver(reading)
+    )
+    rows = by_driver(reading)
+    # Driver 1 opened on MEDIUM at lap 1 and is on lap 18 of that stint at the instant: the
+    # declared median of 25.5 laps, converted by ceiling, projects the stop at lap 27, and
+    # the declared anchors 13-32 spread the window over laps 14-33.
+    opening = rows[1]
+    assert (opening.status, opening.estimate) == (PitWindowStatus.PROJECTED, True)
+    assert (opening.compound, opening.stint_number) == ("MEDIUM", 1)
+    assert (opening.lap_start, opening.current_lap) == (1, 18)
+    assert (opening.norm_laps, opening.corroborating_stints) == (25.5, 14)
+    assert (
+        opening.projected_stop_lap,
+        opening.window_start_lap,
+        opening.window_end_lap,
+    ) == (27, 14, 33)
+    # A second stint on HARD (n=4, median 37.5) that started at lap 18 projects to lap 56.
+    second = rows[20]
+    assert (second.compound, second.stint_number) == ("HARD", 2)
+    assert (second.lap_start, second.current_lap) == (18, 18)
+    assert (second.norm_laps, second.corroborating_stints) == (37.5, 4)
+    assert (
+        second.projected_stop_lap,
+        second.window_start_lap,
+        second.window_end_lap,
+    ) == (56, 45, 58)
+
+
+def test_the_declared_norm_becomes_a_lap_number_by_ceiling_never_by_floor() -> None:
+    """The declared integer rule: both medians are half laps and both round up.
+
+    A tyre whose declared life ends at 25.5 laps is replaced on the following lap, never a
+    half lap earlier, so the projection ceilings the norm and no half lap is ever reported
+    as a stop lap.
+    """
+    reading = pit_windows()
+    rows = projected(reading)
+    assert len(rows) == 19
+    for row in rows:
+        assert row.lap_start is not None and row.norm_laps is not None
+        assert row.projected_stop_lap == row.lap_start + math.ceil(row.norm_laps)
+    # The rule is load-bearing: floor would give a different lap for both declared norms.
+    for compound, life in (("MEDIUM", 26), ("HARD", 38)):
+        norm = stint_norm(DECLARED_NORM_SEASON, compound)
+        assert math.ceil(norm.norm_laps) == life
+        assert math.floor(norm.norm_laps) == life - 1
+    medium = next(row for row in rows if row.compound == "MEDIUM")
+    hard = next(row for row in rows if row.compound == "HARD")
+    assert medium.projected_stop_lap is not None and medium.lap_start is not None
+    assert hard.projected_stop_lap is not None and hard.lap_start is not None
+    assert medium.projected_stop_lap - medium.lap_start == 26
+    assert hard.projected_stop_lap - hard.lap_start == 38
+
+
+def test_the_window_spans_the_declared_anchors_from_the_stints_own_start() -> None:
+    """The anchors bound the estimate; they are not endpoints of the norm itself."""
+    reading = pit_windows()
+    for row in projected(reading):
+        assert row.compound is not None and row.lap_start is not None
+        assert row.window_start_lap is not None and row.window_end_lap is not None
+        assert row.projected_stop_lap is not None
+        norm = stint_norm(DECLARED_NORM_SEASON, row.compound)
+        assert (row.window_start_lap, row.window_end_lap) == (
+            row.lap_start + norm.min_laps,
+            row.lap_start + norm.max_laps,
+        )
+        assert row.window_start_lap < row.projected_stop_lap < row.window_end_lap
+
+
+def test_every_projected_row_is_labelled_an_estimate() -> None:
+    """S5: the projection is labelled, and a declared row carries no numbers at all."""
+    reading = pit_windows()
+    for row in reading.projections:
+        assert row.estimate is (row.status is PitWindowStatus.PROJECTED)
+        if row.estimate:
+            assert row.projected_stop_lap is not None
+        else:
+            assert (
+                row.norm_laps,
+                row.corroborating_stints,
+                row.projected_stop_lap,
+                row.window_start_lap,
+                row.window_end_lap,
+            ) == (None, None, None, None, None)
+    assert len(projected(reading)) == 19
+    # L3's shape decision: the reading is the F06c output shape, not a new alert kind.
+    assert isinstance(reading, PitWindowReading)
+    assert {kind.value for kind in TacticalKind} == {
+        "gap_battle",
+        "gap_lapped",
+        "gap_unknown",
+        "stale_reading",
+        "pace_delta",
+        "tyre_age",
+    }
+
+
+def test_a_stint_that_ended_before_the_instant_is_a_declared_row_never_coerced() -> (
+    None
+):
+    """Driver 44 retired on lap 1; the instant's lap 2 belongs to no recorded stint."""
+    reading = pit_windows()
+    row = by_driver(reading)[44]
+    assert row.status is PitWindowStatus.NO_CURRENT_STINT
+    assert row.current_lap == 2
+    assert (row.stint_number, row.lap_start, row.compound) == (None, None, None)
+    assert reading.drivers_without_current_stint == 1
+    # Exactly one driver is not projected, and it is that one: no other row is coerced.
+    assert {
+        candidate.driver_number
+        for candidate in reading.projections
+        if not candidate.estimate
+    } == {44}
+
+
+def test_before_the_first_recorded_lap_every_driver_is_a_declared_row() -> None:
+    """An instant the corpus does not reach places no lap, so no driver is projected."""
+    reading = pit_windows(as_of="2024-10-20T19:00:00+00:00")
+    assert len(reading.projections) == 20
+    assert {row.status for row in reading.projections} == {
+        PitWindowStatus.NO_CURRENT_LAP
+    }
+    assert reading.drivers_without_current_lap == 20
+    assert all(row.current_lap is None for row in reading.projections)
+    assert projected(reading) == []
+
+
+def test_a_lap_with_no_instant_is_counted_and_never_placed() -> None:
+    """Laps are where an instant becomes a lap, and one recorded lap carries no instant."""
+    reading = pit_windows()
+    assert reading.laps_unplaceable == 1
+    undated = [record for record in load("laps") if record["date_start"] is None]
+    assert [(record["driver_number"], record["lap_number"]) for record in undated] == [
+        (63, 1)
+    ]
+    # Driver 63 is still placed from the laps that do carry an instant, and the row cites
+    # both records it was built from.
+    row = by_driver(reading)[63]
+    assert (row.status, row.current_lap) == (PitWindowStatus.PROJECTED, 17)
+    lap_index = next(
+        index
+        for index, record in enumerate(load("laps"))
+        if record["driver_number"] == 63 and record["lap_number"] == 17
+    )
+    stint_index = next(
+        index
+        for index, record in enumerate(load("stints"))
+        if record["driver_number"] == 63
+    )
+    assert [
+        (source.family, source.record_index, source.driver_number)
+        for source in row.sources
+    ] == [("stints", stint_index, 63), ("laps", lap_index, 63)]
+
+
+def test_a_null_or_unknown_compound_is_a_declared_row_not_a_guess() -> None:
+    """A compound the source does not state is absence; ``UNKNOWN`` is the source's word."""
+    payloads = {
+        "sessions": [race_session_row("Race")],
+        "laps": [
+            pit_lap("2024-10-20T19:10:00+00:00", 5, 7),
+            pit_lap("2024-10-20T19:10:00+00:00", 9, 7),
+        ],
+        "stints": [
+            pit_stint(5, 1, 1, None, None),
+            pit_stint(9, 1, 1, None, "UNKNOWN"),
+        ],
+    }
+    reading = pit_windows(payloads)
+    rows = by_driver(reading)
+    assert rows[5].status is PitWindowStatus.NO_COMPOUND
+    assert (rows[5].compound, rows[5].projected_stop_lap) == (None, None)
+    assert rows[9].status is PitWindowStatus.NO_COMPOUND
+    assert (rows[9].compound, rows[9].projected_stop_lap) == ("UNKNOWN", None)
+    assert reading.drivers_without_compound == 2
+    # The declaration order is declared too: with no instant there is nothing to project
+    # from, so an unplaced driver is NO_CURRENT_LAP even when its compound is also absent.
+    unplaced = pit_windows(
+        {
+            **payloads,
+            "laps": [pit_lap("2024-10-20T19:10:00+00:00", 5, 7)],
+        }
+    )
+    assert by_driver(unplaced)[9].status is PitWindowStatus.NO_CURRENT_LAP
+
+
+def test_an_open_stint_is_current_to_the_instants_lap_and_projects() -> None:
+    """A null ``lap_end`` is an open stint, not a missing bound to be coerced away."""
+    payloads = {
+        "sessions": [race_session_row("Race")],
+        "laps": [pit_lap("2024-10-20T19:10:00+00:00", 5, 30)],
+        "stints": [pit_stint(5, 2, 28, None, "MEDIUM")],
+    }
+    row = by_driver(pit_windows(payloads))[5]
+    assert row.status is PitWindowStatus.PROJECTED
+    assert (row.compound, row.stint_number, row.lap_start) == ("MEDIUM", 2, 28)
+    assert row.projected_stop_lap == 54
+    # A record with no recorded start lap cannot be located at all: counted, never coerced.
+    unlocatable = pit_windows(
+        {
+            **payloads,
+            "stints": [
+                pit_stint(5, 2, None, None, "MEDIUM"),
+                pit_stint(None, 1, 1, 1, "MEDIUM"),
+            ],
+        }
+    )
+    assert unlocatable.stints_unplaceable == 2
+    # Driver 5 is mentioned by the family and has no locatable stint, so the row is a
+    # declaration rather than a silent drop; a record with no driver names nobody.
+    assert [row.status for row in unlocatable.projections] == [
+        PitWindowStatus.NO_CURRENT_STINT
+    ]
+
+
+def test_the_second_recorded_race_declares_its_undeclared_compound() -> None:
+    """9655 carries SOFT stints, and SOFT corroborates no declared norm, so it is declared."""
+    reading = second_race_windows()
+    assert reading.session_type == "Race"
+    assert len(reading.projections) == 20
+    rows = by_driver(reading)
+    soft = {
+        driver
+        for driver, row in rows.items()
+        if row.status is PitWindowStatus.NO_DECLARED_NORM
+    }
+    assert soft == {22, 23, 30}
+    declared = pit_norm_rules(DECLARED_NORM_SEASON)
+    for driver in soft:
+        assert rows[driver].compound == "SOFT"
+        assert rows[driver].compound not in declared
+        assert rows[driver].projected_stop_lap is None
+    assert reading.drivers_without_norm == 3
+    # The 4 records with no recorded bounds are counted, never coerced into a stint.
+    assert reading.stints_unplaceable == 4
+    assert reading.drivers_without_current_stint == 5
+
+
+def test_the_caution_batch_is_declared_as_a_batch_never_averaged_into_a_norm() -> None:
+    """9655's single-lap stints at laps 36-37 are a pit cycle, declared beside the rows."""
+    stints = second_race_payloads()["stints"]
+    total, shared_laps = measured_one_lap_stints(stints)
+    assert (total, shared_laps) == (34, [36, 37])
+    # The first-lap exclusion is load-bearing: two drivers open with a single lap at lap 1,
+    # and a start lap is not a pit cycle, so including it would declare a phantom batch.
+    assert measured_one_lap_stints(stints, first_lap=1) == (34, [1, 36, 37])
+    reading = second_race_windows()
+    assert reading.one_lap_stints == total
+    batch = reading.one_lap_batch
+    assert isinstance(batch, PitOneLapBatch)
+    assert batch.lap_starts == (36, 37)
+    members = [
+        row
+        for row in stints
+        if row["lap_start"] in shared_laps and row["lap_start"] == row["lap_end"]
+    ]
+    assert batch.stint_count == len(members)
+    assert batch.driver_numbers == tuple(
+        sorted({int(row["driver_number"]) for row in members})
+    )
+    assert len(batch.sources) == len(members)
+    # Never a norm input: every member is a single lap, and the shortest declared anchor
+    # is 13 laps, so no member can be inside a declared row.
+    assert max(int(row["lap_end"]) - int(row["lap_start"]) + 1 for row in members) == 1
+    shortest = min(
+        norm.min_laps for norm in pit_norm_rules(DECLARED_NORM_SEASON).values()
+    )
+    assert shortest == 13
+
+
+def test_a_lone_single_lap_stint_is_counted_but_is_no_batch() -> None:
+    """9617's only single-lap stint is one driver's retirement: a lone stint is no cycle."""
+    reading = pit_windows()
+    assert reading.one_lap_stints == 1
+    assert reading.one_lap_batch is None
+    assert measured_one_lap_stints(load("stints")) == (1, [])
+
+
+def test_the_duration_fact_declares_the_fields_the_pit_family_supports() -> None:
+    """S3: lane/pit durations are primary, stop durations are stationary-when-present.
+
+    Both are reported as counted context and nothing is derived from them: no pit-loss
+    estimate is invented, because an estimate would be an assumption dressed as a fact.
+    """
+    race = pit_windows()
+    assert (
+        race.durations.lane_duration_present,
+        race.durations.pit_duration_present,
+    ) == (
+        23,
+        23,
+    )
+    assert (race.durations.records, race.durations.stop_duration_present) == (23, 23)
+    assert race.durations.stop_duration_absent == 0
+    assert race.durations.primary_fields == ("lane_duration", "pit_duration")
+    second = second_race_windows()
+    assert (second.durations.records, second.durations.lane_duration_present) == (
+        60,
+        60,
+    )
+    assert (
+        second.durations.pit_duration_present,
+        second.durations.stop_duration_present,
+    ) == (
+        60,
+        27,
+    )
+    assert second.durations.stop_duration_absent == 33
+    # Declared, not invented: the support record carries counts and no cost at all.
+    assert set(PitDurationSupport.model_fields) == {
+        "records",
+        "lane_duration_present",
+        "pit_duration_present",
+        "stop_duration_present",
+        "stop_duration_absent",
+        "primary_fields",
+    }
+
+
+def test_each_absent_family_is_declared_and_never_silent() -> None:
+    """A missing family is a counted declaration in the module's own fixed message style."""
+    without_stints = pit_windows(race_payloads("stints"))
+    assert without_stints.projections == ()
+    assert without_stints.absences == (
+        "the stints family is absent from these payloads: no driver has a current stint, "
+        "so no stop lap is projected",
+    )
+    # The families that are present are still read.
+    assert without_stints.durations.records == 23
+    without_laps = pit_windows(race_payloads("laps"))
+    assert without_laps.absences == (
+        "the laps family is absent from these payloads: no driver's current lap is known "
+        "and every stop lap is declared absent",
+    )
+    assert {row.status for row in without_laps.projections} == {
+        PitWindowStatus.NO_CURRENT_LAP
+    }
+    assert without_laps.drivers_without_current_lap == 20
+    without_pit = pit_windows(race_payloads("pit"))
+    assert without_pit.absences == (
+        "the pit family is absent from these payloads: no duration field is known and no "
+        "pit cost is claimed",
+    )
+    assert (
+        without_pit.durations.records,
+        without_pit.durations.stop_duration_absent,
+    ) == (
+        0,
+        0,
+    )
+    # A duration fact nobody measured is not a prerequisite: the projection still exists.
+    assert len(projected(without_pit)) == 19
+    # Nothing absent is nothing declared: an empty tuple, never a placeholder sentence.
+    assert pit_windows().absences == ()
+    # The read order is declared, so a payload set with no projection family at all names
+    # all three, in the order this motor consults them.
+    empty = pit_windows({"sessions": [race_session_row("Race")]})
+    assert empty.absences == (
+        without_stints.absences[0],
+        without_laps.absences[0],
+        without_pit.absences[0],
+    )
+    assert (empty.projections, empty.one_lap_batch, empty.one_lap_stints) == (
+        (),
+        None,
+        0,
+    )
+
+
+def test_the_pit_window_reading_is_a_function_of_its_inputs_alone() -> None:
+    """Purity: identical payloads and instants produce an identical reading."""
+    assert pit_windows() == pit_windows()
+    assert pit_windows(as_of="2024-10-20T19:20:00+00:00") != pit_windows()
+    assert second_race_windows() == second_race_windows()
+
+
+def test_the_motor_reads_no_fixture_no_clock_and_no_network() -> None:
+    """S5's purity clause, pinned against the module rather than promised in prose."""
+    source = Path(tactical_module.__file__).read_text(encoding="utf-8")
+    for token in ("fixtures/", "json.load", "open(", "datetime.now", ".now(", "httpx"):
+        assert token not in source, (
+            f"the module reaches outside its inputs via {token!r}"
+        )
+    # No clock and no randomness: the two names that would supply either.
+    for token in ("import random", "os.environ", "from time import", "import secrets"):
+        assert token not in source, (
+            f"the module reaches outside its inputs via {token!r}"
+        )
