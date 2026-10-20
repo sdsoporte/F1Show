@@ -1723,7 +1723,10 @@ question. **Nothing was installed in this repository and no code was written.**
 - Acceptance/checks: qualifying cutoffs follow the selected season/session rules;
   tests cover boundary values, lapped/null intervals, missing telemetry, pit
   interference and stale data. No hardcoded Monza or unqualified strategy claims.
-- Depends on F04/F05. Commit/checks: **partial** — the race tiers landed as **F06a** (the motor) and **F06b** (the booth wiring) below, while qualifying cutoffs, pit-window candidates and the telemetry source decision remain pending, so **this F06 task stays open and its `- [ ]` marker must not change.**
+- Depends on F04/F05. Commit/checks: **partial** — the race tiers landed as **F06a** (the motor) and
+  **F06b** (the booth wiring), and **F06c** below adds qualifying cutoffs over declared season rules;
+  pit-window candidates and the telemetry source decision still remain pending, so **this F06 task
+  stays open and its `- [ ]` marker must not change.**
 
 ### F06a — The race tactical motor: deterministic gap, pace and stint alerts
 
@@ -1746,6 +1749,41 @@ question. **Nothing was installed in this repository and no code was written.**
 - **The native review, recorded as it happened.** Lineage `review-9171bc97a22a1a98` (medium, lenses readability + reliability) completed both lens captures only after an authorized retry — the first attempts failed on the relay reviewer's output budget — and the refuter then closed it into `correction_required` with one frozen finding, `R3-pace-timestamp-none`. Reproduction **disproved the finding's crash claim** (the field accepts `None`), while the underlying `None`-instant inconsistency it pointed at was **real**. The provider's correction-plan capture was then **mechanically refused four times** — the binding rejected as stale even byte-exact after a fresh `STATUS` — so the maintainer explicitly authorized **abandoning the lineage** (`operator_disposition`) and fixing the substance as an ordinary commit: `0d5a906` places each pace alert at its window's last known instant, regression test included. The two docs slices were reviewed and approved normally, as `review-e51c189c11d6d3c1` and `review-4faf2606111aa4a0`. **This functional candidate is therefore verified but not review-approved, and the record says so instead of implying the gate closed.**
 - **Checks.** **1071 passed** on Python 3.14 and again on the **3.12 floor**; `uvx ruff@0.17.0 check --no-cache src tests` clean; RED observed before each unit's implementation. One process slip is kept in the record because it was caught rather than hidden: `booth.py` was applied but **omitted from `30430e1`'s paths**, a committed-but-unpushed slip the pre-push verification surfaced and `70f8818` completed.
 - **Deferred tiers.** The qualifying rules, which need a new fixture capture; the **FastF1/telemetry source decision**, shared with F07; and **Redis/F05** stay open for separate authorizations.
+
+### F06c — Qualifying cutoffs: declared season rules over a recorded qualifying session
+
+- [x] **Built on this branch, awaiting integration.** Authorized in the user's own words, quoted
+  verbatim in `odd/tasks/f06c-qualifying-cutoffs.md`: the piso **"Qualifying (recomendado)"**, the
+  capture scope **"Sólo 9608 (Austin)"**, and the unit scope **"Motor standalone primero
+  (recomendado)"**. Full spec there: S1–S7, T1–T5, L1–L15.
+- **What it is.** A second pure entry point in `f1show.tactical`,
+  `analyze_qualifying_cutoffs(session_key, season, session_kind, payloads, as_of)`, returning a
+  source-traceable reading of where the elimination line sits and where each driver stands against it.
+  Phase windows come from `race_control`'s `qualifying_phase` markers with **both** boundary sources
+  reported; eligible hot laps exclude the 99 pit-out laps and the 22 laps with no duration, each
+  **counted** as an exclusion; the advancement counts (20 → 15 → 10) come from `f1show.standings`,
+  which **refuses** an undeclared season or session kind rather than guessing. The live `position` order
+  is reported beside the verdict with `position_agrees`, because measured on 9608 the source's own
+  phase-1 top fifteen contains two drivers who never entered phase 2 — so the verdict rests on
+  best-eligible-lap classification, not on that order.
+- **The corpus.** Session `9608` (Qualifying, Austin 2024, meeting 1247) captured verbatim: eight
+  families, **340,640 bytes**, every response HTTP 200 as a JSON array, none empty, size gate not
+  fired. `intervals` and the two championship paths are deliberately unfetched with reasons in
+  `PROVENANCE.md`, which also carries the correction that `session_result` **does** answer for a
+  qualifying session — disproving the race-only sentence recorded on 2026-10-12 for one of its three
+  paths.
+- **Commits:** `9396187` (fixtures + provenance), `963ef64` (spec), `019d43a` (declared rules:
+  +178/+140, **0 removed**), `4f360b9` (spec + delivery slices), `9e45b8c` (the motor plus the S6
+  docstring sentences: +589/+451 live), `d98d3ca` (spec). Full suite **1097 passed** and Ruff clean
+  before each commit; RED observed first in every unit.
+- **Budget, stated rather than hidden:** slice 3 measures **1040 authored additions** (960 authored +
+  about 80 of harness formatter reflow) against the ~400 heuristic. The honest slicing pass is
+  recorded in the spec's `## Delivery slices` — 960 cannot form two slices of ≤400, a three-way cut
+  would slice one behaviour artificially, and the vertical cut offered would orphan its first half —
+  so one cohesive commit was kept, the overage reported, and nothing trimmed to fit.
+- **Still open for F06:** pit-window candidates, the FastF1/telemetry source decision (shared with
+  F07), and Redis/F05. **F06c's own delivery** — push, PR, CI, merge — is a separate decision taken in
+  T5, which is also where `docs/PROJECT-STATE.md` gains its row and snapshot, per the L3 precedent.
 
 ### F07 — Implement evidence-grounded historical enrichment
 

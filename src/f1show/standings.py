@@ -7,6 +7,11 @@ the source. An **in-race** table cannot come from the source at all - there is n
 endpoint - so the design requires it to be **derived** from the running order plus a small
 **declared per-season** points dataset. This module is that derivation.
 
+It carries one more **declared per-season** dataset besides the points: the **qualifying
+rules** of F06c T2, shaped exactly like the first so there is one way to read a declared
+rule. That dataset is described at the end of this docstring; nothing about it is derived
+from a payload either.
+
 **Pure by construction.** It reads no file, opens no store, reads no clock and draws no
 random number, so a table is a function of its inputs and equal inputs always give an
 equal table. Inputs are read, never mutated: every function builds a fresh points map and
@@ -111,16 +116,58 @@ these; what holds is that two of our own derivations from the same inputs coinci
 boundary, and that a running order which differs from the classification produces a
 different table (so the property is not vacuous). It is arithmetic self-consistency, not
 source validation of live values.
+
+The declared per-season qualifying rules (F06c T2)
+--------------------------------------------------
+
+The second declared dataset this module states, shaped like the first: one frozen
+:class:`QualifyingRules` per ``(season, session kind)``, exposed through
+:data:`QUALIFYING_RULES` (a read-only mapping) and the refusing accessor
+:func:`qualifying_rules`. The refusal order is declared and testable - an undeclared
+**season** first, naming the declared seasons exactly as :func:`season_rules` does, then an
+undeclared **session kind** for a declared season, naming the kinds that season declares -
+and both refusals are :class:`QualifyingRulesError`, a :class:`StandingsInputError`, so one
+``except`` still covers every declared-dataset refusal in this module.
+
+**What 2024 main qualifying declares:** **three phases**, of **18, 15 and 12 minutes**, with
+**20, 15 and 10 participants** - so five drivers are eliminated after each of the first two
+phases and the last phase classifies ten. Those are the values F06c measured on the capture
+of session ``9608`` and then *declared*, which is the direction that matters: this module
+reads no payload, so no phase length, elimination count or boundary can be read, computed or
+inferred from the fixture corpus at runtime. The capture supplies lap times and positions;
+every rule comes from the table below.
+
+**What is deliberately not declared**, each for a measured reason rather than an oversight:
+
+* **Sprint Qualifying.** Only session ``9608`` - a ``Qualifying`` session - was captured, so
+  an unmeasured session kind has no declaration and is **refused**, never invented and never
+  defaulted to the main-session format. Naming it in :class:`QualifyingSessionKind` would be a
+  declaration nobody measured.
+* **The inter-phase breaks.** Measured at **7** and **8** minutes, i.e. not uniform, so no
+  inter-phase gap is a rule; :class:`QualifyingPhase` carries no gap field, and a caller that
+  needs a break has to read it from the source.
+* **Absolute phase windows.** The windows of ``9608`` are **data** - ``race_control``'s
+  ``qualifying_phase`` rows carry a start/finish pair per phase - and 14 recorded laps start
+  outside every window. The declared rules therefore carry **lengths**, and a window is only
+  stated once a start instant arrives from the source.
+* **Any circuit-specific constant.** Nothing here names a track: the same declared row
+  describes the same session format anywhere.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import Enum
 from types import MappingProxyType
 
 __all__ = [
+    "QUALIFYING_RULES",
     "SEASON_RULES",
+    "QualifyingPhase",
+    "QualifyingRules",
+    "QualifyingRulesError",
+    "QualifyingSessionKind",
     "RaceResult",
     "SeasonRules",
     "Standing",
@@ -131,6 +178,7 @@ __all__ = [
     "order_standings",
     "points_for_position",
     "provisional_table",
+    "qualifying_rules",
     "race_points_scale",
     "season_rules",
 ]
@@ -144,6 +192,9 @@ class StandingsInputError(ValueError):
 
     Raised for an undeclared season, a finishing position below 1, a result or running
     order that names a driver missing from the start checkpoints, and a duplicated driver.
+    :class:`QualifyingRulesError` is a subclass, so this one name also covers the declared
+    qualifying dataset's refusals: an undeclared qualifying season and an undeclared
+    session kind.
     """
 
 
@@ -247,6 +298,116 @@ def points_for_position(season: int, position: int | None) -> int:
     scores nothing; a position below ``1`` is not a real position and is refused.
     """
     return _points_for(season_rules(season), position)
+
+
+# --- the declared per-season qualifying rules (F06c T2) -------------------------------
+
+
+class QualifyingSessionKind(str, Enum):
+    """A session kind the declared qualifying dataset can state rules for.
+
+    The value is the source's own ``session_type`` literal, so a recorded payload reaches
+    the declaration with no mapping in between. ``Qualifying`` is the only member because
+    only session 9608 was captured: **Sprint Qualifying is deliberately absent**, so no
+    caller can name it and :func:`qualifying_rules` refuses it by naming what *is*
+    declared rather than inventing a format nobody measured.
+    """
+
+    MAIN_QUALIFYING = "Qualifying"
+
+
+class QualifyingRulesError(StandingsInputError):
+    """The declared qualifying dataset does not state the rules a caller asked for.
+
+    Raised for an undeclared season and for an undeclared session kind, and each refusal
+    names what *is* declared. A :class:`StandingsInputError`, so a caller that already
+    catches this module's declared-dataset refusals needs no second handler.
+    """
+
+
+@dataclass(frozen=True)
+class QualifyingPhase:
+    """One declared phase of a qualifying session.
+
+    ``phase`` is the phase number the source itself uses (``1``, ``2``, ``3`` in
+    ``race_control.qualifying_phase``). ``duration_minutes`` is how long the phase lasts,
+    and ``participants`` is how many drivers take part in it, so the next phase's count is
+    also the number that advance. There is deliberately **no** gap field: the recorded
+    breaks are 7 and 8 minutes, not uniform, so no inter-phase gap is a rule.
+    """
+
+    phase: int
+    duration_minutes: int
+    participants: int
+
+
+@dataclass(frozen=True)
+class QualifyingRules:
+    """The declared qualifying rules for one season and one session kind.
+
+    ``phases`` is the phase structure in order, each phase carrying its own length and
+    participant count. The rules carry phase **lengths**, not absolute windows: a window is
+    data, so a caller holding a start instant can state one, and nothing here pretends to
+    know when a session began.
+    """
+
+    season: int
+    session_kind: QualifyingSessionKind
+    phases: tuple[QualifyingPhase, ...]
+
+
+#: The declared qualifying dataset. Read-only: a caller cannot edit a season in place.
+QUALIFYING_RULES: Mapping[tuple[int, QualifyingSessionKind], QualifyingRules] = (
+    MappingProxyType(
+        {
+            (2024, QualifyingSessionKind.MAIN_QUALIFYING): QualifyingRules(
+                season=2024,
+                session_kind=QualifyingSessionKind.MAIN_QUALIFYING,
+                # Measured on the capture of session 9608 (F06c L9) and declared here:
+                # 18/15/12 minutes and 20 -> 15 -> 10 participants. Declared once, never
+                # derived from the payload the motor is checked against.
+                phases=(
+                    QualifyingPhase(phase=1, duration_minutes=18, participants=20),
+                    QualifyingPhase(phase=2, duration_minutes=15, participants=15),
+                    QualifyingPhase(phase=3, duration_minutes=12, participants=10),
+                ),
+            ),
+        }
+    )
+)
+
+
+def qualifying_rules(
+    season: int, session_kind: QualifyingSessionKind | str
+) -> QualifyingRules:
+    """The declared qualifying rules for ``season`` and ``session_kind``.
+
+    ``session_kind`` is the enum member or the source's own literal (``"Qualifying"``),
+    because the member's value *is* that literal. An undeclared **season** is refused first,
+    naming the declared seasons exactly as :func:`season_rules` does; an undeclared
+    **session kind** for a declared season is refused next, naming the kinds that season
+    declares. Neither refusal falls back to another season, to a default kind, or to the
+    main-session format.
+    """
+    declared_seasons = sorted({declared for declared, _ in QUALIFYING_RULES})
+    if season not in declared_seasons:
+        raise QualifyingRulesError(
+            f"no declared qualifying rules for season {season!r}; "
+            f"declared qualifying seasons: {declared_seasons}"
+        )
+    kind = _declared_session_kind(session_kind)
+    rules = QUALIFYING_RULES.get((season, kind)) if kind is not None else None
+    if rules is not None:
+        return rules
+    declared_kinds = sorted(
+        declared.value
+        for declared_season, declared in QUALIFYING_RULES
+        if declared_season == season
+    )
+    raise QualifyingRulesError(
+        f"no declared qualifying rules for season {season!r} and session kind "
+        f"{session_kind!r}; declared session kinds for {season}: {declared_kinds}"
+    )
 
 
 def order_standings(points_by_driver: Mapping[int, float]) -> tuple[Standing, ...]:
@@ -400,3 +561,20 @@ def _start_points(start: Sequence[StartStanding]) -> dict[int, float]:
             )
         points[row.driver_number] = float(row.points)
     return points
+
+
+def _declared_session_kind(session_kind: object) -> QualifyingSessionKind | None:
+    """The declared kind a caller's value names, or ``None`` when it names none.
+
+    The table is keyed by the enum, and a ``str``-mixing enum member hashes by its *name*
+    rather than by its value, so the source's literal would never match a key on its own.
+    The value is normalised here instead of leaving each caller to guess which form works.
+    """
+    if isinstance(session_kind, QualifyingSessionKind):
+        return session_kind
+    if isinstance(session_kind, str):
+        try:
+            return QualifyingSessionKind(session_kind)
+        except ValueError:
+            return None
+    return None

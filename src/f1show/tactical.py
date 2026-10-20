@@ -1,4 +1,4 @@
-"""Deterministic tactical analysis over recorded OpenF1 payloads (F06a).
+"""Deterministic tactical analysis over recorded OpenF1 payloads (F06a, F06c).
 
 ``analyze_tactics`` is the single entry point: it takes the raw recorded
 payloads of one session and returns a total-ordered tuple of alerts, each
@@ -6,10 +6,14 @@ traceable to the exact source record that produced it. It is pure: no network,
 no clock, no randomness, and identical payloads always produce an identical
 tuple.
 
-**Scope of this unit (F06a).** Race-only, recorded-corpus-only analysis of
-gaps, freshness, pace and stint age. Qualifying cutoffs, telemetry
-(car/location/weather), FastF1, Redis delivery, booth integration and audio
-are out of scope; the booth and the run path are deliberately untouched.
+**Scope of this unit (F06a, and F06c for the qualifying cutoff motor).**
+Recorded-corpus-only analysis of gaps, freshness, pace and stint age, plus
+qualifying cutoffs from :func:`analyze_qualifying_cutoffs`: the second pure
+entry point this module carries, which reads the declared per-season rules in
+:mod:`f1show.standings` and no constant of any venue. Telemetry
+(car/location/weather), FastF1, Redis delivery, wiring either motor into the
+booth or the run path, and audio are out of scope; the booth and the run path
+are deliberately untouched.
 
 **The motor consumes** :func:`f1show.collector.classify_gap` -- the F04
 handoff. Gap values are classified, never cast: ``+1 LAP`` stays a lap count,
@@ -36,6 +40,7 @@ from typing import cast
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from f1show.collector import GapKind, classify_gap
+from f1show.standings import QualifyingRules, QualifyingSessionKind, qualifying_rules
 
 #: The families the tactical motor reads. ``intervals`` is optional by
 #: construction: the recorded corpus holds it for session 9617 only, so its
@@ -43,6 +48,11 @@ from f1show.collector import GapKind, classify_gap
 _INTERVALS = "intervals"
 _LAPS = "laps"
 _STINTS = "stints"
+
+#: The families the qualifying cutoff motor reads. ``intervals`` is absent from
+#: the qualifying capture by construction, and that absence is declared.
+_RACE_CONTROL = "race_control"
+_POSITION = "position"
 
 
 class _Deterministic(BaseModel):
@@ -274,7 +284,9 @@ def _recent_pace_windows(
         if not isinstance(driver, int):
             continue
         per_driver.setdefault(driver, []).append((index, record))
-    windows: dict[int, tuple[float, tuple[tuple[int, float, int, dt.datetime | None], ...]]] = {}
+    windows: dict[
+        int, tuple[float, tuple[tuple[int, float, int, dt.datetime | None], ...]]
+    ] = {}
     for driver, rows in per_driver.items():
         clean: list[tuple[int, float, int, dt.datetime | None]] = []
         for index, record in rows:
@@ -347,7 +359,12 @@ def _pace_alerts(
                 "window_laps": settings.pace_window_laps,
             },
             sources=tuple(
-                SourceRef(family=_LAPS, record_index=index, driver_number=driver, timestamp=when)
+                SourceRef(
+                    family=_LAPS,
+                    record_index=index,
+                    driver_number=driver,
+                    timestamp=when,
+                )
                 for _, _, index, when in window
             ),
         )
@@ -444,19 +461,31 @@ def _tyre_alerts(
         if isinstance(lap_start, bool) or not isinstance(lap_start, int):
             continue
         completed = last_laps.get(driver)
-        stint_laps = max(0, completed[0] - lap_start + 1) if completed is not None else 0
+        stint_laps = (
+            max(0, completed[0] - lap_start + 1) if completed is not None else 0
+        )
         age = float(age_at_start) + stint_laps
         if age < settings.tyre_age_threshold_laps:
             continue
         sources = [
-            SourceRef(family=_STINTS, record_index=stint_index, driver_number=driver, timestamp=None)
+            SourceRef(
+                family=_STINTS,
+                record_index=stint_index,
+                driver_number=driver,
+                timestamp=None,
+            )
         ]
         timestamp: dt.datetime | None = None
         if completed is not None:
             lap_number, lap_index, when = completed
             timestamp = when
             sources.append(
-                SourceRef(family=_LAPS, record_index=lap_index, driver_number=driver, timestamp=when)
+                SourceRef(
+                    family=_LAPS,
+                    record_index=lap_index,
+                    driver_number=driver,
+                    timestamp=when,
+                )
             )
         yield TacticalAlert(
             kind=TacticalKind.TYRE_AGE,
@@ -495,20 +524,548 @@ def analyze_tactics(
     interval_records = payloads.get(_INTERVALS, [])
     if interval_records:
         alerts.extend(
-            _gap_alerts(_latest_readings(interval_records, session_key, as_of), settings)
+            _gap_alerts(
+                _latest_readings(interval_records, session_key, as_of), settings
+            )
         )
     lap_records = payloads.get(_LAPS, [])
     if lap_records:
         alerts.extend(_pace_alerts(lap_records, session_key, settings, as_of))
     stint_records = payloads.get(_STINTS, [])
     if stint_records:
-        alerts.extend(_tyre_alerts(lap_records, stint_records, session_key, settings, as_of))
+        alerts.extend(
+            _tyre_alerts(lap_records, stint_records, session_key, settings, as_of)
+        )
     return tuple(sorted(alerts, key=_sort_key))
+
+
+# --- F06c: the qualifying cutoff motor -----------------------------------------------
+#
+# The second pure entry point of this module. It consumes the declared per-season rules
+# that ``f1show.standings`` states and the recorded payloads of one qualifying session,
+# and it returns a total-ordered reading of the elimination line at one instant. Every
+# number it reports is either declared (and traceable to the rule table) or measured
+# (and traceable to the ``SourceRef`` of the record that produced it); what neither
+# source states is an absence, never a zero.
+
+#: The declared absences, verbatim in the result. Each names what is missing and what
+#: the motor therefore refuses to claim, so a reader never has to infer either.
+_ABSENT_INTERVALS = (
+    "the intervals family is absent from these payloads: lapped and null intervals "
+    "are declared unknown, never zero"
+)
+_ABSENT_RACE_CONTROL = (
+    "the race_control family is absent from these payloads: no phase window is known "
+    "and every boundary is declared absent"
+)
+_ABSENT_POSITION = (
+    "the position family is absent from these payloads: no driver's place is read"
+)
+_ABSENT_LAPS = "the laps family is absent from these payloads: no hot lap is counted"
+
+
+class QualifyingBoundarySource(str, Enum):
+    """Where one phase boundary came from.
+
+    ``SOURCE`` is a recorded ``race_control`` row, ``DECLARED`` is the declared phase
+    length applied to a recorded start, and ``ABSENT`` is neither: the instant is
+    unknown, and an unknown boundary is reported as unknown rather than guessed.
+    """
+
+    SOURCE = "source"
+    DECLARED = "declared"
+    ABSENT = "absent"
+
+
+class QualifyingPhaseRule(str, Enum):
+    """What the declared rules say one phase does to the drivers in it.
+
+    ``ELIMINATES`` is every phase but the last: its participants who are not inside
+    the line leave the session. ``CLASSIFIES`` is the last phase, which classifies its
+    participants and eliminates nobody -- stated, never left to be inferred from a
+    zero.
+    """
+
+    ELIMINATES = "eliminates"
+    CLASSIFIES = "classifies"
+
+
+class QualifyingStanding(str, Enum):
+    """Where one driver stands against the elimination line of the active phase.
+
+    ``ADVANCING`` and ``ELIMINATED`` are the two sides of the line, ``CLASSIFIED`` is
+    the last phase's verdict for every driver it places, and ``UNRANKED`` is declared
+    absence rather than a verdict: the driver has no comparable lap inside the window,
+    so this motor makes no claim about whether that driver advances.
+    """
+
+    ADVANCING = "advancing"
+    ELIMINATED = "eliminated"
+    CLASSIFIED = "classified"
+    UNRANKED = "unranked"
+
+
+class QualifyingPhaseWindow(_Deterministic):
+    """One declared phase, with the boundaries the source states and the rules it obeys.
+
+    ``participants`` and ``advancing`` are declared: the phase's entrant count, and how
+    many of them move on (the next phase's entrant count, or ``0`` in the phase that
+    classifies). ``declared_duration_minutes`` is always reported, and so is the
+    measured end when the source carries one, so a disagreement between the rule and
+    the recording is visible instead of resolved silently: ``end`` is the instant the
+    reading uses and ``end_source`` says which of the two produced it.
+
+    ``hot_laps``, ``pit_out_laps_excluded`` and ``unreadable_laps_excluded`` are the
+    declared counts of the lap corpus inside this window. All three are ``None`` while
+    the window itself is unknown: an unknown window has no lap count, and reporting
+    ``0`` would be a claim the capture does not support.
+    """
+
+    phase: int
+    rule: QualifyingPhaseRule
+    participants: int = Field(ge=1)
+    advancing: int = Field(ge=0)
+    declared_duration_minutes: int = Field(ge=1)
+    start_source: QualifyingBoundarySource
+    start: AwareDatetime | None = None
+    measured_end: AwareDatetime | None = None
+    declared_end: AwareDatetime | None = None
+    end_source: QualifyingBoundarySource = QualifyingBoundarySource.ABSENT
+    end: AwareDatetime | None = None
+    hot_laps: int | None = Field(default=None, ge=0)
+    pit_out_laps_excluded: int | None = Field(default=None, ge=0)
+    unreadable_laps_excluded: int | None = Field(default=None, ge=0)
+    sources: tuple[SourceRef, ...] = ()
+
+
+class QualifyingStandingRow(_Deterministic):
+    """One driver's place in the active phase: the classification and the live order.
+
+    ``lap_position`` is the classification this motor derives -- rank by best eligible
+    hot lap inside the window, ties broken by the earlier recorded lap start and then
+    by driver number -- and it is what the verdict rests on, because that is what
+    qualifying advances on. ``position`` is the source's own live running order as of
+    the reading's instant, reported because it is a source fact and not a substitute
+    for the classification; ``position_agrees`` says whether the two coincide, so a
+    live order that lags the classification is visible instead of silent, and
+    ``reading_age_seconds`` measures how old that reading was at the instant.
+
+    Every part is ``None`` when its own source says nothing: no lap inside the window
+    means no lap time, no lap rank and no lap source, and no ``position`` row inside
+    the window means no place, no place source and no age.
+    """
+
+    driver_number: int
+    standing: QualifyingStanding
+    lap_position: int | None = Field(default=None, ge=1)
+    best_lap_seconds: float | None = None
+    lap_source: SourceRef | None = None
+    position: int | None = Field(default=None, ge=1)
+    position_source: SourceRef | None = None
+    reading_age_seconds: float | None = None
+    position_agrees: bool | None = None
+
+
+class QualifyingCutoffReading(_Deterministic):
+    """The cutoff of one qualifying session at one instant.
+
+    ``phases`` states the declared phase structure with the boundaries known at
+    ``as_of``; ``active_phase`` is the last phase whose window has started by then and
+    ``line`` is that phase's declared advancement count, or ``None`` when the active
+    phase is the one that classifies and nobody is eliminated. ``standings`` places
+    every driver the source mentions in the active window against that line.
+
+    ``absences`` names every family the payloads do not carry, in the order this motor
+    reads them; ``laps_without_instant`` counts the recorded laps no window can ever
+    hold, and ``laps_outside_every_window`` counts the placed laps that at ``as_of``
+    fall in no known window -- a break lap is not a hot lap either.
+    """
+
+    season: int
+    session_kind: QualifyingSessionKind
+    as_of: AwareDatetime
+    phases: tuple[QualifyingPhaseWindow, ...]
+    active_phase: int | None = None
+    line: int | None = None
+    standings: tuple[QualifyingStandingRow, ...] = ()
+    absences: tuple[str, ...] = ()
+    laps_without_instant: int = Field(default=0, ge=0)
+    laps_outside_every_window: int = Field(default=0, ge=0)
+
+
+def _declared_phase_structure(
+    rules: QualifyingRules,
+) -> tuple[tuple[int, int, int, int, QualifyingPhaseRule], ...]:
+    """The declared phases as ``(phase, minutes, participants, advancing, rule)``.
+
+    The advancement count is never read from a payload: it is the *next* declared
+    phase's participant count, because that is what the next phase can hold, and the
+    last declared phase advances nobody because it classifies.
+    """
+    structure = []
+    for index, phase in enumerate(rules.phases):
+        following = rules.phases[index + 1] if index + 1 < len(rules.phases) else None
+        structure.append(
+            (
+                phase.phase,
+                phase.duration_minutes,
+                phase.participants,
+                following.participants if following is not None else 0,
+                QualifyingPhaseRule.ELIMINATES
+                if following is not None
+                else QualifyingPhaseRule.CLASSIFIES,
+            )
+        )
+    return tuple(structure)
+
+
+def _phase_markers(
+    records: Sequence[Mapping[str, object]],
+    session_key: int,
+    as_of: dt.datetime,
+) -> dict[int, tuple[tuple[int, dt.datetime] | None, tuple[int, dt.datetime] | None]]:
+    """Each phase's recorded start and end rows, as ``(index, instant)`` or ``None``.
+
+    Only ``SESSION STARTED`` and ``SESSION FINISHED`` rows carrying a
+    ``qualifying_phase`` state a boundary: a row without one is not a phase fact, and a
+    row after ``as_of`` is not yet known. Where a family repeats a marker, the earliest
+    recorded one is the boundary and the later ones are not re-read as it.
+    """
+    markers: dict[
+        int, tuple[tuple[int, dt.datetime] | None, tuple[int, dt.datetime] | None]
+    ] = {}
+    for index, record in enumerate(records):
+        if record.get("session_key") != session_key:
+            continue
+        phase = record.get("qualifying_phase")
+        if isinstance(phase, bool) or not isinstance(phase, int):
+            continue
+        message = record.get("message")
+        when = _as_instant(record.get("date"))
+        if when is None or when > as_of:
+            continue
+        if message not in ("SESSION STARTED", "SESSION FINISHED"):
+            continue
+        start, end = markers.get(phase, (None, None))
+        if message == "SESSION STARTED":
+            if start is None or (when, index) < start:
+                start = (index, when)
+        elif end is None or (when, index) < end:
+            end = (index, when)
+        markers[phase] = (start, end)
+    return markers
+
+
+def _active_phase(
+    phases: Sequence[QualifyingPhaseWindow],
+) -> QualifyingPhaseWindow | None:
+    """The last declared phase whose window has started, in declared order.
+
+    Before the first phase starts there is no active phase and therefore no line; a
+    moment in a break between two phases belongs to the phase that has just run, so the
+    reading keeps stating its line rather than pretending no phase ever began.
+    """
+    active: QualifyingPhaseWindow | None = None
+    for phase in phases:
+        if phase.start is not None:
+            active = phase
+    return active
+
+
+def _phase_of(
+    phases: Sequence[QualifyingPhaseWindow], instant: dt.datetime
+) -> QualifyingPhaseWindow | None:
+    """The known window holding ``instant``; both boundaries are inside it.
+
+    A lap starting exactly at a phase's start or exactly at its end is a lap of that
+    phase. Windows are declared in order and a lap belongs to the last one holding it,
+    so the assignment is total and deterministic even if two windows ever overlapped.
+    """
+    holding = [
+        phase
+        for phase in phases
+        if phase.start is not None
+        and phase.end is not None
+        and phase.start <= instant <= phase.end
+    ]
+    return holding[-1] if holding else None
+
+
+def _standings(
+    active: QualifyingPhaseWindow | None,
+    best_laps: Mapping[tuple[int, int], tuple[float, dt.datetime | None, int]],
+    position_records: Sequence[Mapping[str, object]],
+    session_key: int,
+    as_of: dt.datetime,
+) -> tuple[QualifyingStandingRow, ...]:
+    """Every driver the source mentions in the active window, against its line.
+
+    The verdict rests on the lap classification: a driver with no comparable lap is
+    ``UNRANKED`` and this motor claims nothing about the line for that driver, even
+    when a live position reading exists. ``position`` is that reading -- the newest
+    ``position`` row inside the window at or before ``as_of``, where the family carries
+    no lap number and no phase and the ``date`` filter is the only phase filter there
+    is. Equal best lap times break by the earlier recorded start, then by driver
+    number, so the order is total without a field the source does not carry.
+    """
+    if active is None or active.start is None or active.end is None:
+        return ()
+    ranked = {
+        driver: entry
+        for (phase, driver), entry in best_laps.items()
+        if phase == active.phase
+    }
+    order = sorted(ranked.items(), key=lambda item: (item[1][0], item[1][1], item[0]))
+    lap_position = {driver: place for place, (driver, _) in enumerate(order, start=1)}
+    newest: dict[int, tuple[int, Mapping[str, object], dt.datetime]] = {}
+    for index, record in enumerate(position_records):
+        if record.get("session_key") != session_key:
+            continue
+        when = _as_instant(record.get("date"))
+        driver = record.get("driver_number")
+        place = record.get("position")
+        if when is None or not isinstance(driver, int) or isinstance(place, bool):
+            continue
+        if not isinstance(place, int) or place < 1:
+            continue
+        if when > as_of or not active.start <= when <= active.end:
+            continue
+        current = newest.get(driver)
+        if current is None or (when, -index) > (current[2], -current[0]):
+            newest[driver] = (index, record, when)
+    rows = []
+    for driver in sorted(set(ranked) | set(newest)):
+        placed = newest.get(driver)
+        rank = lap_position.get(driver)
+        if rank is None:
+            standing = QualifyingStanding.UNRANKED
+        elif active.rule is QualifyingPhaseRule.CLASSIFIES:
+            standing = QualifyingStanding.CLASSIFIED
+        elif rank <= active.advancing:
+            standing = QualifyingStanding.ADVANCING
+        else:
+            standing = QualifyingStanding.ELIMINATED
+        lap = ranked.get(driver)
+        position = cast(int, placed[1]["position"]) if placed is not None else None
+        rows.append(
+            QualifyingStandingRow(
+                driver_number=driver,
+                standing=standing,
+                lap_position=rank,
+                best_lap_seconds=lap[0] if lap is not None else None,
+                lap_source=(
+                    SourceRef(
+                        family=_LAPS,
+                        record_index=lap[2],
+                        driver_number=driver,
+                        timestamp=lap[1],
+                    )
+                    if lap is not None
+                    else None
+                ),
+                position=position,
+                position_source=(
+                    SourceRef(
+                        family=_POSITION,
+                        record_index=placed[0],
+                        driver_number=driver,
+                        timestamp=placed[2],
+                    )
+                    if placed is not None
+                    else None
+                ),
+                reading_age_seconds=(
+                    (as_of - placed[2]).total_seconds() if placed is not None else None
+                ),
+                position_agrees=(
+                    position == rank
+                    if position is not None and rank is not None
+                    else None
+                ),
+            )
+        )
+    rows.sort(
+        key=lambda row: (
+            row.lap_position is None,
+            row.lap_position or 0,
+            row.driver_number,
+        )
+    )
+    return tuple(rows)
+
+
+def analyze_qualifying_cutoffs(
+    session_key: int,
+    season: int,
+    session_kind: QualifyingSessionKind | str,
+    payloads: Mapping[str, Sequence[Mapping[str, object]]],
+    as_of: dt.datetime,
+) -> QualifyingCutoffReading:
+    """Read the qualifying cutoff of one recorded session at one instant.
+
+    The rules come from :func:`f1show.standings.qualifying_rules`, which refuses a
+    season or a session kind nobody declared before a single payload is read; the
+    windows come from the ``race_control`` rows that carry a ``qualifying_phase`` and a
+    ``SESSION STARTED``/``SESSION FINISHED`` pair, falling back to the declared phase
+    length when the source states no end, and ``end_source`` says which of the two it
+    used. A hot lap is a lap of this session starting inside the window with a finite
+    positive duration that is not an out-lap: pit-out laps and unreadable durations are
+    excluded and counted, in the window they were excluded from.
+
+    ``position`` rows carry no lap number and no phase, so the only phase filter they
+    admit is their ``date``; they are reported as the source's live order, while the
+    classification and the verdict come from the lap times, which is what advances a
+    driver. Deletion notices are not applied: ``race_control`` states them as free text
+    with no phase and no lap key this motor can bind to a lap, so a deleted time can
+    still be the fastest one reported here, and that limitation is pinned by a test
+    instead of being left for a reader to assume away. A family the payloads do not
+    carry is named in ``absences``. Nothing here reads a clock, a file, the network or
+    a random source, so identical payloads and an identical instant produce an
+    identical reading.
+    """
+    rules = qualifying_rules(season, session_kind)
+    race_control = payloads.get(_RACE_CONTROL, ())
+    lap_records = payloads.get(_LAPS, ())
+    position_records = payloads.get(_POSITION, ())
+    markers = _phase_markers(race_control, session_key, as_of)
+
+    windows: list[QualifyingPhaseWindow] = []
+    for phase, minutes, participants, advancing, rule in _declared_phase_structure(
+        rules
+    ):
+        start_marker, end_marker = markers.get(phase, (None, None))
+        start = start_marker[1] if start_marker is not None else None
+        measured_end = end_marker[1] if end_marker is not None else None
+        declared_end = (
+            start + dt.timedelta(minutes=minutes) if start is not None else None
+        )
+        if measured_end is not None:
+            end, end_source = measured_end, QualifyingBoundarySource.SOURCE
+        elif declared_end is not None:
+            end, end_source = declared_end, QualifyingBoundarySource.DECLARED
+        else:
+            end, end_source = None, QualifyingBoundarySource.ABSENT
+        windows.append(
+            QualifyingPhaseWindow(
+                phase=phase,
+                rule=rule,
+                participants=participants,
+                advancing=advancing,
+                declared_duration_minutes=minutes,
+                start=start,
+                start_source=(
+                    QualifyingBoundarySource.SOURCE
+                    if start is not None
+                    else QualifyingBoundarySource.ABSENT
+                ),
+                measured_end=measured_end,
+                declared_end=declared_end,
+                end=end,
+                end_source=end_source,
+                sources=tuple(
+                    SourceRef(
+                        family=_RACE_CONTROL,
+                        record_index=marker[0],
+                        timestamp=marker[1],
+                    )
+                    for marker in (start_marker, end_marker)
+                    if marker is not None
+                ),
+            )
+        )
+
+    hot = dict.fromkeys((window.phase for window in windows), 0)
+    pit_out = dict(hot)
+    unreadable = dict(hot)
+    best_laps: dict[tuple[int, int], tuple[float, dt.datetime | None, int]] = {}
+    laps_without_instant = 0
+    laps_outside_every_window = 0
+    for index, record in enumerate(lap_records):
+        if record.get("session_key") != session_key:
+            continue
+        when = _as_instant(record.get("date_start"))
+        if when is None:
+            # No instant means no window can ever hold this lap.
+            laps_without_instant += 1
+            continue
+        if when > as_of:
+            continue
+        phase = _phase_of(windows, when)
+        if phase is None:
+            laps_outside_every_window += 1
+            continue
+        if record.get("is_pit_out_lap"):
+            # An out-lap measures the pit lane, never a qualifying lap.
+            pit_out[phase.phase] += 1
+            continue
+        seconds = record.get("lap_duration")
+        if isinstance(seconds, bool) or not isinstance(seconds, int | float):
+            unreadable[phase.phase] += 1
+            continue
+        seconds = float(seconds)
+        if not math.isfinite(seconds) or seconds <= 0.0:
+            unreadable[phase.phase] += 1
+            continue
+        hot[phase.phase] += 1
+        driver = record.get("driver_number")
+        if not isinstance(driver, int):
+            continue
+        key = (phase.phase, driver)
+        current = best_laps.get(key)
+        candidate = (seconds, when, index)
+        if current is None or (candidate[0], candidate[1], candidate[2]) < (
+            current[0],
+            current[1],
+            current[2],
+        ):
+            best_laps[key] = candidate
+
+    known: list[QualifyingPhaseWindow] = []
+    for window in windows:
+        if window.start is None or window.end is None:
+            # An unknown window has no lap count; zero would be a fabricated claim.
+            known.append(window)
+            continue
+        known.append(
+            window.model_copy(
+                update={
+                    "hot_laps": hot[window.phase],
+                    "pit_out_laps_excluded": pit_out[window.phase],
+                    "unreadable_laps_excluded": unreadable[window.phase],
+                }
+            )
+        )
+
+    active = _active_phase(known)
+    absences = []
+    if not payloads.get(_INTERVALS):
+        absences.append(_ABSENT_INTERVALS)
+    if not race_control:
+        absences.append(_ABSENT_RACE_CONTROL)
+    if not position_records:
+        absences.append(_ABSENT_POSITION)
+    if not lap_records:
+        absences.append(_ABSENT_LAPS)
+    return QualifyingCutoffReading(
+        season=rules.season,
+        session_kind=rules.session_kind,
+        as_of=as_of,
+        phases=tuple(known),
+        active_phase=active.phase if active is not None else None,
+        line=(
+            active.advancing
+            if active is not None and active.rule is QualifyingPhaseRule.ELIMINATES
+            else None
+        ),
+        standings=_standings(active, best_laps, position_records, session_key, as_of),
+        absences=tuple(absences),
+        laps_without_instant=laps_without_instant,
+        laps_outside_every_window=laps_outside_every_window,
+    )
 
 
 class TacticalSource:
     """The booth's per-moment tactical context, built once from recorded payloads.
-
     The source is the F06a motor viewed at a moving cutoff: ``context``
     returns the alerts as of one instant, each derived from the readings that
     existed at or before it. The end state and every earlier moment come from
@@ -542,7 +1099,9 @@ class TacticalSource:
             per_driver.setdefault(driver, []).append((when, index, record))
         self._readings: dict[
             int,
-            tuple[list[dt.datetime], list[tuple[int, Mapping[str, object], dt.datetime]]],
+            tuple[
+                list[dt.datetime], list[tuple[int, Mapping[str, object], dt.datetime]]
+            ],
         ] = {}
         for driver, rows in per_driver.items():
             rows.sort(key=lambda row: (row[0], row[1]))
@@ -580,11 +1139,17 @@ class TacticalSource:
         if readings:
             alerts.extend(_gap_alerts(readings, self.settings))
         if self._lap_records:
-            alerts.extend(_pace_alerts(self._lap_records, self.session_key, self.settings, at))
+            alerts.extend(
+                _pace_alerts(self._lap_records, self.session_key, self.settings, at)
+            )
         if self._stint_records:
             alerts.extend(
                 _tyre_alerts(
-                    self._lap_records, self._stint_records, self.session_key, self.settings, at
+                    self._lap_records,
+                    self._stint_records,
+                    self.session_key,
+                    self.settings,
+                    at,
                 )
             )
         return tuple(sorted(alerts, key=_sort_key))
@@ -626,9 +1191,7 @@ def _tactical_line(alert: TacticalAlert) -> str:
         return f"driver {d} has not reported for {age:.0f} s."
     if alert.kind is TacticalKind.PACE_DELTA:
         delta = cast(float, facts["delta_seconds"])
-        return (
-            f"driver {d}'s recent pace is {delta:.1f} s off the session's best."
-        )
+        return f"driver {d}'s recent pace is {delta:.1f} s off the session's best."
     age = cast(float, facts["tyre_age_laps"])
     return f"driver {d} is on an estimated {age:.0f}-lap tyre age."
 
@@ -658,13 +1221,19 @@ def render_tactical(
 
 
 __all__ = [
+    "QualifyingBoundarySource",
+    "QualifyingCutoffReading",
+    "QualifyingPhaseRule",
+    "QualifyingPhaseWindow",
+    "QualifyingStanding",
+    "QualifyingStandingRow",
     "SourceRef",
     "TacticalAlert",
     "TacticalKind",
     "TacticalSettings",
     "TacticalSource",
+    "analyze_qualifying_cutoffs",
     "analyze_tactics",
     "build_tactical_source",
     "render_tactical",
 ]
-
