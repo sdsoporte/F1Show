@@ -1724,9 +1724,9 @@ question. **Nothing was installed in this repository and no code was written.**
   tests cover boundary values, lapped/null intervals, missing telemetry, pit
   interference and stale data. No hardcoded Monza or unqualified strategy claims.
 - Depends on F04/F05. Commit/checks: **partial** — the race tiers landed as **F06a** (the motor) and
-  **F06b** (the booth wiring), and **F06c** below adds qualifying cutoffs over declared season rules;
-  pit-window candidates and the telemetry source decision still remain pending, so **this F06 task
-  stays open and its `- [ ]` marker must not change.**
+  **F06b** (the booth wiring), **F06c** below adds qualifying cutoffs over declared season rules, and
+  **F06d** below adds pit-window projections over declared stint norms; the telemetry source decision
+  still remains pending, so **this F06 task stays open and its `- [ ]` marker must not change.**
 
 ### F06a — The race tactical motor: deterministic gap, pace and stint alerts
 
@@ -1784,6 +1784,49 @@ question. **Nothing was installed in this repository and no code was written.**
 - **Still open for F06:** pit-window candidates, the FastF1/telemetry source decision (shared with
   F07), and Redis/F05. **F06c's own delivery** — push, PR, CI, merge — is a separate decision taken in
   T5, which is also where `docs/PROJECT-STATE.md` gains its row and snapshot, per the L3 precedent.
+
+### F06d — Pit-window candidates: declared stint norms over recorded races
+
+- [x] **Built on this branch, awaiting integration.** Authorized in the user's own words, quoted
+  verbatim in `odd/tasks/f06d-pit-window-candidates.md` (S1–S7, T1–T4, L1–L6): the piso
+  **"Pit-window candidates (recomendado)"** with the unit scope **"Motor standalone
+  (recomendado)"** — the F06c pattern, booth and run untouched.
+- **What it is.** `analyze_pit_windows` — the module's **third** pure entry point, returning a
+  `PitWindowReading`: it refuses a non-Race session through the payloads' own `sessions` family
+  (an unstated or contradictory type is a refusal naming both rows), then projects per driver the
+  stop lap as the current stint's start plus the **declared median** under the declared integer
+  rule — **ceiling** (25.5 → 26, 37.5 → 38: a tyre is replaced on the following lap, never half a
+  lap earlier) — with a window from the declared min–max anchors, every projection labelled an
+  estimate. Declared rows (no current lap / stint / compound / norm) keep the readable facts and
+  no projection number; the duration support is a counted fact and **no pit cost is inferred**;
+  a one-lap caution batch is declared as context with the `lap_start >= 2` boundary load-bearing
+  and measured. The stint norms are declared estimates living **beside the motor** in
+  `tactical.py`, not in `standings.py` — that module's discipline is for regulation, and mislodging
+  estimates there would dress them as rules.
+- **The corpus needed no capture, and two handoff errors were caught by measurement.** Both races
+  carry usable durations (9617 `stop_duration` 23/23; 9655 lane/pit 60/60 with `stop_duration`
+  null 33/60, clustered on the safety-car pit batch) and corroborated stint lengths; 9608's pit
+  family is event-only and the session is refused by design. The explorer's **MEDIUM n=16 was
+  irproducible under any definition** — the mandated re-measurement refused to pin it, and the
+  declared criterion (opening stints under four laps are early-stop/DNF outliers) gives
+  **MEDIUM n=14 (13–32, median 25.5) / HARD n=4 (27–40, median 37.5)**, with driver 23 corrected
+  to an early stop (it ran three stints to lap 55), not a DNF.
+- **Commits:** `b3dbe26` (spec + census correction), `86037ac` (norms table: +175/+158),
+  `f455a84` (spec), `eb983e6` (the motor + the four S6 docstring sentences, including `:3`'s
+  "single entry point" — false since F06c — finally fixed: +586/+618 live), `002bb86` (spec).
+  Suite 1097 → **1124**; Ruff clean; RED observed or logically proven per unit.
+- **Incidents kept in the record, not smoothed:** the first T1 dispatch stopped on both of its
+  mandatory gates (the branch did not exist; the re-measurement refuted the handoff count), and
+  the re-dispatched T1 writer **died after writing and before reporting** — the parent measured
+  its landed bytes against the spec instead of trusting or discarding them (L4/L5).
+- **Reviews:** the spec alone (low, auto-approved, burned) and the full T1 candidate
+  (medium, four lenses, 3 files/495 lines, approved, burned — three informational findings);
+  T2's review runs at slice close under the standing RDD gate.
+- **Budget:** 1734 authored lines across 6 commits; T2's honest slicing pass is recorded in the
+  spec (1204 additions cannot form slices of ≤400, and a split would ship an entry point whose
+  rows carry no projection numbers) — one cohesive commit, nothing trimmed.
+- **Still open for F06:** the **FastF1/telemetry decision** (shared with F07) and **Redis/F05**.
+  F06's deterministic tiers are now all delivered.
 
 ### F07 — Implement evidence-grounded historical enrichment
 
