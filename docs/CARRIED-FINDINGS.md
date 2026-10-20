@@ -577,6 +577,7 @@ inference, not the reviewer's words**. The location is the identity.
 | `:307-312` | R3-002 | SUGGESTION | F13 | the first live call: `main` builds the model client **before** it reads the corpus, so the gemini branch constructs a real SDK client ahead of a load that may fail | OPEN, body unknown |
 | `:336-388` | R3-003 | SUGGESTION | F13 | the first live call: the gemini branch materializes the credential and builds the SDK client with a base URL and **no timeout**, so the same subject as the `gemini.py` row above sits on the F10 side too | OPEN, body unknown |
 | `:204-207` | R3-004 | SUGGESTION | the first live call, or any change to the declared base URL | the `native_base_url` derivation: the trailing-segment rule is proved for the two declarations in use, so a third declaration shape is what would revisit it | OPEN, body unknown |
+| `load_recorded_session` required-family contract (`:122`/`:126`) | F06c-loader-contract | WARNING | the first unit that tries to **run** session 9608, or any change to `_LOADED_FAMILIES` | the three championship paths carry **no rows** for a non-race session, so a *complete* capture of 9608 would still raise the `no record of the requested session in a required family` refusal — the corpus contract is race-shaped, which is why `fixtures/openf1/9608/` is deliberately a **motor-only** directory that nothing loads today | **OPEN** (F06c L5), deliberately chosen and measured, not an oversight |
 
 **Subjects at these locations, re-derived by subject at `d0b3cea`** (the file was **already** no longer unchanged when F09f added the driver-directory family, and U3b added the three championship families on top, so the derivation below has now moved **twice** and the original claim that these coordinates were current is **superseded**): `:158-161` the unreadable-JSON branch of `load_recorded_session`, the only place that puts a
 decoder's own message into a `RecordedSourceError`; `:307-312` the client construction in `main`, which
@@ -720,3 +721,17 @@ with the F06a receipt tests unchanged and green.
 | Location | Ids | Severity | Owner | Trigger | Status |
 | --- | --- | --- | --- | --- | --- |
 | `_pace_alerts` timestamp | R3-pace-timestamp-index | CRITICAL | — | — | **CLOSED**: F06b T1 (`dc31251`) reads the window's own instant (`window[-1][3]`); the F06a receipts stayed green, so the wrong value was never load-bearing |
+| `_standings`, deleted laps | F06c-deleted-laps-not-applied | SUGGESTION | whoever next touches the lap classifier | any change to how race-control messages are parsed: the nine deletion notices are free text with **no phase and no lap key**, so a deleted lap still counts — measured on 9608, exactly one matches a driver's best in-window lap (driver 11, 93.26 s, phase 3). The verdict does not move, but the reported best time is a deleted lap | **OPEN** (F06c L14), declared in the entry point's docstring and pinned by `test_a_deleted_lap_is_not_applied_and_that_limitation_is_pinned` |
+| `analyze_qualifying_cutoffs` and `analyze_tactics`, `as_of` | F06c-as-of-naive | SUGGESTION | whoever next touches either entry point | a timezone-unaware `as_of`: it raises a bare `TypeError` from comparison instead of a typed refusal — the same exposure `analyze_tactics` carried before F06c, now inherited by the second entry point | **OPEN** (F06c L14) |
+| `_phase_markers`, declared window ends | F06c-declared-window-overlap | SUGGESTION | whoever next edits `QUALIFYING_RULES` | a season table whose declared phase duration would run past the next phase's start: windows are **declared, not enforced**, so such an overlap would resolve silently as *last window wins* — unreachable with 2024's 7- and 8-minute breaks | **OPEN** (F06c L14) |
+
+## standings.py — from the F06c T2 unit
+
+**Origin of every `F06c-` id in this register.** The five such rows — one in `run.py` above, three in
+`tactical.py` above, and the one below — are the **parent's own measurements during F06c**, not reviewer
+findings: no lens produced them, which is why they carry no `R<n>-` prefix. Their owners and triggers are
+the parent's inference, stated the same way the F10 rows above declare theirs.
+
+| Location | Ids | Severity | Owner | Trigger | Status |
+| --- | --- | --- | --- | --- | --- |
+| `_start_points`, `float(row.points)` | F06c-untyped-float | SUGGESTION | whoever next touches `_start_points` | any change to start-checkpoint parsing: `StartStanding` is an **unvalidated frozen dataclass**, so a non-numeric `points` raises a bare `ValueError` where this module's convention is a typed `StandingsInputError` | **OPEN** (F06c L11), pre-existing — T2 only shifted the line from `:401` to `:562` and added no `int()`/`float()` call |
