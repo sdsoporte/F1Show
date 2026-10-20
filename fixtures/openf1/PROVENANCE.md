@@ -155,6 +155,12 @@ paths answer for a **race** session; a practice or qualifying session has no cha
 declared per-season points rules — these files give the **before and after checkpoints**, not an in-race
 table.
 
+**Correction (2026-10-19, measured by the qualifying window below):** the first clause was written for all
+three paths, and session **9608** disproved it for one of them — `session_result` returned **20 rows** for a
+qualifying session, so it does not share the race-only limit. The limit stands for the two **championship**
+paths only. Those two were **not fetched** for 9608, so what they return there is **unmeasured**, and this
+file claims nothing about it.
+
 **Independent confirmation:** the observation of 2026-10-11 counted 23, 10 and 20 rows for these three
 endpoints. This recording returns the same three counts. The *shape* is stable across two observations made a
 day apart; the *values* remain a point-in-time snapshot, and this repository makes no claim that they hold
@@ -279,3 +285,153 @@ total event count, the count of events whose own evidence places them in laps 1.
 the start group's member count, position and covered count, and one end-to-end `run_session` result. Nothing
 in that module is inherited from session 9617's pins: order, indices, null timestamps and seat consequences
 are session-specific, so the two windows are pinned separately.
+
+## The qualifying window — session 9608 (2026-10-19)
+
+**Why this now:** F06c owes deterministic qualifying cutoffs. Both existing windows are **race** sessions, so
+the qualifying tier has no recorded bytes behind it at all: this capture is the fixture that a cutoff motor
+can be computed over and pinned against. The window **supplements** the other two: no existing fixture, pin
+or count was changed, and the sections above still describe sessions 9617 and 9655 exactly as captured.
+
+- **Recording date (UTC):** 2026-10-19 (first request `2026-10-19T18:29:14.006135Z`, last
+  `2026-10-19T18:29:20.950977Z`).
+- **Authentication:** none. No token, no `Authorization` header, no cookies, no subscription, no account, no
+  `.env` read and no credential file or environment variable consulted. Free-tier historical reads only.
+- **HTTP client:** a throwaway recorder kept **outside the repository** — here it was delivered to `python` as
+  an inline script on standard input (a heredoc), so no recorder file exists in the repository or anywhere
+  else on disk. `httpx` inside the project's existing virtual environment with `trust_env=False`,
+  `follow_redirects=False` and a bounded 60 s timeout, `GET` only, host `api.openf1.org` only, and no header
+  beyond what a plain `GET` needs. The script asserted `https` + `api.openf1.org` + `/v1/<family>` on every
+  URL before sending it. No project file was modified to make the recording possible.
+- **Methods:** `GET` only. **Total requests: 8** (each returned HTTP 200 on the first attempt; no retries were
+  needed and none were performed, and no other host was contacted).
+- **Measured pacing:** `sleep 0.5` between requests, unconditionally. Client-measured request spacing was
+  `0.839095, 0.871336, 1.005811, 0.829371, 0.836680, 0.834652, 0.844511` s — each figure being the 0.5 s sleep
+  plus the measured response time of the request it preceded — with a **7.327 s** wall-clock window for all 8
+  requests and a **minimum observed spacing of 0.829371 s**. Read as the two different kinds of bound they
+  are: the **3 requests/second** ceiling bounds instantaneous rate, and the observed maximum is about **1.21
+  requests/second**; the **30 requests/minute** ceiling bounds a **count**, and this capture used **8 of the
+  30** a minute allows.
+
+### Session selection
+
+The session was fixed by the **user's own directive**, not by a probe: asked what to capture, the user
+answered *"Sólo 9608 (Austin)"* on 2026-10-19, choosing the qualifying session of the same grand prix whose
+race is already recorded here. Session **9608 shares `meeting_key=1247`** with the recorded race `9617` and
+sits **one day earlier**, so the two fixtures describe one event weekend from two different session types —
+no new discovery request was needed to choose it, and none was made.
+
+**Chosen session:** `session_key=9608`, `session_name=Qualifying`, `session_type=Qualifying`,
+`meeting_key=1247`, `date_start=2024-10-19T22:00:00+00:00`, `date_end=2024-10-19T23:00:00+00:00`,
+`gmt_offset=-05:00:00`, Austin (United States), 2024 season, `is_cancelled=false`.
+
+### Endpoints recorded
+
+Each response body was written to `fixtures/openf1/9608/<family>.json` **verbatim**: the exact bytes received
+(compact single-line JSON, no re-serialisation, no pretty-printing, no trimming, no sampling, no reshaping,
+no sorting). `Bytes` is the size on disk and therefore also the received body size; each on-disk SHA256 was
+re-verified against the received bytes and against the hashes recorded by the recorder with `sha256sum`. All
+bodies were held in memory and the size gate below was checked **before** any file was written, so a gate
+firing would have left the tree untouched.
+
+| Endpoint | URL (exact, including query) | HTTP | Bytes | Records | First `date`/`date_start` | Last `date`/`date_start` | Requested (UTC) | SHA256 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| sessions | `https://api.openf1.org/v1/sessions?session_key=9608` | 200 | 370 | 1 | `2024-10-19T22:00:00+00:00` * | `2024-10-19T22:00:00+00:00` * | 2026-10-19T18:29:14.006135Z | `8fff6b9746844499fe563e4f0ab1465137c0c8cad27e86e3ad4724cc8f793063` |
+| drivers | `https://api.openf1.org/v1/drivers?session_key=9608` | 200 | 8013 | 20 | absent ** | absent ** | 2026-10-19T18:29:15.732976Z | `8b9fb20124fc03e7330e4974e04ce592c2ae82718a952d876e72306e900cb595` |
+| laps | `https://api.openf1.org/v1/laps?session_key=9608` | 200 | 130350 | 282 | `2024-10-19T22:00:09.114000+00:00` *** | `2024-10-19T22:59:51.386000+00:00` *** | 2026-10-19T18:29:16.572303Z | `8a9eafab853b75a02676089514e680edebb9508e6db4260a6623668f42be90a4` |
+| position | `https://api.openf1.org/v1/position?session_key=9608` | 200 | 154940 | 1355 | `2024-10-19T21:46:56.596000+00:00` | `2024-10-19T22:56:54.097000+00:00` | 2026-10-19T18:29:17.443807Z | `1a5a8c1eaee62c9d84e2caa95b9453b6d0b15a2d8ae07303119e8724f6457486` |
+| race_control | `https://api.openf1.org/v1/race_control?session_key=9608` | 200 | 11142 | 40 | `2024-10-19T22:00:00+00:00` | `2024-10-19T23:08:47+00:00` | 2026-10-19T18:29:18.449747Z | `33c934adfae612489aa5c25ada867e1e940edfad41bb5a856523dd6613b10a12` |
+| stints | `https://api.openf1.org/v1/stints?session_key=9608` | 200 | 14141 | 99 | absent ** | absent ** | 2026-10-19T18:29:19.279281Z | `1556238112dd6246b9ebc4257f4a1296fb8a80bf5821a2266ee08b36b436981e` |
+| pit | `https://api.openf1.org/v1/pit?session_key=9608` | 200 | 17791 | 99 | `2024-10-19T22:00:04.258000+00:00` | `2024-10-19T22:58:03.538000+00:00` | 2026-10-19T18:29:20.116094Z | `f104cb1ffcd89fc783fd4f9cb2d18d7671a585facffbb699f944321f0f534101` |
+| session_result | `https://api.openf1.org/v1/session_result?session_key=9608` | 200 | 3893 | 20 | absent ** | absent ** | 2026-10-19T18:29:20.950977Z | `0b8c8d64329f0fb4d06e9e2ea914c188cf91e715d450ca8558dbb09e150458ca` |
+
+All eight responses were JSON arrays (`list` at top level) and every one returned records — **nothing came
+back empty, nothing answered non-200, and no family returned a non-array**. Record counts: `sessions` 1,
+`drivers` 20, `laps` 282, `position` 1355, `race_control` 40, `stints` 99, `pit` 99, `session_result` 20.
+
+Timestamp-field notes — recorded observations that downstream code must handle, not problems to fix:
+
+- As in both race windows there is **no uniform timestamp field**, and this session adds no new one. Only
+  `position`, `pit` and `race_control` carry a field named exactly `date`; only `sessions` and `laps` carry
+  `date_start`; `drivers`, `stints` and `session_result` carry **no timestamp field at all**.
+- `*` `sessions` (1/1 record) has no `date` field; it carries `date_start`/`date_end`.
+- `**` `drivers`, `stints` and `session_result` carry **no timestamp field of any kind**. They are
+  session-scoped rows, not timestamped events — `session_result` rows can be ordered only by `position`, and
+  `stints` rows only by `stint_number`/`lap_start`.
+- `***` `laps` has no `date` field; it carries `date_start`, and that key is present on **282/282** records
+  but its value is **null on 1** of them, leaving **281 non-null** (first non-null
+  `2024-10-19T22:00:09.114000+00:00`, last `2024-10-19T22:59:51.386000+00:00`). No code may assume every lap
+  record has a date — the same trap 9617 carries — and no code may assume the 9617 or 9655 null count either.
+- `position` (1355/1355), `pit` (99/99) and `race_control` (40/40) each carry a non-null `date` on every
+  record. `position` begins at **21:46:56**, i.e. before the session's stated `date_start`, so the family
+  carries pre-session rows rather than only in-session ones.
+- `race_control` carries **no usable `lap_number`**: the key is present on all 40 records but **null on all
+  40**. What it does carry, and what no race window carries, is **`qualifying_phase`** — non-null on **17 of
+  40** records with values `1`, `2` and `3`, attached both to `SessionStatus` rows and to `Flag` rows. A
+  qualifying phase boundary is therefore **in the data** for the rows that have it, and absent for the rest;
+  any code that needs a phase for the other 23 records must say so rather than infer one.
+- `pit` carries `stop_duration` on all records but with a **null value on 99/99** of them for this session —
+  unlike the recorded race `9617`, where that field is documented to exist. `lane_duration` and
+  `pit_duration` are the populated fields here. Nothing in this capture supports reading a stationary stop
+  time for a qualifying session.
+- `laps` carries `lap_duration` with a **null value on 22 of 282** records, and `is_pit_out_lap` on all of
+  them; lap numbers span **1..20** across **20** distinct drivers.
+
+### `session_result` on a qualifying session — measured, not assumed
+
+The shape of `session_result` for a **non-race** session was unknown before this capture, so it is recorded
+here as measured rather than as expected: it **does answer**. The response is a 20-record array with
+`position` populated for every integer **1..20**, one row per driver, `duration` non-null on **20/20** and
+`gap_to_leader` non-null on **20/20**, `dnf` true once, `dns` true once and `dsq` never. Its field set is
+identical to the race-session capture above (`driver_number`, `position`, `points`, `number_of_laps`,
+`duration`, `gap_to_leader`, `dnf`, `dns`, `dsq`, `meeting_key`, `session_key`), and like the race capture it
+carries **no timestamp field**.
+
+**This qualifies the sentence recorded above for the championship paths.** That sentence — *"these three
+paths answer for a race session; a practice or qualifying session has no championship rows"* — was measured
+against the three families recorded together on 2026-10-12. This capture **leaves it unmeasured for the two
+championship paths**, which are not fetched here, and **does not confirm it for
+`session_result`**, which plainly returned qualifying rows. No claim is made here about what the two
+championship paths return for 9608: they were **not fetched**, so their size and shape are **not measured**
+and no number is invented for them.
+
+### Deliberately excluded
+
+`intervals` was **deliberately not fetched**. Two reasons: qualifying cutoffs need **lap times and position**,
+not gaps, so nothing in the cutoff motor reads it; and it is the family that already broke the size gate —
+the only measured instance is 9617's `fixtures/openf1/intervals.json` at **2,965,644 bytes / 21,041
+records**, about **82%** of that session's corpus. No `intervals` size for 9608 is claimed: it was not
+fetched, so its size is not measured.
+
+`championship_drivers` and `championship_teams` were **deliberately not fetched**, for the reason already
+measured and recorded in this file: *"these three paths answer for a race session; a practice or qualifying
+session has no championship rows"* (`fixtures/openf1/PROVENANCE.md:152`, the *Race-session-only* paragraph). A qualifying session also has no
+championship points to carry, so the rows would either be absent or meaningless here. See the subsection
+above for the one family that quote does **not** hold for.
+
+For the same reason this window omits `car_data`, `location`, `team_radio`, `overtakes` and the other unread
+paths. The two omissions above are the declared scope of F06c, not silent gaps.
+
+### Total size and the size gate
+
+**Total recorded size: 340,640 bytes (0.34 MB, 0.32 MiB)** across the eight files.
+
+The pre-agreed gate (stop and report if any single family exceeds roughly 2 MB, or the total exceeds roughly
+12 MB) was measured **before** anything was written and **did not fire**:
+
+| Bound | Measured | Limit | Verdict |
+| --- | --- | --- | --- |
+| Largest single family | **154,940** (`position`) | ~2,000,000 | not fired |
+| All eight together | **340,640** | ~12,000,000 | not fired |
+
+Per-family sizes: `sessions` 370, `drivers` 8,013, `laps` 130,350, `position` 154,940, `race_control` 11,142,
+`stints` 14,141, `pit` 17,791, `session_result` 3,893. **Nothing was trimmed, sampled, reshaped or
+replaced**: all eight files are exactly the bytes received.
+
+### Request budget
+
+**8 requests were authorized** — the eight declared families of F06c's capture, each addressed by exactly one
+URL — and **8 were used**: 0 remain unused. All were `GET`, all to `api.openf1.org`, all unauthenticated and
+all HTTP 200 on the first attempt, paced by `sleep 0.5` inside the documented free-tier limits (3
+requests/second, 30 requests/minute). No other host was contacted, no redirect was followed, and no request
+carried a credential or any header beyond a plain `GET`.
