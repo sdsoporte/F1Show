@@ -87,7 +87,9 @@ lint `uvx ruff@0.17.0 check --no-cache src tests`. Delivery is a separate user d
   the CARRIED-FINDINGS rows, the `### F06d` section in `odd/tasks/f1show.md`, F06's bullet.
   Route: parent, then verified. Commit: pending.
 - **T4** (all): independent verification per the assess plan, the native review under RDD,
-  local integration, and the delivery decision put to the user. Route: parent. Commit: pending.
+  local integration, and the delivery decision put to the user. Route: parent. Commit: the chain
+  **#80/#81/#82/#83** merged bottom-up with CI waits, tracker **PR #84** merged as `5b1e625`,
+  snapshot **PR #85** merged as `9188bae` — see L7.
 
 ## Delivery slices
 
@@ -180,3 +182,21 @@ commit is kept, the overage reported, and nothing trimmed to fit. The F06c prece
   and the batch never suppresses a member's projection; (3) 9655's 4 null-bound stints are also
   its 2 `UNKNOWN`-compound records, so the null/`UNKNOWN` branch is pinned with a synthetic
   payload — measured honestly as such.
+- **L7** (2026-10-20): **delivery record.** The user chose the feature-branch-chain again
+  ("Cadena por slices"). Five branches at intact hashes pushed; four child PRs (#80 spec, #81
+  norms, #82 motor, #83 docs) with Chain Context; the cascade merged bottom-up **with CI waits
+  between merges** — the F06c lesson, automated this time — and it still hit one new failure
+  mode: PR **#81**'s check watch exited *"no checks reported"* because the merge of #82 had
+  advanced its head branch seconds earlier and GitHub had not yet started the re-run — a **timing
+  race, not a CI failure**; the recovery was an appearance-wait (poll `statusCheckRollup` until
+  checks exist, up to 300 s) and both remaining PRs merged green. Tracker **PR #84** merged into
+  `main` as **`5b1e625`** (all four checks green; the six F06d commits verified as ancestors),
+  and the snapshot **PR #85** merged as **`9188bae`** — the PROJECT-STATE row and snapshot name
+  `5b1e625`, receipts move 1097 → **1124**, and F06's remaining row reads *"F06's deterministic
+  tiers are all delivered"*. The snapshot's own review was low, auto-approved, burned
+  (`review-12ca6ef7d11a8f6c`). One incident belongs to the parent alone: a mid-edit table
+  corruption (a greedy regex glued the new F06d row to the F06c row's tail, and a second regex
+  dragged it further) was caught by the structural verification the passive plan requires, and
+  repaired by restoring the F06c row verbatim from `origin/main` — stated in PR #85 rather than
+  smoothed. **F06's open tiers are now exactly two: the FastF1/telemetry decision (shared with
+  F07) and Redis/F05.**
