@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+from dataclasses import FrozenInstanceError
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 import pytest
@@ -28,12 +30,17 @@ from f1show import (
 from f1show import tactical as tactical_module
 from f1show.standings import QualifyingRulesError, QualifyingSessionKind
 from f1show.tactical import (
+    PIT_NORM_RULES,
+    PitNormRulesError,
     QualifyingBoundarySource,
     QualifyingCutoffReading,
     QualifyingPhaseRule,
     QualifyingPhaseWindow,
     QualifyingStanding,
+    StintNorm,
     analyze_qualifying_cutoffs,
+    pit_norm_rules,
+    stint_norm,
 )
 
 SESSION_KEY = 9617
@@ -1256,3 +1263,154 @@ def test_a_deleted_lap_is_not_applied_and_that_limitation_is_pinned() -> None:
     assert row.best_lap_seconds is not None
     assert abs(row.best_lap_seconds - 93.26) < 0.001
     assert row.standing is QualifyingStanding.CLASSIFIED
+
+
+# --- the declared per-season stint norms (F06d T1) -----------------------------------
+#
+# The declared table is an *estimate* measured once on the recorded stint corpus of
+# session 9617, then written down here as a declaration. Nothing in this section is read
+# at runtime or at import time by `src/f1show/tactical.py`: the module holds the numbers,
+# and the fixture's only role is the census below, which recomputes them so the pin fails
+# if either side drifts.
+#
+# The declared criterion (F06d L4, definition 2b): only opening stints of **four laps or
+# more** corroborate a norm. The two shorter openings of 9617 are the early-stop/DNF
+# outliers - driver 44's lap-1 HARD stint (the genuine DNF) and driver 23's laps-1-3
+# MEDIUM stint (an early stop: 23 ran three stints to lap 55) - and neither is a stint
+# length a pit window may be projected from.
+
+DECLARED_NORM_SEASON = 2024
+MINIMUM_CORROBORATING_STINT_LAPS = 4
+
+
+def measured_stint_census(
+    minimum_laps: int = MINIMUM_CORROBORATING_STINT_LAPS,
+) -> dict[str, tuple[int, int, int, float]]:
+    """Recompute the declared census from the recorded stints, under the criterion.
+
+    One row per compound of the opening stints: the count of corroborating stints, the
+    minimum and maximum stint length in laps, and the median length. Opening stints are
+    the transition-terminated ones - every recorded stint of this corpus carries an end
+    lap, and the later ones that end at the race's last laps are right-censored at race
+    end, which is why they corroborate nothing.
+    """
+    opening = [row for row in load("stints") if row["stint_number"] == 1]
+    # The corpus's own shape, measured: 43 stint records, 20 opening stints, no null end.
+    assert len(opening) == 20
+    by_compound: dict[str, list[int]] = {}
+    for row in opening:
+        lap_end = row["lap_end"]
+        assert lap_end is not None
+        laps = int(lap_end) - int(row["lap_start"]) + 1
+        if laps < minimum_laps:
+            continue
+        by_compound.setdefault(str(row["compound"]), []).append(laps)
+    return {
+        compound: (len(laps), min(laps), max(laps), median(laps))
+        for compound, laps in by_compound.items()
+    }
+
+
+def test_the_declared_stint_norms_resolve_for_the_recorded_season() -> None:
+    """2024 MEDIUM and HARD are the declared rows, and 2024 is the recorded season."""
+    norms = pit_norm_rules(DECLARED_NORM_SEASON)
+    assert set(norms) == {"HARD", "MEDIUM"}
+    medium = stint_norm(DECLARED_NORM_SEASON, "MEDIUM")
+    assert isinstance(medium, StintNorm)
+    assert (medium.season, medium.compound) == (DECLARED_NORM_SEASON, "MEDIUM")
+    # One way to read a declared row: the accessor, the per-season view and the table
+    # all resolve to the same frozen row.
+    assert stint_norm(DECLARED_NORM_SEASON, "MEDIUM") is medium
+    assert norms["MEDIUM"] is medium
+    assert PIT_NORM_RULES[(DECLARED_NORM_SEASON, "MEDIUM")] is medium
+    assert pit_norm_rules(DECLARED_NORM_SEASON) == norms
+
+
+def test_the_declared_stint_norms_carry_the_measured_counts_medians_and_ranges() -> (
+    None
+):
+    """The pinned declaration: n=14 (13-32, median 25.5) and n=4 (27-40, median 37.5)."""
+    medium = stint_norm(DECLARED_NORM_SEASON, "MEDIUM")
+    assert (
+        medium.corroborating_stints,
+        medium.norm_laps,
+        medium.min_laps,
+        medium.max_laps,
+    ) == (14, 25.5, 13, 32)
+    hard = stint_norm(DECLARED_NORM_SEASON, "HARD")
+    assert (
+        hard.corroborating_stints,
+        hard.norm_laps,
+        hard.min_laps,
+        hard.max_laps,
+    ) == (4, 37.5, 27, 40)
+    # The norm *is* the derived median of the corroborating stints, and the declared
+    # min-max are the tolerance anchors around it - not a midpoint and not an endpoint.
+    for norm in (medium, hard):
+        assert norm.min_laps < norm.norm_laps < norm.max_laps
+    assert medium.corroborating_stints + hard.corroborating_stints == 18
+
+
+def test_the_declared_norms_reproduce_the_measured_census_of_the_recorded_stints() -> (
+    None
+):
+    """The declaration and the fixture agree; either side drifting fails this pin."""
+    census = measured_stint_census()
+    assert census == {"HARD": (4, 27, 40, 37.5), "MEDIUM": (14, 13, 32, 25.5)}
+    assert set(census) == set(pit_norm_rules(DECLARED_NORM_SEASON))
+    for compound, (count, low, high, middle) in census.items():
+        norm = stint_norm(DECLARED_NORM_SEASON, compound)
+        assert (
+            norm.corroborating_stints,
+            norm.min_laps,
+            norm.max_laps,
+            norm.norm_laps,
+        ) == (count, low, high, middle)
+
+
+def test_the_sub_four_lap_criterion_is_load_bearing_not_decorative() -> None:
+    """Without the exclusion the same corpus reads 15/5, so the criterion moved the pin."""
+    raw = measured_stint_census(minimum_laps=1)
+    assert raw == {"HARD": (5, 1, 40, 36), "MEDIUM": (15, 3, 32, 25)}
+    assert raw != measured_stint_census()
+    # The two excluded openings are the short ones, and only those: 20 - 18 = 2.
+    assert raw["MEDIUM"][0] - measured_stint_census()["MEDIUM"][0] == 1
+    assert raw["HARD"][0] - measured_stint_census()["HARD"][0] == 1
+
+
+def test_an_undeclared_season_is_refused_naming_seasons_and_compounds() -> None:
+    """A season nobody declared is refused, and the refusal names what *is* declared."""
+    with pytest.raises(PitNormRulesError) as refusal:
+        pit_norm_rules(2025)
+    assert str(refusal.value) == (
+        "no declared stint norms for season 2025; declared stint-norm seasons: [2024]; "
+        "declared stint-norm compounds: ['HARD', 'MEDIUM']"
+    )
+    # The row accessor refuses through the same season check, so one `except` covers both.
+    with pytest.raises(PitNormRulesError):
+        stint_norm(2025, "MEDIUM")
+
+
+def test_an_undeclared_compound_is_refused_naming_the_declared_compounds() -> None:
+    """SOFT was recorded but corroborates no norm, so it is refused, never defaulted."""
+    with pytest.raises(PitNormRulesError) as refusal:
+        stint_norm(DECLARED_NORM_SEASON, "SOFT")
+    assert str(refusal.value) == (
+        "no declared stint norm for season 2024 and compound 'SOFT'; "
+        "declared stint-norm compounds for 2024: ['HARD', 'MEDIUM']"
+    )
+    assert issubclass(PitNormRulesError, ValueError)
+
+
+def test_the_declared_stint_norm_table_is_read_only() -> None:
+    """Neither the table, nor a season view, nor a declared row can be edited in place."""
+    assert not isinstance(PIT_NORM_RULES, dict)
+    table: Any = PIT_NORM_RULES
+    with pytest.raises(TypeError):
+        table[(DECLARED_NORM_SEASON, "MEDIUM")] = None
+    view: Any = pit_norm_rules(DECLARED_NORM_SEASON)
+    with pytest.raises(TypeError):
+        view["SOFT"] = None
+    norm = stint_norm(DECLARED_NORM_SEASON, "MEDIUM")
+    with pytest.raises(FrozenInstanceError):
+        norm.norm_laps = 1.0  # type: ignore[misc]

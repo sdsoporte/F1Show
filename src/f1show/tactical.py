@@ -32,9 +32,11 @@ import datetime as dt
 import math
 from bisect import bisect_left
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from enum import Enum
 from functools import cache
 from statistics import median
+from types import MappingProxyType
 from typing import cast
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
@@ -1064,6 +1066,174 @@ def analyze_qualifying_cutoffs(
     )
 
 
+# --- the declared per-season stint norms (F06d T1) ------------------------------------
+#
+# A pit window is projected from a *declared* stint length, never from a record, so these
+# numbers live here as estimates beside the motor and not in :mod:`f1show.standings`: that
+# module's discipline is for regulation datasets, and lodging an estimate among the rules
+# would dress it as one. The discipline is the same though - keyed by ``(season,
+# compound)``, one frozen row per key, a read-only table, and a refusing accessor that
+# names what *is* declared. The season is injected by the caller (``RECORDED_SEASON``
+# lives in :mod:`f1show.championship` and is never imported back), so no module here
+# decides which season a reading is about.
+#
+# **What backs these rows, measured once and written down.** The base is the recorded
+# 2024 race of session ``9617`` - the one whose stint corpus is complete: 43 stint
+# records on 20 drivers and not one null end lap - and inside it only the **opening**
+# stints, because the later ones are mostly right-censored at the race's last laps: 19 of
+# the 23 later stints end on the race's final lap, and none of those can be a stint
+# length a pit window is projected from. The other recorded 2024 race is deliberately
+# **not** merged into these medians: one declared row has to name the corpus that
+# produced it, and mixing two recordings would hide exactly that (it is the race whose
+# 1-lap stints the projection declares as a safety-car batch, never an input to a norm).
+#
+# **The declared criterion, stated rather than implied:** an opening stint of **fewer
+# than four laps** is excluded as an early-stop/DNF outlier. Two of the 20 openings are
+# that short - driver 44's lap-1 HARD stint (the genuine DNF) and driver 23's laps-1-3
+# MEDIUM stint (an early stop, not a retirement: 23 ran three stints to lap 55) - so the
+# raw openings are MEDIUM n=15 (3-32) and HARD n=5 (1-40), and the declared readings are
+# the two rows below. Stating both counts is the point: a reader sees how thin the base
+# is and which criterion produced it.
+#
+# **The norm is the derived median of the corroborating stints**, not a mean and not a
+# record: MEDIUM **n=14, 13-32 laps, median 25.5** and HARD **n=4, 27-40 laps, median
+# 37.5**. Half-lap medians are acceptable in this declaration because a median of an even
+# count is one; turning a declared norm into a lap number is a projection's own declared
+# rule, so no rounding is hidden here. ``min_laps``/``max_laps`` are the observed range
+# of those same stints and are declared as this table's **tolerance anchors** - how far a
+# projection may plausibly land from the norm - never as endpoints of the norm itself.
+#
+# Nothing in this table is read from a fixture, at import time or at runtime: the payloads
+# the motor is checked against supply the stints being projected, and every number below
+# was measured once and declared here. No venue, meeting or session constant appears, so
+# the same rows would describe any race of that season.
+
+
+class PitNormRulesError(ValueError):
+    """The declared stint-norm table does not state the norm a caller asked for.
+
+    Raised for an undeclared **season** and for an undeclared **compound**, and each
+    refusal names what *is* declared - the seasons and the compounds for an undeclared
+    season, the compounds of that season for an undeclared compound. There is no default
+    row, no fallback compound and no interpolation between declared rows: a norm nobody
+    measured is refused, because a fabricated stint length would become a fabricated pit
+    window. A :class:`ValueError`, so a caller that already handles declared-dataset
+    refusals needs no second handler.
+    """
+
+
+@dataclass(frozen=True)
+class StintNorm:
+    """One declared stint length for a compound, an **estimate** and not a record.
+
+    ``norm_laps`` is the derived median of the corroborating stints, and
+    ``corroborating_stints`` is how many stints that median rests on - carried so the
+    thinness of the base travels with the number instead of being inferred by a reader.
+    ``min_laps``/``max_laps`` are the observed range of those same stints, declared as the
+    tolerance anchors a projection spreads its window over; they bound the estimate, they
+    do not refine it.
+
+    ``season`` and ``compound`` repeat the row's key so a row is readable on its own.
+    """
+
+    season: int
+    compound: str
+    norm_laps: float
+    corroborating_stints: int
+    min_laps: int
+    max_laps: int
+
+
+#: The declared stint norms, keyed by ``(season, compound)``. Read-only: no caller can
+#: edit a row in place, and only 2024's MEDIUM and HARD are declared - the two compounds
+#: whose opening stints on the measured race corroborate a norm. SOFT was recorded once,
+#: which is no norm at all, so it is absent and refused rather than declared from n=1.
+PIT_NORM_RULES: Mapping[tuple[int, str], StintNorm] = MappingProxyType(
+    {
+        (2024, "MEDIUM"): StintNorm(
+            season=2024,
+            compound="MEDIUM",
+            norm_laps=25.5,
+            corroborating_stints=14,
+            min_laps=13,
+            max_laps=32,
+        ),
+        (2024, "HARD"): StintNorm(
+            season=2024,
+            compound="HARD",
+            norm_laps=37.5,
+            corroborating_stints=4,
+            min_laps=27,
+            max_laps=40,
+        ),
+    }
+)
+
+#: One read-only view per declared season, built once from the table so a caller reads a
+#: season's rows as a mapping and never a mutable copy of them.
+_PIT_NORMS_BY_SEASON: Mapping[int, Mapping[str, StintNorm]] = MappingProxyType(
+    {
+        season: MappingProxyType(
+            {
+                compound: norm
+                for (declared_season, compound), norm in PIT_NORM_RULES.items()
+                if declared_season == season
+            }
+        )
+        for season in sorted({declared for declared, _ in PIT_NORM_RULES})
+    }
+)
+
+
+def _declared_norm_seasons() -> list[int]:
+    """Every season the declared table states a norm for, in a stable order."""
+    return sorted(_PIT_NORMS_BY_SEASON)
+
+
+def _declared_norm_compounds(season: int | None = None) -> list[str]:
+    """Every declared compound, or every compound one season declares."""
+    return sorted(
+        compound
+        for declared_season, compound in PIT_NORM_RULES
+        if season is None or declared_season == season
+    )
+
+
+def pit_norm_rules(season: int) -> Mapping[str, StintNorm]:
+    """The declared stint norms of ``season``, keyed by compound and read-only.
+
+    An undeclared season is refused, and the refusal names both what the table declares:
+    the seasons, and the compounds those seasons state. Nothing falls back to another
+    season or to a default compound.
+    """
+    norms = _PIT_NORMS_BY_SEASON.get(season)
+    if norms is None:
+        raise PitNormRulesError(
+            f"no declared stint norms for season {season!r}; "
+            f"declared stint-norm seasons: {_declared_norm_seasons()}; "
+            f"declared stint-norm compounds: {_declared_norm_compounds()}"
+        )
+    return norms
+
+
+def stint_norm(season: int, compound: str) -> StintNorm:
+    """The declared norm for ``season`` and ``compound``, refused if none is declared.
+
+    ``compound`` is the source's own literal (``"MEDIUM"``, ``"HARD"``), so a recorded
+    stint reaches the declaration with no mapping in between. An undeclared season is
+    refused first, exactly as :func:`pit_norm_rules` refuses it; an undeclared compound
+    for a declared season is refused next, naming the compounds that season declares.
+    """
+    norm = pit_norm_rules(season).get(compound)
+    if norm is None:
+        raise PitNormRulesError(
+            f"no declared stint norm for season {season!r} and compound {compound!r}; "
+            f"declared stint-norm compounds for {season}: "
+            f"{_declared_norm_compounds(season)}"
+        )
+    return norm
+
+
 class TacticalSource:
     """The booth's per-moment tactical context, built once from recorded payloads.
     The source is the F06a motor viewed at a moving cutoff: ``context``
@@ -1221,6 +1391,8 @@ def render_tactical(
 
 
 __all__ = [
+    "PIT_NORM_RULES",
+    "PitNormRulesError",
     "QualifyingBoundarySource",
     "QualifyingCutoffReading",
     "QualifyingPhaseRule",
@@ -1228,6 +1400,7 @@ __all__ = [
     "QualifyingStanding",
     "QualifyingStandingRow",
     "SourceRef",
+    "StintNorm",
     "TacticalAlert",
     "TacticalKind",
     "TacticalSettings",
@@ -1235,5 +1408,7 @@ __all__ = [
     "analyze_qualifying_cutoffs",
     "analyze_tactics",
     "build_tactical_source",
+    "pit_norm_rules",
     "render_tactical",
+    "stint_norm",
 ]
