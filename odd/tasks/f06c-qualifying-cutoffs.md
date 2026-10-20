@@ -103,7 +103,9 @@ separate user decision taken at the end of the unit.
   snapshot are not T4's** — see L15. Route: parent, then verified. Commit: `a359650` — **71**
   additions (2 + 15 + 15 + 39), register guard **19 passed**, tree clean.
 - **T5** (all): independent verification, native review under RDD, local integration, and the
-  delivery decision put to the user. Route: parent. Commit: pending.
+  delivery decision put to the user. Route: parent. Commit: the chain **#74/#75/#76/#77** merged
+  into `feat/f06c-chain` as `0c7c212`/`e394681`/`4546bf8`/`d55cc69`, tracker **PR #78** merged as
+  **`a5a3f75`** — see L17.
 
 ## Delivery slices
 
@@ -296,3 +298,21 @@ never carried forward.
   inserting `-->` after the measured `full file: … bytes; sha256: …. ` needle — and the actual lesson:
   **verification was moved before the write**, each observation's body proven equal to its expected
   slice *pre*-write, so a bad rebuild can no longer land at all.
+- **L17** (2026-10-20): **delivery record.** The user ordered the merge ("mergeá"). The four child
+  PRs merged as merge commits — **#74**, **#75**, **#77**, and **#76 retargeted** — and the tracker
+  **PR #78** merged `feat/f06c-chain` into `main` as **`a5a3f75`**, with all four checks green on
+  every PR and the eight F06c commits verified as ancestors of `main`. Two incidents are part of
+  the record rather than smoothed away: (1) my merge loop ran 77→76→75→74 **without waiting for
+  CI between merges**, so #76's head advancing under it made GitHub refuse it and the cascade
+  fragmented — #75 and #74 landed before #76 could; the repair was to **retarget #76 to the
+  tracker** (its diff became exactly slice 3+4 against the merged prefix) via **REST PATCH**,
+  because `gh pr edit` hit the known gh 2.46 `projectCards` preflight bug already recorded in
+  F15 — no history rewritten, no branch recreated. (2) The native review of the **full-range**
+  target `sha256:95100138…` had been terminally refused by the provider
+  (`lens_context_budget_exceeded`, fixtures in evidence, no authority created); the reduced
+  authored-range candidate was reviewed and **approved** (`review-dbb459b29d828531`, medium, four
+  lenses, six informational findings, authority **burned**), so the delivery went out with the
+  capture standing on its measurement per the F09j precedent. **This snapshot commit is the unit's
+  last artifact**: the PROJECT-STATE row and snapshot name `a5a3f75`, and F06's remaining tiers are
+  now **pit-window candidates** and the telemetry source decision. Still open for F06: those two,
+  plus Redis/F05.
