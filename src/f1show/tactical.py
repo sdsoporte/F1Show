@@ -1,19 +1,22 @@
 """Deterministic tactical analysis over recorded OpenF1 payloads (F06a, F06c).
 
-``analyze_tactics`` is the single entry point: it takes the raw recorded
-payloads of one session and returns a total-ordered tuple of alerts, each
-traceable to the exact source record that produced it. It is pure: no network,
-no clock, no randomness, and identical payloads always produce an identical
-tuple.
+``analyze_tactics`` is one of this module's three pure entry points: it takes
+the raw recorded payloads of one session and returns a total-ordered tuple of
+alerts, each traceable to the exact source record that produced it. It is pure:
+no network, no clock, no randomness, and identical payloads always produce an
+identical tuple.
 
-**Scope of this unit (F06a, and F06c for the qualifying cutoff motor).**
-Recorded-corpus-only analysis of gaps, freshness, pace and stint age, plus
-qualifying cutoffs from :func:`analyze_qualifying_cutoffs`: the second pure
-entry point this module carries, which reads the declared per-season rules in
-:mod:`f1show.standings` and no constant of any venue. Telemetry
-(car/location/weather), FastF1, Redis delivery, wiring either motor into the
-booth or the run path, and audio are out of scope; the booth and the run path
-are deliberately untouched.
+**Scope of this unit (F06a, F06c for the qualifying cutoff motor, and F06d for
+the pit-window motor).** Recorded-corpus-only analysis of gaps, freshness, pace
+and stint age, plus qualifying cutoffs from
+:func:`analyze_qualifying_cutoffs` and pit-window candidates from
+:func:`analyze_pit_windows`: the second and third pure entry points this module
+carries. The cutoff motor reads the declared per-season rules in
+:mod:`f1show.standings`; the pit-window motor reads the declared stint norms
+that live beside it in this module, and neither reads a constant of any venue.
+Telemetry (car/location/weather), FastF1, Redis delivery, wiring any motor into
+the booth or the run path, and audio are out of scope; the booth and the run
+path are deliberately untouched.
 
 **The motor consumes** :func:`f1show.collector.classify_gap` -- the F04
 handoff. Gap values are classified, never cast: ``+1 LAP`` stays a lap count,
@@ -23,7 +26,10 @@ handoff. Gap values are classified, never cast: ``+1 LAP`` stays a lap count,
 **Unknowns stay unknown.** An unreadable timestamp, a null gap or a missing
 family is declared, never coerced. No strategy claim is made: tyre life and
 pit loss are estimates by construction, and no record, best-ever or circuit
-comparison exists.
+comparison exists. The pit-window norms are the same kind of thing: declared
+estimates derived from corroborated stints, not records, so a projected stop
+lap is an estimate too and no pit cost is inferred from the durations the
+source measures.
 """
 
 from __future__ import annotations
@@ -31,10 +37,13 @@ from __future__ import annotations
 import datetime as dt
 import math
 from bisect import bisect_left
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from enum import Enum
 from functools import cache
 from statistics import median
+from types import MappingProxyType
 from typing import cast
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
@@ -1064,6 +1073,731 @@ def analyze_qualifying_cutoffs(
     )
 
 
+# --- the declared per-season stint norms (F06d T1) ------------------------------------
+#
+# A pit window is projected from a *declared* stint length, never from a record, so these
+# numbers live here as estimates beside the motor and not in :mod:`f1show.standings`: that
+# module's discipline is for regulation datasets, and lodging an estimate among the rules
+# would dress it as one. The discipline is the same though - keyed by ``(season,
+# compound)``, one frozen row per key, a read-only table, and a refusing accessor that
+# names what *is* declared. The season is injected by the caller (``RECORDED_SEASON``
+# lives in :mod:`f1show.championship` and is never imported back), so no module here
+# decides which season a reading is about.
+#
+# **What backs these rows, measured once and written down.** The base is the recorded
+# 2024 race of session ``9617`` - the one whose stint corpus is complete: 43 stint
+# records on 20 drivers and not one null end lap - and inside it only the **opening**
+# stints, because the later ones are mostly right-censored at the race's last laps: 19 of
+# the 23 later stints end on the race's final lap, and none of those can be a stint
+# length a pit window is projected from. The other recorded 2024 race is deliberately
+# **not** merged into these medians: one declared row has to name the corpus that
+# produced it, and mixing two recordings would hide exactly that (it is the race whose
+# 1-lap stints the projection declares as a safety-car batch, never an input to a norm).
+#
+# **The declared criterion, stated rather than implied:** an opening stint of **fewer
+# than four laps** is excluded as an early-stop/DNF outlier. Two of the 20 openings are
+# that short - driver 44's lap-1 HARD stint (the genuine DNF) and driver 23's laps-1-3
+# MEDIUM stint (an early stop, not a retirement: 23 ran three stints to lap 55) - so the
+# raw openings are MEDIUM n=15 (3-32) and HARD n=5 (1-40), and the declared readings are
+# the two rows below. Stating both counts is the point: a reader sees how thin the base
+# is and which criterion produced it.
+#
+# **The norm is the derived median of the corroborating stints**, not a mean and not a
+# record: MEDIUM **n=14, 13-32 laps, median 25.5** and HARD **n=4, 27-40 laps, median
+# 37.5**. Half-lap medians are acceptable in this declaration because a median of an even
+# count is one; turning a declared norm into a lap number is a projection's own declared
+# rule, so no rounding is hidden here. ``min_laps``/``max_laps`` are the observed range
+# of those same stints and are declared as this table's **tolerance anchors** - how far a
+# projection may plausibly land from the norm - never as endpoints of the norm itself.
+#
+# Nothing in this table is read from a fixture, at import time or at runtime: the payloads
+# the motor is checked against supply the stints being projected, and every number below
+# was measured once and declared here. No venue, meeting or session constant appears, so
+# the same rows would describe any race of that season.
+
+
+class PitNormRulesError(ValueError):
+    """The declared stint-norm table does not state the norm a caller asked for.
+
+    Raised for an undeclared **season** and for an undeclared **compound**, and each
+    refusal names what *is* declared - the seasons and the compounds for an undeclared
+    season, the compounds of that season for an undeclared compound. There is no default
+    row, no fallback compound and no interpolation between declared rows: a norm nobody
+    measured is refused, because a fabricated stint length would become a fabricated pit
+    window. A :class:`ValueError`, so a caller that already handles declared-dataset
+    refusals needs no second handler.
+    """
+
+
+@dataclass(frozen=True)
+class StintNorm:
+    """One declared stint length for a compound, an **estimate** and not a record.
+
+    ``norm_laps`` is the derived median of the corroborating stints, and
+    ``corroborating_stints`` is how many stints that median rests on - carried so the
+    thinness of the base travels with the number instead of being inferred by a reader.
+    ``min_laps``/``max_laps`` are the observed range of those same stints, declared as the
+    tolerance anchors a projection spreads its window over; they bound the estimate, they
+    do not refine it.
+
+    ``season`` and ``compound`` repeat the row's key so a row is readable on its own.
+    """
+
+    season: int
+    compound: str
+    norm_laps: float
+    corroborating_stints: int
+    min_laps: int
+    max_laps: int
+
+
+#: The declared stint norms, keyed by ``(season, compound)``. Read-only: no caller can
+#: edit a row in place, and only 2024's MEDIUM and HARD are declared - the two compounds
+#: whose opening stints on the measured race corroborate a norm. SOFT was recorded once,
+#: which is no norm at all, so it is absent and refused rather than declared from n=1.
+PIT_NORM_RULES: Mapping[tuple[int, str], StintNorm] = MappingProxyType(
+    {
+        (2024, "MEDIUM"): StintNorm(
+            season=2024,
+            compound="MEDIUM",
+            norm_laps=25.5,
+            corroborating_stints=14,
+            min_laps=13,
+            max_laps=32,
+        ),
+        (2024, "HARD"): StintNorm(
+            season=2024,
+            compound="HARD",
+            norm_laps=37.5,
+            corroborating_stints=4,
+            min_laps=27,
+            max_laps=40,
+        ),
+    }
+)
+
+#: One read-only view per declared season, built once from the table so a caller reads a
+#: season's rows as a mapping and never a mutable copy of them.
+_PIT_NORMS_BY_SEASON: Mapping[int, Mapping[str, StintNorm]] = MappingProxyType(
+    {
+        season: MappingProxyType(
+            {
+                compound: norm
+                for (declared_season, compound), norm in PIT_NORM_RULES.items()
+                if declared_season == season
+            }
+        )
+        for season in sorted({declared for declared, _ in PIT_NORM_RULES})
+    }
+)
+
+
+def _declared_norm_seasons() -> list[int]:
+    """Every season the declared table states a norm for, in a stable order."""
+    return sorted(_PIT_NORMS_BY_SEASON)
+
+
+def _declared_norm_compounds(season: int | None = None) -> list[str]:
+    """Every declared compound, or every compound one season declares."""
+    return sorted(
+        compound
+        for declared_season, compound in PIT_NORM_RULES
+        if season is None or declared_season == season
+    )
+
+
+def pit_norm_rules(season: int) -> Mapping[str, StintNorm]:
+    """The declared stint norms of ``season``, keyed by compound and read-only.
+
+    An undeclared season is refused, and the refusal names both what the table declares:
+    the seasons, and the compounds those seasons state. Nothing falls back to another
+    season or to a default compound.
+    """
+    norms = _PIT_NORMS_BY_SEASON.get(season)
+    if norms is None:
+        raise PitNormRulesError(
+            f"no declared stint norms for season {season!r}; "
+            f"declared stint-norm seasons: {_declared_norm_seasons()}; "
+            f"declared stint-norm compounds: {_declared_norm_compounds()}"
+        )
+    return norms
+
+
+def stint_norm(season: int, compound: str) -> StintNorm:
+    """The declared norm for ``season`` and ``compound``, refused if none is declared.
+
+    ``compound`` is the source's own literal (``"MEDIUM"``, ``"HARD"``), so a recorded
+    stint reaches the declaration with no mapping in between. An undeclared season is
+    refused first, exactly as :func:`pit_norm_rules` refuses it; an undeclared compound
+    for a declared season is refused next, naming the compounds that season declares.
+    """
+    norm = pit_norm_rules(season).get(compound)
+    if norm is None:
+        raise PitNormRulesError(
+            f"no declared stint norm for season {season!r} and compound {compound!r}; "
+            f"declared stint-norm compounds for {season}: "
+            f"{_declared_norm_compounds(season)}"
+        )
+    return norm
+
+
+# --- F06d: the pit-window motor --------------------------------------------------------
+#
+# The third pure entry point of this module. Per driver, it projects when the next stop
+# plausibly falls: a declared stint length added to the current stint's own recorded start,
+# with the declared norm's observed range spread around it as the tolerance. Every number
+# it reports is either declared (the stint-norm table above) or measured (the stint and lap
+# rows its ``SourceRef``s name); what neither states is a declared absence.
+#
+# **The decisions this motor takes, stated rather than implied.**
+#
+# * **The race gate reads the payloads' own ``sessions`` family**, and reads it before any
+#   other family. Not a caller parameter: a caller could claim a session type the recording
+#   does not state, and the whole point of the gate is that a pit window is a race concept
+#   (qualifying's ``pit`` family supports event readings only). A session whose type no row
+#   states, and a session two rows describe differently, are refusals too - assuming the
+#   supported case is exactly the coercion this module forbids elsewhere.
+# * **An instant becomes a lap through the ``laps`` family**, because ``stints`` carries no
+#   timestamp at all. A driver's lap at the instant is its highest ``lap_number`` with a
+#   readable ``date_start`` at or before it; the current stint is its highest
+#   ``stint_number`` that has started at or before that lap and whose recorded end, when the
+#   source states one, is not behind it. A lap with no readable instant is counted, never
+#   placed; a null ``lap_end`` is an **open** stint and stays current to that lap.
+# * **The declared norm becomes a lap number by ceiling**, so the half-lap medians of the
+#   table above project whole laps and no half lap is ever reported as a stop lap.
+# * **Single-lap stints are declared as a batch, never averaged into anything.** A lone
+#   one-lap stint is an early stop or a retirement; two or more different drivers starting
+#   one-lap stints on the same lap, after the first lap, is what a caution pit cycle looks
+#   like in the record (a first-lap stint is a start, never a cycle). The batch is reported
+#   beside the projections and is not an input to any norm, because the norms are declared,
+#   not computed here.
+# * **Durations are reported, never spent.** The reading states which duration fields the
+#   session's ``pit`` family supports, as counted context. No pit-loss or cost estimate is
+#   derived from them: an estimate dressed as a measurement is the claim this module refuses
+#   to make, so what the source measures is stated and nothing is inferred from it.
+
+#: The families the pit-window motor reads beside the laps and stints it shares.
+_SESSIONS = "sessions"
+_PIT = "pit"
+
+#: The one session type a pit window can be projected for, and the only one accepted. No
+#: venue, meeting or capture constant appears: the gate names a session kind, nothing more.
+_SUPPORTED_SESSION_TYPES = ("Race",)
+
+#: The first lap a caution batch may begin on. A single-lap *opening* stint is an early
+#: stop or a retirement, never a pit cycle, so lap 1 is deliberately outside the batch rule.
+_BATCH_FIRST_LAP = 2
+
+#: The declared absences, verbatim in the result, in the fixed message style the cutoff
+#: motor already uses: each names what is missing and what the motor therefore cannot claim.
+_ABSENT_PIT_WINDOW_STINTS = (
+    "the stints family is absent from these payloads: no driver has a current stint, so "
+    "no stop lap is projected"
+)
+_ABSENT_PIT_WINDOW_LAPS = (
+    "the laps family is absent from these payloads: no driver's current lap is known and "
+    "every stop lap is declared absent"
+)
+_ABSENT_PIT_WINDOW_PIT = (
+    "the pit family is absent from these payloads: no duration field is known and no pit "
+    "cost is claimed"
+)
+
+
+class PitWindowRefusal(ValueError):
+    """No pit window is projected for this session, and the refusal names what is supported.
+
+    Raised when the payloads' ``sessions`` family states a session type other than
+    ``Race``, when it states none at all, and when two rows contradict each other - the
+    last two because an unstated or disputed kind cannot support a race-only reading, and
+    choosing between the candidates would be the guess this module refuses to make. A
+    :class:`ValueError`, so a caller that already handles this module's declared-dataset
+    refusals needs no second handler.
+    """
+
+
+class PitWindowStatus(str, Enum):
+    """What one driver's row states, and the fixed order in which it is decided.
+
+    ``PROJECTED`` is the only status carrying numbers. ``NO_CURRENT_LAP`` is declared first
+    because nothing can be projected from an instant the laps family cannot place;
+    ``NO_CURRENT_STINT`` follows (the driver has stints but none is current at that lap);
+    then ``NO_COMPOUND`` (the source states no compound, or its own ``UNKNOWN`` spelling)
+    and ``NO_DECLARED_NORM`` (the compound is stated but no norm is declared for it).
+    """
+
+    PROJECTED = "projected"
+    NO_CURRENT_LAP = "no_current_lap"
+    NO_CURRENT_STINT = "no_current_stint"
+    NO_COMPOUND = "no_compound"
+    NO_DECLARED_NORM = "no_declared_norm"
+
+
+class PitWindowProjection(_Deterministic):
+    """One driver's projected stop lap - an **estimate** - or the reason it has none.
+
+    ``estimate`` is ``True`` exactly when ``status`` is ``PROJECTED``, and it is the label
+    the result carries so no reader has to infer that a projection is an assumption. The
+    reported facts behind a projection travel with it: the stint's own ``lap_start``, the
+    declared ``norm_laps`` and ``corroborating_stints`` (how thin the base is), the window's
+    declared anchors, and the instant's ``current_lap`` that made the stint current.
+
+    ``sources`` names the ``stints`` row and the ``laps`` row a projection was built from.
+    A declared row cites nothing, because nothing was measured for that driver at that
+    instant: the absence is the fact, and a number with no source would be the invention.
+    """
+
+    driver_number: int
+    status: PitWindowStatus
+    estimate: bool = False
+    compound: str | None = None
+    stint_number: int | None = None
+    current_lap: int | None = Field(default=None, ge=1)
+    lap_start: int | None = Field(default=None, ge=1)
+    norm_laps: float | None = None
+    corroborating_stints: int | None = Field(default=None, ge=1)
+    projected_stop_lap: int | None = Field(default=None, ge=1)
+    window_start_lap: int | None = Field(default=None, ge=1)
+    window_end_lap: int | None = Field(default=None, ge=1)
+    sources: tuple[SourceRef, ...] = ()
+
+
+class PitDurationSupport(_Deterministic):
+    """Which pit-duration fields the session's ``pit`` family actually states.
+
+    Counted context, and nothing else: ``lane_duration``/``pit_duration`` are the declared
+    **primary** time cost (present on every recorded stop of both races), and
+    ``stop_duration`` is the stationary component **when populated**, so the count of stops
+    that state it - and the count that do not - travels with the reading. "Present" means
+    the field is not null; the values themselves are never read, so no cost can be derived
+    here. 9655's missing stop durations are a source property, not a defect, and a null is
+    counted rather than imputed.
+    """
+
+    records: int = Field(ge=0)
+    lane_duration_present: int = Field(ge=0)
+    pit_duration_present: int = Field(ge=0)
+    stop_duration_present: int = Field(ge=0)
+    stop_duration_absent: int = Field(ge=0)
+    primary_fields: tuple[str, ...] = ("lane_duration", "pit_duration")
+
+
+class PitOneLapBatch(_Deterministic):
+    """A declared batch of single-lap stints: a caution pit cycle, never a norm input.
+
+    Declared only when two or more **different drivers** start a single-lap stint on the
+    same lap after the first lap, which is what a safety-car pit cycle looks like in the
+    record. ``lap_starts`` lists those laps, ``stint_count`` counts the stints on them (never
+    the drivers: one driver may have two), ``driver_numbers`` names them, and ``sources``
+    cites every stint row the batch rests on so the declaration is checkable against the
+    payload. No batch is ever read into a stint norm: the norms are declared, and a one-lap
+    stint is a pit cycle rather than a tyre life.
+    """
+
+    lap_starts: tuple[int, ...] = Field(min_length=1)
+    stint_count: int = Field(ge=2)
+    driver_numbers: tuple[int, ...]
+    sources: tuple[SourceRef, ...] = ()
+
+
+class PitWindowReading(_Deterministic):
+    """The pit-window candidates of one recorded race at one instant.
+
+    ``projections`` holds one row per driver the ``stints`` family mentions, in driver-number
+    order, so a driver with nothing to project is *declared* instead of dropped;
+    ``session_type`` is the measured type the race gate accepted. ``durations`` states what
+    the ``pit`` family supports and ``one_lap_batch`` declares a caution cycle when one was
+    recorded, beside ``one_lap_stints`` (every single-lap stint seen, batch members or not).
+
+    Every exclusion is counted: ``laps_unplaceable`` (lap rows with no readable instant, or no
+    integer driver and lap number), ``stints_unplaceable`` (stint rows this motor cannot
+    locate: no integer driver, stint number or ``lap_start``), and one count per declared row
+    status. ``absences`` names every family the payloads do not carry, in the order this
+    motor reads them. Nothing here reads a clock, a file, the network or a random source, so
+    identical payloads and an identical instant produce an identical reading.
+    """
+
+    season: int
+    session_key: int
+    session_type: str
+    as_of: AwareDatetime
+    durations: PitDurationSupport
+    projections: tuple[PitWindowProjection, ...] = ()
+    one_lap_batch: PitOneLapBatch | None = None
+    one_lap_stints: int = Field(default=0, ge=0)
+    absences: tuple[str, ...] = ()
+    laps_unplaceable: int = Field(default=0, ge=0)
+    stints_unplaceable: int = Field(default=0, ge=0)
+    drivers_without_current_lap: int = Field(default=0, ge=0)
+    drivers_without_current_stint: int = Field(default=0, ge=0)
+    drivers_without_compound: int = Field(default=0, ge=0)
+    drivers_without_norm: int = Field(default=0, ge=0)
+
+
+def _as_counted(value: object) -> int | None:
+    """A recorded count of laps or a driver number, or ``None`` when none is stated.
+
+    ``bool`` is an ``int`` in Python, so it is refused explicitly: a recorded ``true`` is
+    never lap 1 and never driver 1.
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
+def _session_type(session_key: int, sessions: Sequence[Mapping[str, object]]) -> str:
+    """The session type the ``sessions`` family states, refused unless it is a race.
+
+    Read before any other family, so a session that cannot produce a pit window is refused
+    before a projection payload is consulted. An unstated type and two contradictory rows
+    are refusals, not resolutions: the first has no type to support a window and the second
+    has no single one, and picking would be the guess this module refuses to make.
+    """
+    observed: set[str] = set()
+    for record in sessions:
+        if record.get("session_key") != session_key:
+            continue
+        value = record.get("session_type")
+        if isinstance(value, str) and value:
+            observed.add(value)
+    stated = sorted(observed)
+    if len(stated) > 1:
+        raise PitWindowRefusal(
+            f"the sessions family states more than one session type for session "
+            f"{session_key}: {stated}; pit windows are a race-only reading, and the "
+            f"supported session types are {list(_SUPPORTED_SESSION_TYPES)}"
+        )
+    if not stated:
+        raise PitWindowRefusal(
+            f"the sessions family does not state the session type of session "
+            f"{session_key}; pit windows are a race-only reading, and the supported "
+            f"session types are {list(_SUPPORTED_SESSION_TYPES)}"
+        )
+    if stated[0] not in _SUPPORTED_SESSION_TYPES:
+        raise PitWindowRefusal(
+            f"pit windows are a race-only reading: session {session_key} is a "
+            f"{stated[0]!r} session, and the supported session types are "
+            f"{list(_SUPPORTED_SESSION_TYPES)}"
+        )
+    return stated[0]
+
+
+def _current_lap_of_each_driver(
+    lap_records: Sequence[Mapping[str, object]],
+    session_key: int,
+    as_of: dt.datetime,
+) -> tuple[dict[int, tuple[int, int, dt.datetime]], int]:
+    """Each driver's lap at the instant, plus the count of laps no instant can place.
+
+    ``stints`` carries no timestamp, so ``date_start`` on the ``laps`` rows is the only way
+    an instant maps to a lap. A row without a readable instant - or without an integer
+    driver and lap number - cannot be placed at all: it is counted and never coerced into
+    lap 1 of the session. Among the placeable rows the highest lap number wins, and rows
+    sharing it break to the earliest recorded one, so the choice is total.
+    """
+    current: dict[int, tuple[int, int, dt.datetime]] = {}
+    unplaceable = 0
+    for index, record in enumerate(lap_records):
+        if record.get("session_key") != session_key:
+            continue
+        driver = _as_counted(record.get("driver_number"))
+        lap = _as_counted(record.get("lap_number"))
+        when = _as_instant(record.get("date_start"))
+        if driver is None or lap is None or when is None:
+            unplaceable += 1
+            continue
+        if when > as_of:
+            continue
+        known = current.get(driver)
+        if known is None or (lap, -index) > (known[0], -known[1]):
+            current[driver] = (lap, index, when)
+    return current, unplaceable
+
+
+def _current_stints(
+    stint_records: Sequence[Mapping[str, object]],
+    session_key: int,
+    current_laps: Mapping[int, tuple[int, int, dt.datetime]],
+) -> tuple[dict[int, tuple[int, int, Mapping[str, object]]], set[int], int]:
+    """Each driver's current stint at the instant, the drivers seen, and the unplaceable.
+
+    A stint is current by its recorded lap window and the driver's lap at the instant: it
+    must have started at or before that lap, and its recorded ``lap_end`` - when the source
+    states one - must not be behind it, so a stint whose end the source already recorded is
+    never presented as still running. A null ``lap_end`` is an *open* stint and stays
+    current. The highest ``stint_number`` wins, and rows sharing it break to the earliest
+    recorded one, exactly as the tyre-age motor picks the latest stint.
+
+    Every driver the family mentions is returned even when no stint qualifies, so a driver
+    with nothing to project gets a declared row rather than a silent drop. A row without an
+    integer driver, stint number or ``lap_start`` cannot be located at all: it is counted in
+    the third element, never coerced.
+    """
+    current: dict[int, tuple[int, int, Mapping[str, object]]] = {}
+    mentioned: set[int] = set()
+    unplaceable = 0
+    for index, record in enumerate(stint_records):
+        if record.get("session_key") != session_key:
+            continue
+        driver = _as_counted(record.get("driver_number"))
+        if driver is None:
+            # No driver to name: the record cannot become a declared row either.
+            unplaceable += 1
+            continue
+        mentioned.add(driver)
+        stint = _as_counted(record.get("stint_number"))
+        lap_start = _as_counted(record.get("lap_start"))
+        if stint is None or lap_start is None:
+            unplaceable += 1
+            continue
+        placed = current_laps.get(driver)
+        if placed is None:
+            continue
+        lap = placed[0]
+        if lap_start > lap:
+            # The stint has not started yet at this instant.
+            continue
+        lap_end = _as_counted(record.get("lap_end"))
+        if lap_end is not None and lap_end < lap:
+            # The source already ended this stint before the instant's lap.
+            continue
+        known = current.get(driver)
+        if known is None or (stint, -index) > (known[0], -known[1]):
+            current[driver] = (stint, index, record)
+    return current, mentioned, unplaceable
+
+
+def _projection(
+    driver: int,
+    stint: tuple[int, int, Mapping[str, object]] | None,
+    current_laps: Mapping[int, tuple[int, int, dt.datetime]],
+    norms: Mapping[str, StintNorm],
+) -> PitWindowProjection:
+    """One driver's projected stop lap, or the declaration of why there is none.
+
+    The statuses are decided in :class:`PitWindowStatus`'s declared order; ``norms`` is the
+    already-refused declared table, so an undeclared compound is a declared row here and a
+    fabricated norm is impossible. A declared row still carries the facts that *were*
+    readable - the instant's lap, the stint's number and start, the source's own compound
+    spelling - and carries no projection number at all.
+    """
+    placed = current_laps.get(driver)
+    if placed is None:
+        return PitWindowProjection(
+            driver_number=driver, status=PitWindowStatus.NO_CURRENT_LAP
+        )
+    lap = placed[0]
+    if stint is None:
+        return PitWindowProjection(
+            driver_number=driver,
+            status=PitWindowStatus.NO_CURRENT_STINT,
+            current_lap=lap,
+        )
+    stint_number, stint_index, record = stint
+    compound = record.get("compound")
+    stated = compound if isinstance(compound, str) else None
+    # A located stint always carries an integer start: that is how it was located.
+    lap_start = cast(int, record.get("lap_start"))
+    if stated is None or stated == "UNKNOWN":
+        return PitWindowProjection(
+            driver_number=driver,
+            status=PitWindowStatus.NO_COMPOUND,
+            compound=stated,
+            stint_number=stint_number,
+            current_lap=lap,
+            lap_start=lap_start,
+        )
+    norm = norms.get(stated)
+    if norm is None:
+        return PitWindowProjection(
+            driver_number=driver,
+            status=PitWindowStatus.NO_DECLARED_NORM,
+            compound=stated,
+            stint_number=stint_number,
+            current_lap=lap,
+            lap_start=lap_start,
+        )
+    return PitWindowProjection(
+        driver_number=driver,
+        status=PitWindowStatus.PROJECTED,
+        estimate=True,
+        compound=stated,
+        stint_number=stint_number,
+        current_lap=lap,
+        lap_start=lap_start,
+        norm_laps=norm.norm_laps,
+        corroborating_stints=norm.corroborating_stints,
+        projected_stop_lap=lap_start + math.ceil(norm.norm_laps),
+        window_start_lap=lap_start + norm.min_laps,
+        window_end_lap=lap_start + norm.max_laps,
+        sources=(
+            SourceRef(family=_STINTS, record_index=stint_index, driver_number=driver),
+            SourceRef(
+                family=_LAPS,
+                record_index=placed[1],
+                driver_number=driver,
+                timestamp=placed[2],
+            ),
+        ),
+    )
+
+
+def _duration_support(
+    pit_records: Sequence[Mapping[str, object]], session_key: int
+) -> PitDurationSupport:
+    """Which duration fields the session's own ``pit`` family states, counted.
+
+    Present means the field is not null; the values are not read, so no cost can be derived
+    from them here. ``lane_duration``/``pit_duration`` are the declared primary pair because
+    they are the only two complete on both recorded races, and ``stop_duration`` is the
+    stationary component, reported only as the count of stops that state it and of those
+    that do not.
+    """
+    records = lane = pit = stop = 0
+    for record in pit_records:
+        if record.get("session_key") != session_key:
+            continue
+        records += 1
+        if record.get("lane_duration") is not None:
+            lane += 1
+        if record.get("pit_duration") is not None:
+            pit += 1
+        if record.get("stop_duration") is not None:
+            stop += 1
+    return PitDurationSupport(
+        records=records,
+        lane_duration_present=lane,
+        pit_duration_present=pit,
+        stop_duration_present=stop,
+        stop_duration_absent=records - stop,
+    )
+
+
+def _one_lap_batch(
+    stint_records: Sequence[Mapping[str, object]], session_key: int
+) -> tuple[int, PitOneLapBatch | None]:
+    """Count the single-lap stints, and declare a batch where drivers share a lap.
+
+    A single-lap stint is a pit cycle seen from one car: on its own it is an early stop or a
+    retirement, so a lone one is counted and no batch is declared. A batch is declared when
+    two or more different drivers start a single-lap stint on the same lap, on or after
+    :data:`_BATCH_FIRST_LAP` - a first-lap stint is a start, not a cycle; the batch is then
+    reported beside the projections as declared context and is never an input to a norm.
+    """
+    by_lap: dict[int, list[tuple[int, int]]] = {}
+    total = 0
+    for index, record in enumerate(stint_records):
+        if record.get("session_key") != session_key:
+            continue
+        driver = _as_counted(record.get("driver_number"))
+        lap_start = _as_counted(record.get("lap_start"))
+        lap_end = _as_counted(record.get("lap_end"))
+        if driver is None or lap_start is None or lap_end != lap_start:
+            continue
+        total += 1
+        if lap_start < _BATCH_FIRST_LAP:
+            # A first-lap stint is a start, never a pit cycle: no batch can begin there.
+            continue
+        by_lap.setdefault(lap_start, []).append((index, driver))
+    batch_laps = sorted(
+        lap for lap, members in by_lap.items() if len({drv for _, drv in members}) > 1
+    )
+    if not batch_laps:
+        return total, None
+    members = [member for lap in batch_laps for member in by_lap[lap]]
+    return total, PitOneLapBatch(
+        lap_starts=tuple(batch_laps),
+        stint_count=len(members),
+        driver_numbers=tuple(sorted({driver for _, driver in members})),
+        sources=tuple(
+            SourceRef(family=_STINTS, record_index=index, driver_number=driver)
+            for index, driver in members
+        ),
+    )
+
+
+def analyze_pit_windows(
+    session_key: int,
+    season: int,
+    payloads: Mapping[str, Sequence[Mapping[str, object]]],
+    as_of: dt.datetime,
+) -> PitWindowReading:
+    """Project each driver's next pit stop at one instant of one recorded race.
+
+    ``payloads`` maps a family name to its recorded records, exactly like
+    :func:`f1show.collector.collect_session_events`. Two refusals come first, before a
+    projection payload is read: the payloads' own ``sessions`` family must state that this
+    session is a ``Race`` (a pit window is a race concept, and a qualifying capture can only
+    ever support an event reading), and the declared stint-norm table must state a row for
+    ``season`` - refused by :func:`pit_norm_rules`, which names the seasons and compounds
+    that *are* declared. ``season`` is injected by the caller, never inferred here.
+
+    **The declared integer rule.** A norm is a median over stints and may be a half lap, so
+    the projection converts it to a lap number by **ceiling**:
+    ``projected_stop_lap = lap_start + ceil(norm_laps)``. A tyre whose declared life ends at
+    25.5 laps is replaced on the following lap and never a half lap earlier, so MEDIUM's
+    25.5 projects 26 laps of life and HARD's 37.5 projects 38, and no half lap is ever
+    reported as a stop lap. The window around the projection is the declared row's observed
+    range as a tolerance measured from the stint's own start - ``lap_start + min_laps`` to
+    ``lap_start + max_laps`` - so the anchors bound the estimate without refining it.
+
+    ``stints`` carries no timestamp, so the instant reaches the stints through the ``laps``
+    family: a driver's lap at ``as_of`` is its highest ``lap_number`` with a readable
+    ``date_start`` at or before the instant, and its current stint is the highest
+    ``stint_number`` that has started by that lap and whose recorded end is not behind it (a
+    null ``lap_end`` is an open stint). Nothing is coerced: a lap with no readable instant, a
+    stint with no readable start, a driver with no current lap, a driver whose stint ended, a
+    null or ``UNKNOWN`` compound, and a compound with no declared norm each produce a
+    *declared* row and a count, never a zero. Single-lap stints are declared as a caution
+    batch when drivers share a lap, and never averaged into a norm. Durations are reported as
+    counted context - which fields the ``pit`` family supports - and no cost is estimated
+    from them. A family the payloads do not carry is named in ``absences``. Nothing here
+    reads a clock, a file, the network or a random source, so identical payloads and an
+    identical instant produce an identical reading.
+    """
+    session_type = _session_type(session_key, payloads.get(_SESSIONS, ()))
+    norms = pit_norm_rules(season)
+    lap_records = payloads.get(_LAPS, ())
+    stint_records = payloads.get(_STINTS, ())
+    pit_records = payloads.get(_PIT, ())
+    current_laps, laps_unplaceable = _current_lap_of_each_driver(
+        lap_records, session_key, as_of
+    )
+    current_stints, mentioned, stints_unplaceable = _current_stints(
+        stint_records, session_key, current_laps
+    )
+    projections = tuple(
+        _projection(driver, current_stints.get(driver), current_laps, norms)
+        for driver in sorted(mentioned)
+    )
+    counts = Counter(row.status for row in projections)
+    one_lap_stints, batch = _one_lap_batch(stint_records, session_key)
+    absences: list[str] = []
+    if not stint_records:
+        absences.append(_ABSENT_PIT_WINDOW_STINTS)
+    if not lap_records:
+        absences.append(_ABSENT_PIT_WINDOW_LAPS)
+    if not pit_records:
+        absences.append(_ABSENT_PIT_WINDOW_PIT)
+    return PitWindowReading(
+        season=season,
+        session_key=session_key,
+        session_type=session_type,
+        as_of=as_of,
+        durations=_duration_support(pit_records, session_key),
+        projections=projections,
+        one_lap_batch=batch,
+        one_lap_stints=one_lap_stints,
+        absences=tuple(absences),
+        laps_unplaceable=laps_unplaceable,
+        stints_unplaceable=stints_unplaceable,
+        drivers_without_current_lap=counts[PitWindowStatus.NO_CURRENT_LAP],
+        drivers_without_current_stint=counts[PitWindowStatus.NO_CURRENT_STINT],
+        drivers_without_compound=counts[PitWindowStatus.NO_COMPOUND],
+        drivers_without_norm=counts[PitWindowStatus.NO_DECLARED_NORM],
+    )
+
+
 class TacticalSource:
     """The booth's per-moment tactical context, built once from recorded payloads.
     The source is the F06a motor viewed at a moving cutoff: ``context``
@@ -1221,6 +1955,14 @@ def render_tactical(
 
 
 __all__ = [
+    "PIT_NORM_RULES",
+    "PitDurationSupport",
+    "PitNormRulesError",
+    "PitOneLapBatch",
+    "PitWindowProjection",
+    "PitWindowReading",
+    "PitWindowRefusal",
+    "PitWindowStatus",
     "QualifyingBoundarySource",
     "QualifyingCutoffReading",
     "QualifyingPhaseRule",
@@ -1228,12 +1970,16 @@ __all__ = [
     "QualifyingStanding",
     "QualifyingStandingRow",
     "SourceRef",
+    "StintNorm",
     "TacticalAlert",
     "TacticalKind",
     "TacticalSettings",
     "TacticalSource",
+    "analyze_pit_windows",
     "analyze_qualifying_cutoffs",
     "analyze_tactics",
     "build_tactical_source",
+    "pit_norm_rules",
     "render_tactical",
+    "stint_norm",
 ]

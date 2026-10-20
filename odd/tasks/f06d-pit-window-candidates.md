@@ -75,11 +75,14 @@ lint `uvx ruff@0.17.0 check --no-cache src tests`. Delivery is a separate user d
   (RED → GREEN): declared season/compound resolving, undeclared season refusing, undeclared
   compound refusing, read-only table, corroborating counts pinned to L2's measured values.
   Route: one writer in this worktree, surface-confined to `src/f1show/tactical.py` and
-  `tests/test_tactical.py`; the parent commits. Commit: pending.
+  `tests/test_tactical.py`; the parent commits. Commit: `86037ac` — **175 + 158 authored**
+  additions (0 removed), focused **62 passed** (+7 tests), full suite **1104**, Ruff clean.
 - **T2** (S5, S3, S6): the third entry point and `PitWindowReading`, RED → GREEN against the
   spec's boundary, refusal, absence and safety-car-batch cases, with the provenance of each
   value pinned — plus the S6 docstring sentences updated **in the same commit**. Route: one
-  writer in this worktree, same surfaces; the parent commits. Commit: pending.
+  writer in this worktree, same surfaces; the parent commits. Commit: `eb983e6` — **586/15 +
+  618/0 live** (1204 additions; pi-lens reformatted both files after the child measured
+  588/15 + 588/0), focused **82 passed** (+20), full suite **1124**, Ruff clean.
 - **T3** (S7): the cross-document rows on this branch — ARCHITECTURE's Tactical-analyst row,
   the CARRIED-FINDINGS rows, the `### F06d` section in `odd/tasks/f1show.md`, F06's bullet.
   Route: parent, then verified. Commit: pending.
@@ -90,8 +93,13 @@ lint `uvx ruff@0.17.0 check --no-cache src tests`. Delivery is a separate user d
 
 Strategy inherited: `auto-chain` with the cached `feature-branch-chain`
 (`odd/tasks/f1show.md:113-115`). Boundary measured as work lands, never carried forward; one
-deliverable work unit per child PR. The F06c precedent stands: if a cohesive unit cannot fit
-~400 authored lines, one honest slicing pass is recorded and nothing is trimmed to fit.
+deliverable work unit per child PR. **Boundary so far: 1714 authored lines across 4 commits**
+(`b3dbe26` 146 + `86037ac` 333 + `f455a84` 16 + `eb983e6` 1204 live) — the same
+inherited-strategy gate F06c hit, applied here without a new menu because the chain strategy is
+cached. **T2's slicing pass, made and recorded:** 1204 additions cannot form slices of ≤400; a
+split would ship slice A as an entry point whose rows carry no projection numbers — something S5
+does not describe and the orphan-code defect the heuristic exists to prevent — so one cohesive
+commit is kept, the overage reported, and nothing trimmed to fit. The F06c precedent stands.
 
 ## Log
 
@@ -144,3 +152,31 @@ deliverable work unit per child PR. The F06c precedent stands: if a cohesive uni
   stop re-proves, now twice in one feature: **a handoff number that cannot be reproduced under
   any definition is an overcount, not a definitional difference — and the re-measurement gate
   earned its keep by refusing to pin it.**
+- **L5** (2026-10-20): **the re-dispatched T1 writer died after writing and before reporting**
+  ("assistant reported an error", no output), leaving `+175/0` and `+158/0` in the working tree
+  with **no writer-observed evidence**. The parent did not commit blind and did not discard: it
+  verified the landed bytes itself — the diff is faithful to S4/2b (the exact 2b numbers, the
+  sub-four-lap criterion declared in the table docstring, refusals naming seasons **and**
+  compounds, `__all__` extended, **the S6 docstring untouched**, since those sentences are T2's);
+  the RED is logically guaranteed (the new names occur **0 times** at HEAD); focused **62
+  passed** (+7 tests, including one *named* so the declared criterion is load-bearing rather
+  than decorative — `test_the_sub_four_lap_criterion_is_load_bearing_not_decorative`); full
+  suite **1104 passed**; Ruff clean. The commit message states the incident. **Process rule:
+  a writer's death post-write is an evidence gap the parent fills by measuring the bytes —
+  never by trusting them, and never by throwing away verified-faithful work.**
+- **L6** (2026-10-20): **T2 closed as `eb983e6`** — the pit-window motor as the module's third
+  pure entry point, 20 test-first tests, full suite **1124**, Ruff clean, booth/run untouched,
+  zero venue tokens. **The declared integer rule, verbatim from the entry point's docstring:**
+  the projection converts the half-lap median by **ceiling** — *"A tyre whose declared life ends
+  at 25.5 laps is replaced on the following lap and never a half lap earlier, so MEDIUM's 25.5
+  projects 26 laps of life and HARD's 37.5 projects 38"* — pinned by a test named so that
+  ceil≠floor is load-bearing. The race gate reads the payloads' own `sessions` family: an
+  unstated type is a refusal (not a declared absence) and contradictory rows are a refusal naming
+  both, so no caller parameter can claim a type the recording does not state. **Judgment calls
+  carried to T3 for register rows**: (1) the `as_of`-naive `TypeError` exposure now has **three**
+  entry points (the row's trigger said "either"); (2) the one-lap caution batch declares
+  `lap_start >= 2` as a **load-bearing, measured** boundary — 9655 has two one-lap openings at
+  lap 1 that would otherwise declare a phantom batch ([1,36,37] instead of the declared [36,37]),
+  and the batch never suppresses a member's projection; (3) 9655's 4 null-bound stints are also
+  its 2 `UNKNOWN`-compound records, so the null/`UNKNOWN` branch is pinned with a synthetic
+  payload — measured honestly as such.
