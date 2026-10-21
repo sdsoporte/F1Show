@@ -17,6 +17,9 @@ class SpeechService {
   private enabled: boolean = false;
   private soundEffects: boolean = true;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
+  private currentAudio: HTMLAudioElement | null = null;
+  private currentAudioUrl: string | null = null;
+  private serverPlaybackActive = false;
   private audioContext: AudioContext | null = null;
   private isCurrentlySpeaking: boolean = false;
   private currentSpeaker: BoothSpeaker | null = null;
@@ -245,22 +248,104 @@ class SpeechService {
 
     const { immediate = false, onEnd, isRetry = false } = options;
 
-    // If something is already speaking and this is not an immediate action, queue it!
-    if (this.isCurrentlySpeaking && !immediate) {
+    // If something is already playing and this is not an immediate action, queue it!
+    // serverPlaybackActive is claimed synchronously (see below): it must be visible
+    // BEFORE the async /api/tts fetch resolves, or concurrent turns overlap.
+    if ((this.isCurrentlySpeaking || this.serverPlaybackActive) && !immediate) {
       // Keep only up to 1 turn in queue to avoid stale commentary piling up
       this.queue = [{ text: cleanText, speaker, language, onEnd }];
       return;
     }
 
-    // Cancel existing utterance safely
-    if (immediate && this.isCurrentlySpeaking) {
+    // Immediate: stop whatever is playing — server audio and browser speech alike.
+    if (immediate) {
+      this.stopServerAudio();
       window.speechSynthesis.cancel();
+      this.isCurrentlySpeaking = false;
     }
+
+    // Claim the playback slot synchronously: concurrent speak() calls must see the
+    // busy state before the async fetch resolves (the overlap bug F19 shipped with).
+    this.serverPlaybackActive = true;
 
     // Avoid Chrome instant cancel-speak race condition: dispatch in next microtask
     setTimeout(() => {
-      this.executeSpeak(cleanText, speaker, language, { onEnd, isRetry });
+      // Server audio first (neural edge voices via /api/tts, F19); browser TTS fallback.
+      this.playServerAudio(cleanText, speaker, language, { onEnd, isRetry }).catch(() => {
+        // Server path failed: release the slot and fall back to browser TTS.
+        this.serverPlaybackActive = false;
+        this.executeSpeak(cleanText, speaker, language, { onEnd, isRetry });
+      });
     }, 40);
+  }
+
+  private async playServerAudio(
+    cleanText: string,
+    speaker: BoothSpeaker,
+    language: BoothLanguage,
+    options: { onEnd?: () => void; isRetry?: boolean }
+  ) {
+    const response = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: cleanText, speaker, language }),
+    });
+    if (!response.ok) {
+      throw new Error(`tts route responded ${response.status}`);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    this.currentAudio = audio;
+    this.currentAudioUrl = url;
+
+    audio.onplay = () => {
+      this.playRadioChime();
+      this.notifySpeaking(true, speaker);
+    };
+    audio.onended = () => {
+      this.currentAudio = null;
+      this.currentAudioUrl = null;
+      this.serverPlaybackActive = false;
+      URL.revokeObjectURL(url);
+      this.notifySpeaking(false, null);
+      if (options.onEnd) options.onEnd();
+      this.processQueue();
+    };
+    audio.onerror = () => {
+      this.currentAudio = null;
+      this.currentAudioUrl = null;
+      this.serverPlaybackActive = false;
+      URL.revokeObjectURL(url);
+      throw new Error('server audio element failed to load');
+    };
+    await audio.play();
+  }
+
+  private stopServerAudio() {
+    if (this.currentAudio) {
+      this.currentAudio.onended = null;
+      this.currentAudio.onerror = null;
+      this.currentAudio.pause();
+    }
+    if (this.currentAudioUrl) {
+      URL.revokeObjectURL(this.currentAudioUrl);
+      this.currentAudioUrl = null;
+    }
+    this.currentAudio = null;
+    this.serverPlaybackActive = false;
+    this.notifySpeaking(false, null);
+  }
+
+  private processQueue() {
+    if (this.queue.length > 0) {
+      const next = this.queue.shift();
+      if (next) {
+        setTimeout(() => {
+          this.speak(next.text, next.speaker, next.language, { onEnd: next.onEnd });
+        }, 350);
+      }
+    }
   }
 
   private executeSpeak(
@@ -304,14 +389,7 @@ class SpeechService {
       if (options.onEnd) options.onEnd();
 
       // Process next queued turn if any
-      if (this.queue.length > 0) {
-        const next = this.queue.shift();
-        if (next) {
-          setTimeout(() => {
-            this.speak(next.text, next.speaker, next.language, { onEnd: next.onEnd });
-          }, 350);
-        }
-      }
+      this.processQueue();
     };
 
     utterance.onerror = (e: any) => {
@@ -375,6 +453,7 @@ class SpeechService {
 
   public stop() {
     this.queue = [];
+    this.stopServerAudio();
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
       this.currentUtterance = null;
