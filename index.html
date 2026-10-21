@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23E10600'/><text y='70' x='50' text-anchor='middle' font-family='sans-serif' font-weight='900' font-size='60' fill='white'>F1</text></svg>" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>F1Show - Replay & Live Commentary System</title>
+    <meta name="description" content="Evidence-grounded Formula 1 real-time telemetry replay and simulated dual-persona commentary booth with multi-dialect support and live timing." />
+    <meta property="og:title" content="F1Show - Replay & Live Commentary System" />
+    <meta property="og:description" content="Evidence-grounded Formula 1 real-time telemetry replay and simulated dual-persona commentary booth with multi-dialect support and live timing." />
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Suppress Vite HMR WebSocket proxy disconnection log in iframe/cloud preview -->
+    <script>
+      window.addEventListener('unhandledrejection', function (event) {
+        if (event && event.reason && (String(event.reason).includes('WebSocket closed') || String(event.reason).includes('vite'))) {
+          event.preventDefault();
+        }
+      });
+      (function() {
+        var _origError = console.error;
+        console.error = function() {
+          var firstArg = arguments[0];
+          if (firstArg && typeof firstArg === 'string' && (firstArg.indexOf('[vite]') !== -1 || firstArg.indexOf('WebSocket closed without opened') !== -1)) {
+            return;
+          }
+          return _origError.apply(console, arguments);
+        };
+      })();
+    </script>
+  </head>
+  <body class="bg-zinc-950 text-zinc-100 antialiased selection:bg-red-600 selection:text-white min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

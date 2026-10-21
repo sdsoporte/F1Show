@@ -1,0 +1,6 @@
+{
+  "name": "F1Show - Replay & Live Commentary System",
+  "description": "Evidence-grounded Formula 1 real-time telemetry replay and simulated dual-persona commentary booth with multi-dialect support and live timing.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
