@@ -2,6 +2,9 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { resolveGeminiProvider } from './server/geminiProvider';
+import { spawn } from 'child_process';
+import fs from 'fs';
+import os from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -136,60 +139,46 @@ app.get('/api/gemini/status', (_req, res) => {
 
 /**
  * Route: POST /api/tts
- * Synthesizes voice audio using Gemini TTS (gemini-3.8-flash-lite-tts).
+ * Synthesizes booth voice audio with Edge neural voices (msedge-tts), using the
+ * voice map recorded by F15 (Engram obs 6046): lead -> es-AR-TomasNeural,
+ * colour -> es-UY-MateoNeural, es-419 fallbacks -> Jorge/Alonso. No key needed.
  */
+const BOOTH_VOICES: Record<string, { lead: string; colour: string }> = {
+  'es-AR': { lead: 'es-AR-TomasNeural', colour: 'es-UY-MateoNeural' },
+  'es-419': { lead: 'es-MX-JorgeNeural', colour: 'es-PE-AlexNeural' },
+  'es-MX': { lead: 'es-MX-JorgeNeural', colour: 'es-MX-DaliaNeural' },
+  'es-ES': { lead: 'es-ES-AlvaroNeural', colour: 'es-ES-ElviraNeural' },
+};
+const DEFAULT_BOOTH_VOICES = { lead: 'es-MX-JorgeNeural', colour: 'es-MX-AlonsoNeural' };
+
+const EDGE_TTS_BIN = path.resolve(process.cwd(), '.venv', 'bin', 'edge-tts');
+
 app.post('/api/tts', async (req, res) => {
   try {
     const { text, speaker, language } = req.body;
     if (!text || typeof text !== 'string') {
       return res.status(400).json({ error: 'Missing or invalid text parameter' });
     }
+    const voices = BOOTH_VOICES[language] ?? DEFAULT_BOOTH_VOICES;
+    const voiceName = speaker === 'color' ? voices.colour : voices.lead;
 
-    if (!ai) {
-      return res.status(503).json({ error: 'GEMINI_API_KEY is not configured on server', available: false });
+    if (!fs.existsSync(EDGE_TTS_BIN)) {
+      return res.status(503).json({ error: 'edge-tts binary not found — provision the repo venv (uv sync)', available: false });
     }
 
-    // Assign distinct voices for Carlos (Lead) vs Alex (Color Analyst)
-    const voiceName = speaker === 'lead' ? 'Puck' : 'Fenrir';
-
-    let dialectInstruction = 'Spanish (Argentina)';
-    if (language === 'es-MX') dialectInstruction = 'Spanish (Mexico)';
-    else if (language === 'es-ES') dialectInstruction = 'Spanish (Spain)';
-    else if (language === 'en') dialectInstruction = 'English (UK)';
-
-    const promptText = `Speak as an authentic Formula 1 TV commentator in ${dialectInstruction}: ${text}`;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash-lite-tts',
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: promptText }],
-        },
-      ],
-      config: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName },
-          },
-        },
-      },
+    const outFile = path.join(os.tmpdir(), `f1show-tts-${Date.now()}-${Math.random().toString(16).slice(2)}.mp3`);
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn(EDGE_TTS_BIN, ['--voice', voiceName, '--text', text, '--write-media', outFile], { timeout: 15000 });
+      proc.on('error', reject);
+      proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`edge-tts exited with code ${code}`))));
     });
+    const audio = await fs.promises.readFile(outFile);
+    await fs.promises.unlink(outFile).catch(() => {});
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) {
-      throw new Error('No audio payload received from Gemini TTS');
-    }
-
-    return res.json({
-      audioBase64: base64Audio,
-      mimeType: 'audio/wav',
-      speaker,
-      available: true,
-    });
+    res.set('Content-Type', 'audio/mpeg');
+    res.send(audio);
   } catch (error: any) {
-    console.warn('[Gemini TTS] Error generating audio:', error?.message || error);
+    console.warn('[Edge TTS] Error generating audio:', error?.message || error);
     return res.status(500).json({ error: error?.message || 'TTS generation failed', available: false });
   }
 });

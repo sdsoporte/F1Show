@@ -17,6 +17,7 @@ class SpeechService {
   private enabled: boolean = false;
   private soundEffects: boolean = true;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
+  private currentAudio: HTMLAudioElement | null = null;
   private audioContext: AudioContext | null = null;
   private isCurrentlySpeaking: boolean = false;
   private currentSpeaker: BoothSpeaker | null = null;
@@ -259,8 +260,60 @@ class SpeechService {
 
     // Avoid Chrome instant cancel-speak race condition: dispatch in next microtask
     setTimeout(() => {
-      this.executeSpeak(cleanText, speaker, language, { onEnd, isRetry });
+      // Server audio first (neural edge voices via /api/tts, F19); browser TTS fallback.
+      this.playServerAudio(cleanText, speaker, language, { onEnd, isRetry }).catch(() => {
+        this.executeSpeak(cleanText, speaker, language, { onEnd, isRetry });
+      });
     }, 40);
+  }
+
+  private async playServerAudio(
+    cleanText: string,
+    speaker: BoothSpeaker,
+    language: BoothLanguage,
+    options: { onEnd?: () => void; isRetry?: boolean }
+  ) {
+    const response = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: cleanText, speaker, language }),
+    });
+    if (!response.ok) {
+      throw new Error(`tts route responded ${response.status}`);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    this.currentAudio = audio;
+
+    audio.onplay = () => {
+      this.playRadioChime();
+      this.notifySpeaking(true, speaker);
+    };
+    audio.onended = () => {
+      this.currentAudio = null;
+      URL.revokeObjectURL(url);
+      this.notifySpeaking(false, null);
+      if (options.onEnd) options.onEnd();
+      this.processQueue();
+    };
+    audio.onerror = () => {
+      this.currentAudio = null;
+      URL.revokeObjectURL(url);
+      throw new Error('server audio element failed to load');
+    };
+    await audio.play();
+  }
+
+  private processQueue() {
+    if (this.queue.length > 0) {
+      const next = this.queue.shift();
+      if (next) {
+        setTimeout(() => {
+          this.speak(next.text, next.speaker, next.language, { onEnd: next.onEnd });
+        }, 350);
+      }
+    }
   }
 
   private executeSpeak(
@@ -304,14 +357,7 @@ class SpeechService {
       if (options.onEnd) options.onEnd();
 
       // Process next queued turn if any
-      if (this.queue.length > 0) {
-        const next = this.queue.shift();
-        if (next) {
-          setTimeout(() => {
-            this.speak(next.text, next.speaker, next.language, { onEnd: next.onEnd });
-          }, 350);
-        }
-      }
+      this.processQueue();
     };
 
     utterance.onerror = (e: any) => {
@@ -375,6 +421,10 @@ class SpeechService {
 
   public stop() {
     this.queue = [];
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio = null;
+    }
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
       this.currentUtterance = null;
