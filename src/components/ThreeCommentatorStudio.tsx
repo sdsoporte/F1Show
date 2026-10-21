@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Camera, Volume2, Maximize2, RotateCcw, Radio, Sparkles, User, Settings2 } from 'lucide-react';
+import { Maximize2, Radio } from 'lucide-react';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { BoothSpeaker } from '../types/f1';
 
 interface ThreeCommentatorStudioProps {
@@ -40,7 +42,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     // --- Scene, Camera, Renderer ---
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x07090f);
-    scene.fog = new THREE.FogExp2(0x07090f, 0.03);
+    scene.fog = new THREE.FogExp2(0x07090f, 0.018);
 
     const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
     camera.position.set(0, 1.35, 3.8);
@@ -49,26 +51,37 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.18;
+    renderer.toneMappingExposure = 0.9;
+    // A local studio environment gives skin and metal soft reflections without remote assets.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const room = new RoomEnvironment();
+    const environment = pmrem.fromScene(room, 0.04);
+    scene.environment = environment.texture;
+    scene.environmentIntensity = 0.35;
+    room.dispose();
+    pmrem.dispose();
     container.appendChild(renderer.domElement);
 
     // --- Studio Lighting Setup (Warm Key, Soft Fill, Dramatic Rims) ---
-    const ambientLight = new THREE.AmbientLight(0x283244, 1.8);
+    const ambientLight = new THREE.HemisphereLight(0xdceaff, 0x263044, 0.9);
     scene.add(ambientLight);
 
     // Key Light (Warm soft studio key)
-    const keyLight = new THREE.DirectionalLight(0xfff6ec, 2.2);
+    const keyLight = new THREE.DirectionalLight(0xfff6ec, 1.7);
     keyLight.position.set(2.0, 3.5, 3.0);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.width = 1024;
     keyLight.shadow.mapSize.height = 1024;
     keyLight.shadow.bias = -0.0005;
+    keyLight.shadow.normalBias = 0.02;
+    keyLight.shadow.radius = 4;
     scene.add(keyLight);
 
     // Fill Light (Cool TV studio cyan-blue fill)
-    const fillLight = new THREE.DirectionalLight(0x60a5fa, 1.4);
+    const fillLight = new THREE.DirectionalLight(0xc7e3ff, 1.1);
     fillLight.position.set(-2.5, 2.0, 2.5);
     scene.add(fillLight);
 
@@ -97,56 +110,73 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     // --- Studio Architecture & Floor ---
     const floorGeo = new THREE.PlaneGeometry(18, 18);
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x090c13,
-      roughness: 0.3,
-      metalness: 0.7,
+      color: 0x141c2a,
+      roughness: 0.48,
+      metalness: 0.25,
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // Curved Studio Backdrop with Neon Accents
-    const backdropGeo = new THREE.CylinderGeometry(6.4, 6.4, 4.6, 48, 1, true, -Math.PI * 0.42, Math.PI * 0.84);
-    const backdropMat = new THREE.MeshStandardMaterial({
-      color: 0x0e131d,
-      roughness: 0.6,
-      side: THREE.BackSide,
-    });
-    const backdrop = new THREE.Mesh(backdropGeo, backdropMat);
-    backdrop.position.set(0, 1.9, 0);
-    scene.add(backdrop);
-
-    // Neon Vertical Accent Ribs
-    for (let i = -3; i <= 3; i++) {
-      if (i === 0) continue;
-      const angle = (i * Math.PI) / 10;
-      const ribGeo = new THREE.BoxGeometry(0.035, 3.6, 0.06);
-      const ribMat = new THREE.MeshBasicMaterial({ color: i > 0 ? 0x00d8f6 : 0xe10600 });
-      const rib = new THREE.Mesh(ribGeo, ribMat);
-      rib.position.set(Math.sin(angle) * 6.1, 1.9, -Math.cos(angle) * 6.1);
-      rib.rotation.y = -angle;
+    // Layered architectural panels frame the video wall and catch the studio fill.
+    const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x172334, roughness: 0.8 });
+    const wall = new THREE.Mesh(new RoundedBoxGeometry(11, 4.8, 0.18, 3, 0.08), wallMaterial);
+    wall.position.set(0, 1.9, -2.6);
+    wall.receiveShadow = true;
+    scene.add(wall);
+    for (let i = -5; i <= 5; i++) {
+      const panel = new THREE.Mesh(
+        new RoundedBoxGeometry(0.78, 3.6, 0.09, 2, 0.025),
+        new THREE.MeshStandardMaterial({ color: i % 2 ? 0x202f43 : 0x192638, roughness: 0.75 }),
+      );
+      panel.position.set(i * 0.94, 1.8, -2.46);
+      scene.add(panel);
+    }
+    for (const x of [-3.1, -1.35, 1.35, 3.1]) {
+      const rib = new THREE.Mesh(
+        new THREE.BoxGeometry(0.018, 3.25, 0.035),
+        new THREE.MeshBasicMaterial({ color: x < 0 ? 0xef3340 : 0x65dbe5 }),
+      );
+      rib.position.set(x, 1.8, -2.37);
       scene.add(rib);
     }
+    const stage = new THREE.Mesh(
+      new THREE.CylinderGeometry(2.55, 2.65, 0.1, 80),
+      new THREE.MeshStandardMaterial({ color: 0x222e40, metalness: 0.35, roughness: 0.5 }),
+    );
+    stage.position.set(0, 0.015, -0.05);
+    stage.receiveShadow = true;
+    scene.add(stage);
+    const stageTrim = new THREE.Mesh(
+      new THREE.TorusGeometry(2.59, 0.012, 8, 100),
+      new THREE.MeshBasicMaterial({ color: 0x44838e }),
+    );
+    stageTrim.rotation.x = Math.PI / 2;
+    stageTrim.position.y = 0.035;
+    scene.add(stageTrim);
 
     // --- Dynamic Studio Video Walls ---
     const centerCanvas = document.createElement('canvas');
-    centerCanvas.width = 512;
-    centerCanvas.height = 256;
+    centerCanvas.width = 1024;
+    centerCanvas.height = 512;
     const centerCtx = centerCanvas.getContext('2d')!;
     const centerTexture = new THREE.CanvasTexture(centerCanvas);
+    centerTexture.colorSpace = THREE.SRGBColorSpace;
 
     const leftCanvas = document.createElement('canvas');
     leftCanvas.width = 256;
     leftCanvas.height = 256;
     const leftCtx = leftCanvas.getContext('2d')!;
     const leftTexture = new THREE.CanvasTexture(leftCanvas);
+    leftTexture.colorSpace = THREE.SRGBColorSpace;
 
     const rightCanvas = document.createElement('canvas');
     rightCanvas.width = 256;
     rightCanvas.height = 256;
     const rightCtx = rightCanvas.getContext('2d')!;
     const rightTexture = new THREE.CanvasTexture(rightCanvas);
+    rightTexture.colorSpace = THREE.SRGBColorSpace;
 
     const monitorFrameMat = new THREE.MeshStandardMaterial({ color: 0x07090e, metalness: 0.9, roughness: 0.2 });
 
@@ -190,11 +220,11 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     const deskGroup = new THREE.Group();
 
     // Curved Modern F1 Desk Top
-    const deskTopGeo = new THREE.BoxGeometry(3.0, 0.08, 1.1);
+    const deskTopGeo = new RoundedBoxGeometry(3.3, 0.09, 1.1, 4, 0.04);
     const deskTopMat = new THREE.MeshStandardMaterial({
-      color: 0x121620,
-      metalness: 0.85,
-      roughness: 0.2,
+      color: 0x364357,
+      metalness: 0.35,
+      roughness: 0.32,
     });
     const deskTop = new THREE.Mesh(deskTopGeo, deskTopMat);
     deskTop.position.set(0, 0.82, 0.05);
@@ -217,26 +247,50 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     deskGroup.add(deskGlass);
 
     // Sleek Red Neon Trim along front of desk
-    const deskEdgeGeo = new THREE.BoxGeometry(3.02, 0.02, 0.02);
+    const deskEdgeGeo = new THREE.BoxGeometry(3.2, 0.012, 0.02);
     const deskEdgeMat = new THREE.MeshBasicMaterial({ color: 0xe10600 });
     const deskEdge = new THREE.Mesh(deskEdgeGeo, deskEdgeMat);
     deskEdge.position.set(0, 0.83, 0.6);
     deskGroup.add(deskEdge);
 
-    // Desk Center Base Pedestal
-    const deskBaseGeo = new THREE.CylinderGeometry(0.35, 0.55, 0.8, 24);
-    const deskBaseMat = new THREE.MeshStandardMaterial({ color: 0x161b26, roughness: 0.4, metalness: 0.7 });
-    const deskBase = new THREE.Mesh(deskBaseGeo, deskBaseMat);
-    deskBase.position.set(0, 0.4, 0.05);
-    deskGroup.add(deskBase);
-
-    // Glowing F1 Center Emblem on Base
-    const emblemGeo = new THREE.CylinderGeometry(0.11, 0.11, 0.015, 24);
-    const emblemMat = new THREE.MeshBasicMaterial({ color: 0xe10600 });
-    const emblem = new THREE.Mesh(emblemGeo, emblemMat);
-    emblem.position.set(0, 0.44, 0.48);
-    emblem.rotation.x = Math.PI / 2;
-    deskGroup.add(emblem);
+    // A continuous desk fascia hides the seated bodies and anchors the broadcast set.
+    const fascia = new THREE.Mesh(
+      new RoundedBoxGeometry(2.9, 0.64, 0.24, 5, 0.09),
+      new THREE.MeshStandardMaterial({ color: 0x202d40, roughness: 0.48, metalness: 0.3 }),
+    );
+    fascia.position.set(0, 0.45, 0.4);
+    fascia.castShadow = true;
+    deskGroup.add(fascia);
+    for (const x of [-1.28, 1.28]) {
+      const inlay = new THREE.Mesh(
+        new THREE.BoxGeometry(0.028, 0.42, 0.015),
+        new THREE.MeshBasicMaterial({ color: x < 0 ? 0xef3340 : 0x65dbe5 }),
+      );
+      inlay.position.set(x, 0.45, 0.527);
+      deskGroup.add(inlay);
+    }
+    const brandCanvas = document.createElement('canvas');
+    brandCanvas.width = 1024;
+    brandCanvas.height = 256;
+    const brandCtx = brandCanvas.getContext('2d')!;
+    brandCtx.fillStyle = '#172438';
+    brandCtx.fillRect(0, 0, 1024, 256);
+    brandCtx.fillStyle = '#ef3340';
+    brandCtx.fillRect(90, 62, 12, 120);
+    brandCtx.fillStyle = '#f1f5f9';
+    brandCtx.font = 'italic 800 100px Arial, sans-serif';
+    brandCtx.fillText('F1 SHOW', 140, 144);
+    brandCtx.fillStyle = '#92a9bd';
+    brandCtx.font = '24px monospace';
+    brandCtx.fillText('RACE COMMENTARY STUDIO', 146, 193);
+    const brandTexture = new THREE.CanvasTexture(brandCanvas);
+    brandTexture.colorSpace = THREE.SRGBColorSpace;
+    const brand = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.65, 0.4125),
+      new THREE.MeshBasicMaterial({ map: brandTexture, toneMapped: false }),
+    );
+    brand.position.set(0, 0.45, 0.53);
+    deskGroup.add(brand);
 
     // Nameplates on Desk (Positioned neatly without clipping edge)
     const createNameplate = (x: number, title: string, subtitle: string, colorHex: number) => {
@@ -260,7 +314,8 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
       pCtx.fillText(subtitle, 128, 48);
 
       const pTex = new THREE.CanvasTexture(pCanvas);
-      const pGeo = new THREE.PlaneGeometry(0.38, 0.095);
+      pTex.colorSpace = THREE.SRGBColorSpace;
+      const pGeo = new THREE.PlaneGeometry(0.46, 0.115);
       const pMat = new THREE.MeshBasicMaterial({ map: pTex });
       const plate = new THREE.Mesh(pGeo, pMat);
       plate.position.set(x, 0.88, 0.44);
@@ -280,6 +335,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
 
       const scrGeo = new THREE.BoxGeometry(0.36, 0.23, 0.01);
       const scrTex = new THREE.CanvasTexture(canvas);
+      scrTex.colorSpace = THREE.SRGBColorSpace;
       const scrMat = new THREE.MeshBasicMaterial({ map: scrTex });
       const scr = new THREE.Mesh(scrGeo, scrMat);
       scr.position.set(0, 0.115, -0.11);
@@ -369,14 +425,14 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     // Shared Skin & Feature Materials
     const skinMatCarlos = new THREE.MeshStandardMaterial({
       color: 0xdfad85, // Warm golden tan
-      roughness: 0.55,
-      metalness: 0.02,
+      roughness: 0.7,
+      metalness: 0,
     });
 
     const skinMatAlex = new THREE.MeshStandardMaterial({
       color: 0xe8be9e, // Clean peach tone
-      roughness: 0.55,
-      metalness: 0.02,
+      roughness: 0.7,
+      metalness: 0,
     });
 
     // Helper: Sculpted Natural Eye with Eyelids and Blinking
@@ -388,16 +444,16 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
       const scleraGeo = new THREE.SphereGeometry(0.022, 16, 16);
       const scleraMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.2 });
       const sclera = new THREE.Mesh(scleraGeo, scleraMat);
-      sclera.scale.set(1.1, 0.95, 0.7);
+      sclera.scale.set(1.15, 0.72, 0.7);
 
       // Iris with rich color
-      const irisGeo = new THREE.CircleGeometry(0.012, 16);
+      const irisGeo = new THREE.CircleGeometry(0.009, 24);
       const irisMat = new THREE.MeshBasicMaterial({ color: irisColorHex });
       const iris = new THREE.Mesh(irisGeo, irisMat);
       iris.position.set(0, 0, 0.016);
 
       // Pupil
-      const pupilGeo = new THREE.CircleGeometry(0.006, 16);
+      const pupilGeo = new THREE.CircleGeometry(0.0045, 24);
       const pupilMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
       const pupil = new THREE.Mesh(pupilGeo, pupilMat);
       pupil.position.set(0, 0, 0.017);
@@ -460,20 +516,34 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     ) => {
       const torsoGroup = new THREE.Group();
 
-      // Broad Shoulder & Chest Volume (Tapered, not a square block)
-      const chestGeo = new THREE.CylinderGeometry(0.26, 0.22, 0.38, 24);
-      chestGeo.scale(1.25, 1.0, 0.85); // Organic oval cross-section
-      const blazerMat = new THREE.MeshStandardMaterial({ color: blazerColorHex, roughness: 0.65 });
-      const chest = new THREE.Mesh(chestGeo, blazerMat);
-      chest.position.set(0, 0.96, 0);
+      const blazerMat = new THREE.MeshStandardMaterial({ color: blazerColorHex, roughness: 0.9 });
+      const chest = new THREE.Mesh(new RoundedBoxGeometry(0.49, 0.43, 0.27, 5, 0.095), blazerMat);
+      chest.position.set(0, 0.96, -0.005);
       chest.castShadow = true;
-
-      // Abdomen / Midsection
-      const abdomenGeo = new THREE.CylinderGeometry(0.22, 0.24, 0.32, 24);
-      abdomenGeo.scale(1.18, 1.0, 0.82);
-      const abdomen = new THREE.Mesh(abdomenGeo, blazerMat);
-      abdomen.position.set(0, 0.68, 0);
-      abdomen.castShadow = true;
+      const abdomen = new THREE.Mesh(new RoundedBoxGeometry(0.42, 0.3, 0.25, 4, 0.065), blazerMat);
+      abdomen.position.set(0, 0.66, -0.01);
+      // Shirt front and fabric lapels sit forward of the jacket, rather than inside it.
+      const shirtFront = new THREE.Mesh(
+        new RoundedBoxGeometry(0.17, 0.29, 0.018, 2, 0.008),
+        new THREE.MeshStandardMaterial({ color: shirtColorHex, roughness: 0.8 }),
+      );
+      shirtFront.position.set(0, 1.01, 0.14);
+      torsoGroup.add(shirtFront);
+      for (const side of [-1, 1]) {
+        const shape = new THREE.Shape();
+        shape.moveTo(side * 0.08, 1.17);
+        shape.lineTo(side * 0.2, 1.09);
+        shape.lineTo(side * 0.12, 0.99);
+        shape.lineTo(side * 0.145, 0.96);
+        shape.lineTo(side * 0.035, 0.84);
+        shape.closePath();
+        const lapel = new THREE.Mesh(
+          new THREE.ShapeGeometry(shape),
+          new THREE.MeshStandardMaterial({ color: blazerColorHex, roughness: 0.7, side: THREE.DoubleSide }),
+        );
+        lapel.position.z = 0.16;
+        torsoGroup.add(lapel);
+      }
 
       // Crisp Dress Shirt Collar
       const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColorHex, roughness: 0.4 });
@@ -498,19 +568,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
       const tieBody = new THREE.Mesh(tieBodyGeo, tieMat);
       tieBody.position.set(0, 0.98, 0.152);
 
-      // FIA VIP Media Lanyard & Pass
-      const lanyardGeo = new THREE.TorusGeometry(0.13, 0.007, 8, 24, Math.PI * 0.9);
-      const lanyardMat = new THREE.MeshBasicMaterial({ color: tieColorHex });
-      const lanyard = new THREE.Mesh(lanyardGeo, lanyardMat);
-      lanyard.position.set(0, 1.08, 0.09);
-      lanyard.rotation.x = 0.55;
-
-      const passGeo = new THREE.BoxGeometry(0.065, 0.095, 0.004);
-      const passMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 });
-      const pass = new THREE.Mesh(passGeo, passMat);
-      pass.position.set(0, 0.9, 0.165);
-
-      torsoGroup.add(chest, abdomen, collarL, collarR, tieKnot, tieBody, lanyard, pass);
+      torsoGroup.add(chest, abdomen, collarL, collarR, tieKnot, tieBody);
       return torsoGroup;
     };
 
@@ -526,37 +584,38 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
       const dir = isLeft ? -1 : 1;
       const blazerMat = new THREE.MeshStandardMaterial({ color: blazerColorHex, roughness: 0.65 });
 
-      // Rounded Shoulder
-      const shoulderGeo = new THREE.SphereGeometry(0.082, 16, 16);
-      const shoulder = new THREE.Mesh(shoulderGeo, blazerMat);
-      shoulder.position.set(dir * 0.27, 1.04, 0.02);
-
-      // Upper Arm (tapered sleeve)
-      const upperGeo = new THREE.CylinderGeometry(0.065, 0.055, 0.26, 16);
-      const upper = new THREE.Mesh(upperGeo, blazerMat);
-      upper.position.set(dir * 0.29, 0.92, 0.12);
-      upper.rotation.x = 0.5;
-      upper.rotation.z = dir * -0.25;
-
-      // Forearm resting on desk
-      const forearmGeo = new THREE.CylinderGeometry(0.052, 0.044, 0.28, 16);
-      const forearm = new THREE.Mesh(forearmGeo, blazerMat);
-      forearm.position.set(dir * 0.25, 0.86, 0.32);
-      forearm.rotation.x = 1.35;
-      forearm.rotation.y = dir * 0.28;
+      // Connected sleeve segments follow a seated pose from shoulder to wrist.
+      const shoulderPoint = new THREE.Vector3(dir * 0.245, 1.055, 0);
+      const elbowPoint = new THREE.Vector3(dir * 0.305, 0.9, 0.19);
+      const wristPoint = new THREE.Vector3(dir * 0.21, 0.895, 0.425);
+      const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.075, 20, 16), blazerMat);
+      shoulder.position.copy(shoulderPoint);
+      const sleeve = (from: THREE.Vector3, to: THREE.Vector3, radius: number) => {
+        const direction = to.clone().sub(from);
+        const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(radius, Math.max(0.01, direction.length() - radius * 2), 8, 16), blazerMat);
+        mesh.position.copy(from).add(to).multiplyScalar(0.5);
+        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+        mesh.castShadow = true;
+        return mesh;
+      };
+      const upper = sleeve(shoulderPoint, elbowPoint, 0.063);
+      const forearm = sleeve(elbowPoint, wristPoint, 0.052);
+      const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 12), blazerMat);
+      elbow.position.copy(elbowPoint);
+      armGroup.add(elbow);
 
       // White Shirt Cuff
       const cuffGeo = new THREE.CylinderGeometry(0.046, 0.044, 0.03, 16);
       const cuffMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
       const cuff = new THREE.Mesh(cuffGeo, cuffMat);
-      cuff.position.set(dir * 0.22, 0.87, 0.43);
+      cuff.position.copy(wristPoint);
       cuff.rotation.x = 1.35;
 
       // Sculpted Palm & Fingers resting on the desk
       const handGroup = new THREE.Group();
       handGroup.position.set(dir * 0.2, 0.88, 0.48);
 
-      const palmGeo = new THREE.BoxGeometry(0.062, 0.025, 0.075);
+      const palmGeo = new RoundedBoxGeometry(0.062, 0.025, 0.075, 3, 0.01);
       const palm = new THREE.Mesh(palmGeo, skinMat);
       handGroup.add(palm);
 
@@ -565,7 +624,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
         const fingerGeo = new THREE.CapsuleGeometry(0.007, 0.035, 6, 8);
         const finger = new THREE.Mesh(fingerGeo, skinMat);
         finger.position.set(f * 0.013, -0.005, 0.045);
-        finger.rotation.x = 0.25;
+        finger.rotation.x = Math.PI / 2 - 0.12;
         handGroup.add(finger);
       }
 
@@ -600,12 +659,12 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     leadGroup.position.set(-0.7, 0, -0.05);
 
     // Torso (Navy Blue Blazer, Red Racing Tie, Crisp White Shirt)
-    const leadTorsoGroup = createBroadcasterTorso(0x131926, 0xe10600, 0xffffff);
+    const leadTorsoGroup = createBroadcasterTorso(0x283a54, 0xe10600, 0xffffff);
     leadGroup.add(leadTorsoGroup);
 
     // Arms
-    const leadArmL = createSculptedArm('left', 0x131926, skinMatCarlos, false);
-    const leadArmR = createSculptedArm('right', 0x131926, skinMatCarlos, true);
+    const leadArmL = createSculptedArm('left', 0x283a54, skinMatCarlos, false);
+    const leadArmR = createSculptedArm('right', 0x283a54, skinMatCarlos, true);
     leadGroup.add(leadArmL.armGroup, leadArmR.armGroup);
 
     // Neck
@@ -616,7 +675,8 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
 
     // Head Group
     const leadHeadGroup = new THREE.Group();
-    leadHeadGroup.position.set(0, 1.36, 0.02);
+    leadHeadGroup.position.set(0, 1.4, 0.02);
+    leadHeadGroup.scale.setScalar(1.12);
 
     // Sculpted Head Cranium
     const headGeo = new THREE.SphereGeometry(0.155, 32, 32);
@@ -627,9 +687,9 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
 
     // Smooth Tapered Jawline & Chin
     const jawGeo = new THREE.CapsuleGeometry(0.048, 0.065, 12, 16);
-    jawGeo.scale(1.2, 1.0, 0.9);
+    jawGeo.scale(1.55, 0.65, 0.65);
     const leadJaw = new THREE.Mesh(jawGeo, skinMatCarlos);
-    leadJaw.position.set(0, -0.09, 0.095);
+    leadJaw.position.set(0, -0.085, 0.055);
     leadJaw.rotation.x = 0.28;
     leadHeadGroup.add(leadJaw);
 
@@ -675,7 +735,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     hairCap.position.set(0, 0.06, -0.02);
 
     // Textured Front Pompadour Quiff (Full volume lobes)
-    const quiffLobeGeo = new THREE.CapsuleGeometry(0.045, 0.1, 10, 16);
+    const quiffLobeGeo = new THREE.CapsuleGeometry(0.032, 0.08, 10, 16);
     const quiffCenter = new THREE.Mesh(quiffLobeGeo, hairMatCarlos);
     quiffCenter.position.set(0, 0.165, 0.08);
     quiffCenter.rotation.x = -Math.PI / 2.8;
@@ -699,7 +759,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     const headsetMat = new THREE.MeshStandardMaterial({ color: 0x1f242e, metalness: 0.85, roughness: 0.25 });
     const headband = new THREE.Mesh(headbandGeo, headsetMat);
     headband.position.set(0, 0.05, -0.01);
-    headband.rotation.x = -Math.PI / 2;
+    headband.rotation.x = 0;
 
     const earpadGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.035, 24);
     const earpadMat = new THREE.MeshStandardMaterial({ color: 0x0f131a, roughness: 0.95 });
@@ -740,12 +800,12 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     analystGroup.position.set(0.7, 0, -0.05);
 
     // Torso (Charcoal Slate Blazer, Electric Cyan Tie, Soft Ice-Blue Shirt)
-    const analystTorsoGroup = createBroadcasterTorso(0x1c222e, 0x00f0ff, 0xe0f2fe);
+    const analystTorsoGroup = createBroadcasterTorso(0x374354, 0x00f0ff, 0xe0f2fe);
     analystGroup.add(analystTorsoGroup);
 
     // Arms
-    const analystArmL = createSculptedArm('left', 0x1c222e, skinMatAlex, false);
-    const analystArmR = createSculptedArm('right', 0x1c222e, skinMatAlex, false);
+    const analystArmL = createSculptedArm('left', 0x374354, skinMatAlex, false);
+    const analystArmR = createSculptedArm('right', 0x374354, skinMatAlex, false);
     analystGroup.add(analystArmL.armGroup, analystArmR.armGroup);
 
     // Neck
@@ -755,7 +815,8 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
 
     // Head Group
     const analystHeadGroup = new THREE.Group();
-    analystHeadGroup.position.set(0, 1.36, 0.02);
+    analystHeadGroup.position.set(0, 1.4, 0.02);
+    analystHeadGroup.scale.setScalar(1.12);
 
     const aHeadGeo = new THREE.SphereGeometry(0.152, 32, 32);
     aHeadGeo.scale(0.95, 1.14, 1.0);
@@ -764,7 +825,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     analystHeadGroup.add(analystHead);
 
     const analystJaw = new THREE.Mesh(jawGeo, skinMatAlex);
-    analystJaw.position.set(0, -0.09, 0.092);
+    analystJaw.position.set(0, -0.085, 0.052);
     analystJaw.rotation.x = 0.28;
     analystHeadGroup.add(analystJaw);
 
@@ -824,7 +885,8 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
       metalness: 0.8,
       roughness: 0.05,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.08,
+      depthWrite: false,
     });
     const lensL = new THREE.Mesh(lensGeo, lensMat);
     lensL.position.set(-0.05, 0.032, 0.166);
@@ -844,7 +906,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     const aHairCap = new THREE.Mesh(hairCapGeo, hairMatAlex);
     aHairCap.position.set(0, 0.055, -0.015);
 
-    const sideSweepGeo = new THREE.CapsuleGeometry(0.04, 0.12, 10, 16);
+    const sideSweepGeo = new THREE.CapsuleGeometry(0.028, 0.1, 10, 16);
     const sideSweep = new THREE.Mesh(sideSweepGeo, hairMatAlex);
     sideSweep.position.set(-0.03, 0.155, 0.07);
     sideSweep.rotation.x = -Math.PI / 2.6;
@@ -857,7 +919,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     const headsetGroupAlex = new THREE.Group();
     const aHeadband = new THREE.Mesh(headbandGeo, headsetMat);
     aHeadband.position.set(0, 0.05, -0.01);
-    aHeadband.rotation.x = -Math.PI / 2;
+    aHeadband.rotation.x = 0;
 
     const aEarpadL = new THREE.Mesh(earpadGeo, earpadMat);
     aEarpadL.position.set(-0.16, 0.01, 0);
@@ -886,17 +948,31 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
     analystGroup.add(analystHeadGroup);
     scene.add(analystGroup);
 
+    for (const [head, skin] of [[leadHeadGroup, skinMatCarlos], [analystHeadGroup, skinMatAlex]] as const) {
+      for (const side of [-1, 1]) {
+        const ear = new THREE.Mesh(new THREE.SphereGeometry(0.028, 16, 12), skin);
+        ear.scale.set(0.65, 1.3, 0.7);
+        ear.position.set(side * 0.147, -0.015, 0.015);
+        head.add(ear);
+      }
+    }
+
     // -------------------------------------------------------------------------
     // ANIMATION LOOP & SIMULATION
     // -------------------------------------------------------------------------
     const startTime = performance.now();
     let animationFrameId: number;
     let screenTick = 0;
+    let previousFrameTime = performance.now();
+    const cameraLookTarget = new THREE.Vector3(0, 1.25, 0);
 
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
 
-      const elapsedTime = (performance.now() - startTime) * 0.001;
+      const now = performance.now();
+      const deltaTime = Math.min((now - previousFrameTime) * 0.001, 0.1);
+      previousFrameTime = now;
+      const elapsedTime = (now - startTime) * 0.001;
       const currentSpeaker = stateRef.current.activeSpeaker;
       const isCurrentlySpeaking = stateRef.current.isSpeaking;
       const currentCameraMode = stateRef.current.cameraView;
@@ -935,39 +1011,42 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
       // Update Dynamic Canvas Video Walls (every 4 frames for smooth 60fps telemetry)
       screenTick++;
       if (screenTick % 4 === 0) {
-        // Center Video Wall (F1 Live Track HUD & Audio Waveform)
-        centerCtx.fillStyle = '#090d16';
-        centerCtx.fillRect(0, 0, 512, 256);
-
-        centerCtx.fillStyle = '#141c2c';
-        centerCtx.fillRect(10, 10, 492, 38);
-        centerCtx.fillStyle = '#e10600';
-        centerCtx.fillRect(10, 10, 8, 38);
-
-        centerCtx.fillStyle = '#ffffff';
-        centerCtx.font = 'bold 20px sans-serif';
-        centerCtx.fillText('FIA FORMULA 1 LIVE BROADCAST TELEMETRY', 28, 36);
-
-        // Animated Audio / Telemetry waveform
-        centerCtx.strokeStyle = isLeadActive ? '#e10600' : isAnalystActive ? '#00f0ff' : '#38bdf8';
-        centerCtx.lineWidth = 3;
+        centerCtx.fillStyle = '#0b1525';
+        centerCtx.fillRect(0, 0, 1024, 512);
+        centerCtx.fillStyle = '#ef3340';
+        centerCtx.fillRect(44, 42, 8, 64);
+        centerCtx.fillStyle = '#eff6ff';
+        centerCtx.font = 'italic bold 46px Arial, sans-serif';
+        centerCtx.fillText('F1 SHOW / PADDOCK', 76, 86);
+        centerCtx.fillStyle = '#8ba5bd';
+        centerCtx.font = '20px monospace';
+        centerCtx.fillText('COMMENTARY STUDIO', 76, 120);
+        centerCtx.fillText('DEMO', 894, 74);
+        centerCtx.strokeStyle = '#1b3047';
+        centerCtx.lineWidth = 1;
+        for (let y = 170; y <= 350; y += 45) {
+          centerCtx.beginPath();
+          centerCtx.moveTo(44, y);
+          centerCtx.lineTo(980, y);
+          centerCtx.stroke();
+        }
+        centerCtx.strokeStyle = isLeadActive ? '#ef3340' : isAnalystActive ? '#65dbe5' : '#668ca8';
+        centerCtx.lineWidth = 4;
         centerCtx.beginPath();
-        for (let x = 20; x < 492; x += 6) {
-          const freq = isCurrentlySpeaking ? 16 : 4;
-          const amp = isCurrentlySpeaking ? 34 : 10;
-          const y = 135 + Math.sin(x * 0.05 + elapsedTime * freq) * amp * Math.sin(x * 0.015);
-          if (x === 20) centerCtx.moveTo(x, y);
+        for (let x = 44; x <= 980; x += 4) {
+          const amp = isCurrentlySpeaking ? 58 : 12;
+          const y = 260 + Math.sin(x * 0.04 + elapsedTime * (isCurrentlySpeaking ? 12 : 2)) * amp * Math.sin(x * 0.009);
+          if (x === 44) centerCtx.moveTo(x, y);
           else centerCtx.lineTo(x, y);
         }
         centerCtx.stroke();
-
-        // Speed & Gear HUD
-        centerCtx.fillStyle = '#172033';
-        centerCtx.fillRect(20, 195, 472, 45);
-        centerCtx.fillStyle = '#00f0ff';
-        centerCtx.font = 'bold 18px monospace';
-        const simulatedSpeed = Math.floor(290 + Math.sin(elapsedTime * 2) * 45);
-        centerCtx.fillText(`SPEED: ${simulatedSpeed} KM/H  |  GEAR: 7  |  MGU-K: 350kW (100%)  |  OVERRIDE: READY`, 30, 224);
+        centerCtx.fillStyle = '#14263a';
+        centerCtx.fillRect(44, 398, 936, 72);
+        centerCtx.fillStyle = '#d9e6f2';
+        centerCtx.font = 'bold 24px monospace';
+        centerCtx.fillText('CARLOS / RELATO', 70, 442);
+        centerCtx.fillStyle = '#65dbe5';
+        centerCtx.fillText('ALEX / ANÁLISIS', 600, 442);
         centerTexture.needsUpdate = true;
 
         // Left Video Wall (Sector Timings)
@@ -975,7 +1054,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
         leftCtx.fillRect(0, 0, 256, 256);
         leftCtx.fillStyle = '#e10600';
         leftCtx.font = 'bold 16px sans-serif';
-        leftCtx.fillText('SECTOR TIMINGS', 15, 28);
+        leftCtx.fillText('SECTORES / DEMO', 15, 28);
 
         const drivers = ['1 VER', '4 NOR', '81 PIA', '44 HAM'];
         drivers.forEach((drv, idx) => {
@@ -1012,7 +1091,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
 
         rightCtx.fillStyle = '#ffffff';
         rightCtx.font = 'bold 16px sans-serif';
-        rightCtx.fillText('LATERAL G: 4.8G', 20, 240);
+        rightCtx.fillText('G-FORCE / DEMO', 20, 240);
         rightTexture.needsUpdate = true;
       }
 
@@ -1021,12 +1100,12 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
       // -----------------------------------------------------------------------
       if (isLeadActive) {
         // High-energy speaking gestures
-        leadHeadGroup.rotation.y = Math.sin(elapsedTime * 8) * 0.12 - 0.06;
-        leadHeadGroup.rotation.x = Math.sin(elapsedTime * 12) * 0.07 + 0.03;
+        leadHeadGroup.rotation.y = Math.sin(elapsedTime * 2.8) * 0.07 - 0.06;
+        leadHeadGroup.rotation.x = Math.sin(elapsedTime * 3.5) * 0.035 + 0.03;
         leadHeadGroup.rotation.z = Math.sin(elapsedTime * 6) * 0.03;
 
         // Dynamic mouth articulation
-        const mouthOpen = Math.abs(Math.sin(elapsedTime * 15)) * 1.8 + 1.0;
+        const mouthOpen = Math.abs(Math.sin(elapsedTime * 15)) * 0.9 + 0.35;
         leadMouthObj.mouthGroup.scale.set(1.05, mouthOpen, 1);
 
         // Eyebrows arching with excitement
@@ -1043,13 +1122,13 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
         // Alex looks at Carlos while Carlos is talking!
         analystHeadGroup.rotation.y = -0.22 + Math.sin(elapsedTime * 1.5) * 0.04;
         analystHeadGroup.rotation.x = 0.02;
-        analystMouthObj.mouthGroup.scale.set(1, 1, 1);
+        analystMouthObj.mouthGroup.scale.set(1, 0.24, 1);
       } else {
         // Idle breathing / looking forward
         leadHeadGroup.rotation.y = Math.sin(elapsedTime * 0.8) * 0.05 + 0.03;
         leadHeadGroup.rotation.x = Math.sin(elapsedTime * 1.2) * 0.02;
         leadHeadGroup.rotation.z = 0;
-        leadMouthObj.mouthGroup.scale.set(1, 1, 1);
+        leadMouthObj.mouthGroup.scale.set(1, 0.24, 1);
         leadBrowL.position.y = 0.068;
         leadBrowR.position.y = 0.068;
         leadArmR.armGroup.position.set(0, 0, 0);
@@ -1061,12 +1140,12 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
       // -----------------------------------------------------------------------
       if (isAnalystActive) {
         // Analytical explanation gestures
-        analystHeadGroup.rotation.y = Math.sin(elapsedTime * 6) * 0.08 + 0.1;
-        analystHeadGroup.rotation.x = Math.sin(elapsedTime * 10) * 0.05 + 0.04;
+        analystHeadGroup.rotation.y = Math.sin(elapsedTime * 2.3) * 0.06 + 0.1;
+        analystHeadGroup.rotation.x = Math.sin(elapsedTime * 3) * 0.025 + 0.04;
         analystHeadGroup.rotation.z = Math.sin(elapsedTime * 5) * 0.025;
 
         // Articulated mouth
-        const aMouthOpen = Math.abs(Math.sin(elapsedTime * 14)) * 1.6 + 1.0;
+        const aMouthOpen = Math.abs(Math.sin(elapsedTime * 14)) * 0.8 + 0.35;
         analystMouthObj.mouthGroup.scale.set(1.05, aMouthOpen, 1);
 
         aBrowL.position.y = 0.068 + Math.sin(elapsedTime * 8) * 0.006;
@@ -1084,7 +1163,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
         analystHeadGroup.rotation.y = Math.sin(elapsedTime * 0.7 + 1) * 0.04 - 0.06;
         analystHeadGroup.rotation.x = 0.07 + Math.sin(elapsedTime * 1.1) * 0.02; // looking down at tablet
         analystHeadGroup.rotation.z = 0;
-        analystMouthObj.mouthGroup.scale.set(1, 1, 1);
+        analystMouthObj.mouthGroup.scale.set(1, 0.24, 1);
         aBrowL.position.y = 0.068;
         aBrowR.position.y = 0.068;
         analystArmR.armGroup.position.set(0, 0, 0);
@@ -1095,38 +1174,40 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
       // BROADCAST CAMERA TRANSITIONS (Auto Director Mode)
       // -----------------------------------------------------------------------
       let targetCamX = 0;
-      let targetCamY = 1.35;
-      let targetCamZ = 3.8;
+      let targetCamY = 1.65;
+      let targetCamZ = 4.3;
       let targetLookX = 0;
-      let targetLookY = 1.15;
+      let targetLookY = 1.25;
 
       if (currentCameraMode === 'lead' || (currentCameraMode === 'dual' && isLeadActive && !isAnalystActive)) {
         // Tight shot on Carlos
         targetCamX = -0.7;
-        targetCamY = 1.35;
-        targetCamZ = 2.4;
+        targetCamY = 1.45;
+        targetCamZ = 1.95;
         targetLookX = -0.7;
         targetLookY = 1.32;
       } else if (currentCameraMode === 'analyst' || (currentCameraMode === 'dual' && isAnalystActive && !isLeadActive)) {
         // Tight shot on Alex
         targetCamX = 0.7;
-        targetCamY = 1.35;
-        targetCamZ = 2.4;
+        targetCamY = 1.45;
+        targetCamZ = 1.95;
         targetLookX = 0.7;
         targetLookY = 1.32;
       } else if (currentCameraMode === 'wide') {
         // Panoramic crane shot
         targetCamX = 0;
-        targetCamY = 1.8;
-        targetCamZ = 4.8;
+        targetCamY = 1.9;
+        targetCamZ = 5.2;
         targetLookX = 0;
-        targetLookY = 1.1;
+        targetLookY = 1.2;
       }
 
-      camera.position.x += (targetCamX - camera.position.x) * 0.045;
-      camera.position.y += (targetCamY - camera.position.y) * 0.045;
-      camera.position.z += (targetCamZ - camera.position.z) * 0.045;
-      camera.lookAt(targetLookX, targetLookY, 0);
+      // Preserve the two-shot on narrow panels instead of cutting off a presenter.
+      targetCamZ *= Math.max(1, 1.45 / camera.aspect);
+      const cameraBlend = 1 - Math.exp(-4 * deltaTime);
+      camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), cameraBlend);
+      cameraLookTarget.lerp(new THREE.Vector3(targetLookX, targetLookY, 0), cameraBlend);
+      camera.lookAt(cameraLookTarget);
 
       renderer.render(scene, camera);
     };
@@ -1137,19 +1218,40 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
       if (!container) return;
       const newWidth = container.clientWidth;
       const newHeight = container.clientHeight;
+      if (!newWidth || !newHeight) return;
       camera.aspect = newWidth / newHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(newWidth, newHeight);
     };
 
-    window.addEventListener('resize', handleResize);
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(container);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       cancelAnimationFrame(animationFrameId);
       if (container && renderer.domElement) {
         container.removeChild(renderer.domElement);
       }
+      const geometries = new Set<THREE.BufferGeometry>();
+      const materials = new Set<THREE.Material>();
+      const textures = new Set<THREE.Texture>();
+      scene.traverse(object => {
+        if (object instanceof THREE.Mesh) {
+          geometries.add(object.geometry);
+          const meshMaterials = Array.isArray(object.material) ? object.material : [object.material];
+          for (const material of meshMaterials) {
+            materials.add(material);
+            for (const value of Object.values(material)) {
+              if (value instanceof THREE.Texture) textures.add(value);
+            }
+          }
+        }
+      });
+      geometries.forEach(geometry => geometry.dispose());
+      materials.forEach(material => material.dispose());
+      textures.forEach(texture => texture.dispose());
+      environment.dispose();
       renderer.dispose();
       scene.clear();
     };
@@ -1157,15 +1259,15 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
 
   return (
     <div
-      className={`relative bg-zinc-950 rounded-xl overflow-hidden border border-zinc-800 shadow-2xl flex flex-col ${
-        isFullscreen ? 'fixed inset-4 z-50' : 'h-full min-h-[420px]'
+      className={`bg-zinc-950 rounded-xl overflow-hidden border border-zinc-800 shadow-2xl flex flex-col ${
+        isFullscreen ? 'fixed inset-4 z-50' : 'relative h-full min-h-[420px]'
       }`}
     >
       {/* 3D WebGL Canvas Container */}
       <div ref={mountRef} className="w-full flex-1 min-h-[380px] bg-zinc-950 relative" />
 
       {/* Top Overlay Badge: Live Booth Status */}
-      <div className="absolute top-3 left-3 flex items-center gap-2 bg-zinc-950/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-zinc-800/80 text-xs">
+      <div className="absolute top-3 left-3 flex max-w-[calc(100%-1.5rem)] items-center gap-2 bg-zinc-950/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-zinc-800/80 text-xs">
         <div className="flex items-center gap-1.5">
           <span
             className={`w-2.5 h-2.5 rounded-full ${
@@ -1182,7 +1284,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
           </span>
         </div>
         <span className="text-zinc-600">|</span>
-        <span className="text-zinc-400 font-mono text-[11px]">
+        <span className="text-zinc-400 font-mono text-[11px] truncate">
           {activeSpeaker === 'lead'
             ? '🎙️ Carlos (Relator Principal)'
             : activeSpeaker === 'color'
@@ -1192,9 +1294,10 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
       </div>
 
       {/* Top Right: Camera Angle & Fullscreen Controls */}
-      <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-zinc-950/85 backdrop-blur-md p-1 rounded-lg border border-zinc-800/80 text-xs">
+      <div className="absolute top-14 right-3 sm:top-3 flex items-center gap-1.5 bg-zinc-950/85 backdrop-blur-md p-1 rounded-lg border border-zinc-800/80 text-xs">
         <button
           onClick={() => setCameraView('dual')}
+          aria-pressed={cameraView === 'dual'}
           className={`px-2.5 py-1 rounded font-medium transition-colors ${
             cameraView === 'dual'
               ? 'bg-red-600 text-white shadow-sm'
@@ -1206,6 +1309,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
         </button>
         <button
           onClick={() => setCameraView('lead')}
+          aria-pressed={cameraView === 'lead'}
           className={`px-2 py-1 rounded transition-colors ${
             cameraView === 'lead'
               ? 'bg-red-600 text-white'
@@ -1217,6 +1321,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
         </button>
         <button
           onClick={() => setCameraView('analyst')}
+          aria-pressed={cameraView === 'analyst'}
           className={`px-2 py-1 rounded transition-colors ${
             cameraView === 'analyst'
               ? 'bg-cyan-600 text-white'
@@ -1228,6 +1333,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
         </button>
         <button
           onClick={() => setCameraView('wide')}
+          aria-pressed={cameraView === 'wide'}
           className={`px-2 py-1 rounded transition-colors ${
             cameraView === 'wide'
               ? 'bg-zinc-700 text-white'
@@ -1240,6 +1346,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
         <div className="w-[1px] h-4 bg-zinc-800 mx-0.5" />
         <button
           onClick={() => setIsFullscreen(!isFullscreen)}
+          aria-pressed={isFullscreen}
           className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
           title="Pantalla completa"
         >
@@ -1255,7 +1362,7 @@ export const ThreeCommentatorStudio: React.FC<ThreeCommentatorStudioProps> = ({
           </div>
           <div className="flex-1 min-w-0">
             <span className="text-[10px] uppercase font-bold tracking-wider text-red-400 block font-mono">
-              {activeSpeaker === 'lead' ? 'Carlos (Play-by-Play)' : 'Alex (Telemetría)'}
+              {activeSpeaker === 'lead' ? 'Carlos (Play-by-Play)' : activeSpeaker === 'color' ? 'Alex (Telemetría)' : 'Cabina de comentarios'}
             </span>
             <p className="text-zinc-200 line-clamp-2 leading-relaxed italic mt-0.5">
               "{currentTurnQuote}"
