@@ -40,3 +40,17 @@ at startup.
 - **L1** (2026-10-21, verbatim): *"y podemos crear algo que sea funcional a las dos opciones ?
   Switch Usar A o B"* — after the parent answered that `server.ts` reads only `GEMINI_API_KEY`
   and the proxy requires an edit.
+- **L2** (2026-10-21): **T2 measured — the proxy's native-dialect endpoint routes but rejects
+  both stored credentials.** The experiment matrix (values never printed): native dialect via
+  `CLIPROXY_BASE_URL` (no `/v1`) with `CLIPROXY_API_KEY` → `{"error":"Invalid API key"}`; same
+  base with `OPENAI_API_KEY` → identical; base **with** `/v1` (either key) → **404 Not Found**
+  (the `/v1/v1beta` join does not exist); raw `curl /v1beta/models` with the key as
+  `x-goog-api-key` → `Invalid API key` again. **Findings:** the proxy **does route** the native
+  Gemini path (a Gemini-shaped auth error, not a 404 — F08's untested wiring is now measured to
+  this depth), and both stored credentials (both len-24, likely the same value) are **rejected
+  for the native endpoint** — they authenticate the OpenAI-compatible endpoint instead. **Option
+  B via the native dialect is therefore blocked on credentials, not on code**: it needs the
+  proxy's native-dialect key (CLI-proxy-api typically issues one, or uses its own OAuth to
+  upstream). The alternative — consuming the proxy's OpenAI-compatible endpoint from the TS
+  server — is a different client shape and stays a user decision. Option A (direct key)
+  remains zero-change.
