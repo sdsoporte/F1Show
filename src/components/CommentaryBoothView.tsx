@@ -159,7 +159,8 @@ export const CommentaryBoothView: React.FC<CommentaryBoothViewProps> = ({
                   speechService.speak(
                     '¡Bienvenidos al Gran Premio! Carlos en los relatos de la Fórmula 1.',
                     'lead',
-                    language
+                    language,
+                    { immediate: true }
                   );
                 }}
                 className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-zinc-700/60 shadow-sm"
@@ -210,7 +211,8 @@ export const CommentaryBoothView: React.FC<CommentaryBoothViewProps> = ({
                   speechService.speak(
                     'Alex analizando la telemetría, el modo override y los neumáticos.',
                     'color',
-                    language
+                    language,
+                    { immediate: true }
                   );
                 }}
                 className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-zinc-700/60 shadow-sm"

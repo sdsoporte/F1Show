@@ -117,7 +117,7 @@ export const LiveTimingTower: React.FC<LiveTimingTowerProps> = ({
   });
 
   return (
-    <div className="bg-zinc-900/90 rounded-xl border border-zinc-800 shadow-xl overflow-hidden flex flex-col h-full">
+    <div className="bg-zinc-900/90 rounded-xl border border-zinc-800 shadow-xl overflow-hidden flex flex-col h-full min-h-0">
       {/* Tower Header */}
       <div className="bg-zinc-850 px-3 py-2 border-b border-zinc-700/60 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -197,7 +197,7 @@ export const LiveTimingTower: React.FC<LiveTimingTowerProps> = ({
       </div>
 
       {/* Driver List (Scrollable) with Elimination Cutoff Lines in Qualy */}
-      <div className="divide-y divide-zinc-800/60 overflow-y-auto flex-1 font-mono text-xs">
+      <div className="divide-y divide-zinc-800/60 overflow-y-auto flex-1 min-h-0 font-mono text-xs">
         {filteredDrivers.map((d, index) => {
           const isSelected = selectedDriverNumber === d.driverNumber;
           const isFastest = fastestLapHolderNumber === d.driverNumber;

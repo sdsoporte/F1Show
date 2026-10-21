@@ -464,7 +464,7 @@ export const App: React.FC = () => {
         setCustomAiTurns(prev => [...prev, newTurn]);
 
         if (audioEnabled) {
-          speechService.speak(newTurn.text, newTurn.speaker, language);
+          speechService.speak(newTurn.text, newTurn.speaker, language, { immediate: true });
         }
       }
     } finally {
@@ -488,7 +488,7 @@ export const App: React.FC = () => {
       const latestTurn = turns[turns.length - 1];
       if (latestTurn.outcome === 'AIRED' && latestTurn.id !== lastSpokenTurnId.current) {
         lastSpokenTurnId.current = latestTurn.id;
-        speechService.speak(latestTurn.text, latestTurn.speaker, language);
+        speechService.speak(latestTurn.text, latestTurn.speaker, language, { immediate: false });
       }
     }
   }, [turns, audioEnabled, isPlaying, language]);
@@ -550,7 +550,7 @@ export const App: React.FC = () => {
   const handlePlayTurnAudio = useCallback((turn: Turn) => {
     speechService.setEnabled(true);
     setAudioEnabled(true);
-    speechService.speak(turn.text, turn.speaker, language);
+    speechService.speak(turn.text, turn.speaker, language, { immediate: true });
   }, [language]);
 
   if (isObsDirect) {
@@ -723,9 +723,9 @@ export const App: React.FC = () => {
 
         {/* ================= DASHBOARD 2: MASTER 3-COLUMN CONTROL ================= */}
         {dashboardTab === 'master' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 h-full overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 h-full min-h-0 overflow-hidden">
             {/* Left Column: Live Timing Tower */}
-            <div className="lg:col-span-4 xl:col-span-3 h-full overflow-hidden">
+            <div className="lg:col-span-4 xl:col-span-3 h-full min-h-0 overflow-hidden flex flex-col">
               <LiveTimingTower
                 driversState={driversState}
                 selectedDriverNumber={selectedDriverNumber}
@@ -737,7 +737,7 @@ export const App: React.FC = () => {
             </div>
 
             {/* Center Column: Two-Person Commentary Booth or 2D Circuit Tracker */}
-            <div className="lg:col-span-8 xl:col-span-5 h-full flex flex-col gap-2 overflow-hidden">
+            <div className="lg:col-span-8 xl:col-span-5 h-full min-h-0 flex flex-col gap-2 overflow-hidden">
               <div className="flex items-center justify-between bg-zinc-900/90 p-1.5 rounded-lg border border-zinc-800 text-xs shrink-0">
                 <div className="flex items-center gap-1">
                   <button
@@ -793,7 +793,7 @@ export const App: React.FC = () => {
             </div>
 
             {/* Right Column: Salience, Championship & Tactical */}
-            <div className="lg:col-span-12 xl:col-span-4 h-full flex flex-col gap-2 overflow-hidden">
+            <div className="lg:col-span-12 xl:col-span-4 h-full min-h-0 flex flex-col gap-2 overflow-hidden">
               <div className="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800 text-xs shrink-0">
                 <button
                   onClick={() => setRightTab('all')}
@@ -898,9 +898,9 @@ export const App: React.FC = () => {
 
         {/* ================= DASHBOARD 5: 2D CIRCUIT GPS TRACKER ================= */}
         {dashboardTab === 'map' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 h-full overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 h-full min-h-0 overflow-hidden">
             {/* Left Column: Live Timing Tower */}
-            <div className="lg:col-span-4 xl:col-span-3 h-full overflow-hidden">
+            <div className="lg:col-span-4 xl:col-span-3 h-full min-h-0 overflow-hidden flex flex-col">
               <LiveTimingTower
                 driversState={driversState}
                 selectedDriverNumber={selectedDriverNumber}
@@ -912,7 +912,7 @@ export const App: React.FC = () => {
             </div>
 
             {/* Right Column: 2D Circuit Tracker */}
-            <div className="lg:col-span-8 xl:col-span-9 h-full overflow-hidden">
+            <div className="lg:col-span-8 xl:col-span-9 h-full min-h-0 overflow-hidden flex flex-col">
               <CircuitMap2D
                 session={sessionData.session}
                 driversState={driversState}

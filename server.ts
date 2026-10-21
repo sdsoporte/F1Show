@@ -140,6 +140,66 @@ app.get('/api/gemini/status', (_req, res) => {
   });
 });
 
+/**
+ * Route: POST /api/tts
+ * Synthesizes voice audio using Gemini TTS (gemini-3.8-flash-lite-tts).
+ */
+app.post('/api/tts', async (req, res) => {
+  try {
+    const { text, speaker, language } = req.body;
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ error: 'Missing or invalid text parameter' });
+    }
+
+    if (!ai) {
+      return res.status(503).json({ error: 'GEMINI_API_KEY is not configured on server', available: false });
+    }
+
+    // Assign distinct voices for Carlos (Lead) vs Alex (Color Analyst)
+    const voiceName = speaker === 'lead' ? 'Puck' : 'Fenrir';
+
+    let dialectInstruction = 'Spanish (Argentina)';
+    if (language === 'es-MX') dialectInstruction = 'Spanish (Mexico)';
+    else if (language === 'es-ES') dialectInstruction = 'Spanish (Spain)';
+    else if (language === 'en') dialectInstruction = 'English (UK)';
+
+    const promptText = `Speak as an authentic Formula 1 TV commentator in ${dialectInstruction}: ${text}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash-lite-tts',
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: promptText }],
+        },
+      ],
+      config: {
+        responseModalities: ['AUDIO'],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName },
+          },
+        },
+      },
+    });
+
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!base64Audio) {
+      throw new Error('No audio payload received from Gemini TTS');
+    }
+
+    return res.json({
+      audioBase64: base64Audio,
+      mimeType: 'audio/wav',
+      speaker,
+      available: true,
+    });
+  } catch (error: any) {
+    console.warn('[Gemini TTS] Error generating audio:', error?.message || error);
+    return res.status(500).json({ error: error?.message || 'TTS generation failed', available: false });
+  }
+});
+
 import { f1SignalR } from './server/f1SignalR.ts';
 
 /**

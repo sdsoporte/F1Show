@@ -1,31 +1,63 @@
 import { BoothLanguage, BoothSpeaker } from '../types/f1';
 
+export interface SpeakOptions {
+  immediate?: boolean;
+  onEnd?: () => void;
+  isRetry?: boolean;
+}
+
+interface QueuedTurn {
+  text: string;
+  speaker: BoothSpeaker;
+  language: BoothLanguage;
+  onEnd?: () => void;
+}
+
 class SpeechService {
   private enabled: boolean = false;
   private soundEffects: boolean = true;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private audioContext: AudioContext | null = null;
   private isCurrentlySpeaking: boolean = false;
+  private currentSpeaker: BoothSpeaker | null = null;
   private speakingListeners: Array<(speaking: boolean, speaker: BoothSpeaker | null) => void> = [];
   private cachedVoices: SpeechSynthesisVoice[] = [];
+  private voicesLoaded: boolean = false;
+  private queue: QueuedTurn[] = [];
+  private lastChimeTime: number = 0;
+  private keepAliveTimer: any = null;
 
   constructor() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       this.loadVoices();
-      window.speechSynthesis.onvoiceschanged = () => {
-        this.loadVoices();
-      };
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          this.loadVoices();
+        };
+      }
+      // Chrome keepalive: prevent long speech from going silent or stuck in paused state
+      this.keepAliveTimer = setInterval(() => {
+        if (typeof window !== 'undefined' && window.speechSynthesis && this.isCurrentlySpeaking) {
+          if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
+        }
+      }, 3000);
     }
   }
 
   private loadVoices() {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
-      this.cachedVoices = window.speechSynthesis.getVoices();
+      const v = window.speechSynthesis.getVoices();
+      if (v && v.length > 0) {
+        this.cachedVoices = v;
+        this.voicesLoaded = true;
+      }
     }
   }
 
   public getAvailableVoices(): SpeechSynthesisVoice[] {
-    if (this.cachedVoices.length === 0) {
+    if (!this.voicesLoaded || this.cachedVoices.length === 0) {
       this.loadVoices();
     }
     return this.cachedVoices;
@@ -40,6 +72,7 @@ class SpeechService {
 
   private notifySpeaking(speaking: boolean, speaker: BoothSpeaker | null) {
     this.isCurrentlySpeaking = speaking;
+    this.currentSpeaker = speaker;
     this.speakingListeners.forEach(l => l(speaking, speaker));
   }
 
@@ -47,11 +80,15 @@ class SpeechService {
     return this.isCurrentlySpeaking;
   }
 
+  public getCurrentSpeaker(): BoothSpeaker | null {
+    return this.currentSpeaker;
+  }
+
   public setEnabled(enabled: boolean) {
     this.enabled = enabled;
-    if (!enabled && typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-      this.notifySpeaking(false, null);
+    if (!enabled) {
+      this.queue = [];
+      this.stop();
     }
   }
 
@@ -78,6 +115,11 @@ class SpeechService {
 
   public playRadioChime() {
     if (!this.soundEffects) return;
+    const now = Date.now();
+    // Don't spam chimes if one just played in the last 2.5 seconds
+    if (now - this.lastChimeTime < 2500) return;
+    this.lastChimeTime = now;
+
     try {
       this.initAudioContext();
       if (!this.audioContext) return;
@@ -92,7 +134,7 @@ class SpeechService {
       osc.frequency.setValueAtTime(880, this.audioContext.currentTime); // A5
       osc.frequency.exponentialRampToValueAtTime(1760, this.audioContext.currentTime + 0.08); // A6
 
-      gain.gain.setValueAtTime(0.08, this.audioContext.currentTime);
+      gain.gain.setValueAtTime(0.06, this.audioContext.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.15);
 
       osc.connect(gain);
@@ -105,96 +147,234 @@ class SpeechService {
     }
   }
 
+  /**
+   * Intelligently selects the best matching voice and sets utterance.lang to match!
+   */
+  private selectVoiceAndLang(utterance: SpeechSynthesisUtterance, speaker: BoothSpeaker, language: BoothLanguage) {
+    const allVoices = this.getAvailableVoices();
+
+    // Map booth language preference
+    let preferredDialect = 'es-AR';
+    if (language === 'es-MX') preferredDialect = 'es-MX';
+    else if (language === 'es-419') preferredDialect = 'es-419';
+    else if (language === 'es-ES') preferredDialect = 'es-ES';
+    else if (language === 'en') preferredDialect = 'en-GB';
+
+    if (allVoices.length === 0) {
+      // No voices loaded in browser yet, use fallback code
+      utterance.lang = language === 'en' ? 'en-US' : 'es-ES';
+      return;
+    }
+
+    if (language === 'en') {
+      const enVoices = allVoices.filter(v => v.lang.toLowerCase().startsWith('en'));
+      if (enVoices.length > 0) {
+        const chosen = speaker === 'lead' ? enVoices[0] : enVoices[enVoices.length - 1];
+        utterance.voice = chosen;
+        utterance.lang = chosen.lang;
+        return;
+      }
+    }
+
+    // Spanish selection: find all Spanish voices
+    const esVoices = allVoices.filter(v => {
+      const l = v.lang.toLowerCase().replace('_', '-');
+      const n = v.name.toLowerCase();
+      return l.startsWith('es') || n.includes('spanish') || n.includes('español');
+    });
+
+    if (esVoices.length > 0) {
+      // Check if any voice matches preferred dialect exactly
+      const dialectMatch = esVoices.find(v => v.lang.toLowerCase().replace('_', '-') === preferredDialect.toLowerCase());
+
+      let leadVoice = dialectMatch || esVoices[0];
+      let analystVoice = esVoices.length > 1 ? esVoices[esVoices.length - 1] : leadVoice;
+
+      // Check for named personas if available
+      const maleVoice = esVoices.find(v => {
+        const n = v.name.toLowerCase();
+        return (
+          n.includes('carlos') ||
+          n.includes('jorge') ||
+          n.includes('diego') ||
+          n.includes('pablo') ||
+          n.includes('raul') ||
+          n.includes('male')
+        );
+      });
+      const altVoice = esVoices.find(v => v !== (maleVoice || leadVoice));
+
+      if (maleVoice) leadVoice = maleVoice;
+      if (altVoice) analystVoice = altVoice;
+
+      const chosenVoice = speaker === 'lead' ? leadVoice : analystVoice;
+      utterance.voice = chosenVoice;
+      // CRITICAL: lang must match the voice's actual lang to prevent 'language-unavailable' error in Chromium!
+      utterance.lang = chosenVoice.lang || 'es-ES';
+      return;
+    }
+
+    // No Spanish voices installed on user's system!
+    // Pick the default system voice or first voice so speech DOES NOT ERROR OUT!
+    const defaultVoice = allVoices.find(v => v.default) || allVoices[0];
+    if (defaultVoice) {
+      utterance.voice = defaultVoice;
+      utterance.lang = defaultVoice.lang || 'es-ES';
+    } else {
+      utterance.lang = 'es-ES';
+    }
+  }
+
   public speak(
     text: string,
     speaker: BoothSpeaker,
     language: BoothLanguage,
-    onEnd?: () => void
+    options: SpeakOptions = {}
   ) {
     if (!this.enabled || typeof window === 'undefined' || !window.speechSynthesis) {
-      if (onEnd) onEnd();
+      if (options.onEnd) options.onEnd();
       return;
     }
 
-    // Play subtle broadcast radio chime before speech
-    this.playRadioChime();
+    // Clean text of markdown or URLs if any
+    const cleanText = text.replace(/[*_#`]/g, '').trim();
+    if (!cleanText) {
+      if (options.onEnd) options.onEnd();
+      return;
+    }
 
-    // Cancel any ongoing speech and unfreeze Chrome speech queue
-    window.speechSynthesis.cancel();
+    const { immediate = false, onEnd, isRetry = false } = options;
+
+    // If something is already speaking and this is not an immediate action, queue it!
+    if (this.isCurrentlySpeaking && !immediate) {
+      // Keep only up to 1 turn in queue to avoid stale commentary piling up
+      this.queue = [{ text: cleanText, speaker, language, onEnd }];
+      return;
+    }
+
+    // Cancel existing utterance safely
+    if (immediate && this.isCurrentlySpeaking) {
+      window.speechSynthesis.cancel();
+    }
+
+    // Avoid Chrome instant cancel-speak race condition: dispatch in next microtask
+    setTimeout(() => {
+      this.executeSpeak(cleanText, speaker, language, { onEnd, isRetry });
+    }, 40);
+  }
+
+  private executeSpeak(
+    cleanText: string,
+    speaker: BoothSpeaker,
+    language: BoothLanguage,
+    options: { onEnd?: () => void; isRetry?: boolean }
+  ) {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
     if (window.speechSynthesis.paused) {
       window.speechSynthesis.resume();
     }
 
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(cleanText);
     this.currentUtterance = utterance;
-    // Store in global window to prevent Chrome GC bug
     (window as any).__f1Utterance = utterance;
 
-    // Map booth language to BCP 47 tag
-    let langCode = 'es-AR';
-    if (language === 'es-AR') langCode = 'es-AR';
-    else if (language === 'es-MX') langCode = 'es-MX';
-    else if (language === 'es-419') langCode = 'es-419';
-    else if (language === 'es-ES') langCode = 'es-ES';
-    else if (language === 'en') langCode = 'en-GB';
-
-    utterance.lang = langCode;
-
     // Distinct persona voice tuning:
-    // Lead announcer (Carlos): slightly higher pitch, energetic broadcast tempo
-    // Color analyst (Alex): slightly deeper pitch, calm telemetry tempo
     if (speaker === 'lead') {
-      utterance.pitch = 1.15;
-      utterance.rate = 1.08;
+      utterance.pitch = 1.08;
+      utterance.rate = 1.05;
     } else {
-      utterance.pitch = 0.92;
+      utterance.pitch = 0.94;
       utterance.rate = 0.98;
     }
 
-    // Voice selection heuristic with language fallback
-    const voices = this.getAvailableVoices();
-    if (voices.length > 0) {
-      const langPrefix = langCode.slice(0, 2);
-      // Try exact language match first, then language prefix
-      let matchingVoices = voices.filter(v => v.lang.toLowerCase() === langCode.toLowerCase());
-      if (matchingVoices.length === 0) {
-        matchingVoices = voices.filter(v => v.lang.toLowerCase().startsWith(langPrefix.toLowerCase()));
-      }
+    // Select voice and matching language code
+    this.selectVoiceAndLang(utterance, speaker, language);
 
-      if (matchingVoices.length > 1) {
-        if (speaker === 'lead') {
-          utterance.voice = matchingVoices[0];
-        } else {
-          utterance.voice = matchingVoices[matchingVoices.length - 1];
-        }
-      } else if (matchingVoices.length === 1) {
-        utterance.voice = matchingVoices[0];
-      }
-    }
-
-    this.notifySpeaking(true, speaker);
+    // Play chime right when audio starts!
+    utterance.onstart = () => {
+      this.playRadioChime();
+      this.notifySpeaking(true, speaker);
+    };
 
     utterance.onend = () => {
       this.currentUtterance = null;
       (window as any).__f1Utterance = null;
       this.notifySpeaking(false, null);
-      if (onEnd) onEnd();
+      if (options.onEnd) options.onEnd();
+
+      // Process next queued turn if any
+      if (this.queue.length > 0) {
+        const next = this.queue.shift();
+        if (next) {
+          setTimeout(() => {
+            this.speak(next.text, next.speaker, next.language, { onEnd: next.onEnd });
+          }, 350);
+        }
+      }
     };
 
-    utterance.onerror = (e) => {
-      console.warn('[SpeechService] Speech synthesis event:', e);
+    utterance.onerror = (e: any) => {
+      const errorType = e.error || 'unknown';
       this.currentUtterance = null;
       (window as any).__f1Utterance = null;
+
+      if (errorType === 'canceled' || errorType === 'interrupted') {
+        // Normal interruption, do not warn or alert
+        this.notifySpeaking(false, null);
+        if (options.onEnd) options.onEnd();
+        return;
+      }
+
+      console.warn(`[SpeechService] Speech synthesis event: ${errorType}`);
+
+      // Auto-fallback: if language-unavailable or voice-unavailable, retry once with raw system voice!
+      if ((errorType === 'language-unavailable' || errorType === 'voice-unavailable') && !options.isRetry) {
+        console.info('[SpeechService] Retrying with generic system default voice...');
+        setTimeout(() => {
+          this.executeSystemFallback(cleanText, speaker, options.onEnd);
+        }, 50);
+        return;
+      }
+
+      this.notifySpeaking(false, null);
+      if (options.onEnd) options.onEnd();
+    };
+
+    try {
+      window.speechSynthesis.resume();
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn('[SpeechService] Error calling speechSynthesis.speak:', err);
+      this.notifySpeaking(false, null);
+      if (options.onEnd) options.onEnd();
+    }
+  }
+
+  private executeSystemFallback(cleanText: string, speaker: BoothSpeaker, onEnd?: () => void) {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.voice = null;
+    utterance.lang = ''; // Use browser default
+
+    utterance.onstart = () => {
+      this.notifySpeaking(true, speaker);
+    };
+    utterance.onend = () => {
+      this.notifySpeaking(false, null);
+      if (onEnd) onEnd();
+    };
+    utterance.onerror = (e: any) => {
+      console.warn('[SpeechService] Fallback speech error:', e.error || e);
       this.notifySpeaking(false, null);
       if (onEnd) onEnd();
     };
 
-    // Unpause if stuck and speak
-    window.speechSynthesis.resume();
     window.speechSynthesis.speak(utterance);
   }
 
   public stop() {
+    this.queue = [];
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
       this.currentUtterance = null;

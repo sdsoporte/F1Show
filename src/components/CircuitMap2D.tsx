@@ -452,7 +452,7 @@ export const CircuitMap2D: React.FC<CircuitMap2DProps> = ({
   };
 
   return (
-    <div className="bg-zinc-900/95 rounded-xl border border-zinc-800 shadow-2xl overflow-hidden flex flex-col h-full">
+    <div className="bg-zinc-900/95 rounded-xl border border-zinc-800 shadow-2xl overflow-hidden flex flex-col h-full min-h-0">
       {/* Circuit Tracker Top Toolbar */}
       <div className="bg-zinc-850 px-4 py-2.5 border-b border-zinc-700/60 flex flex-wrap items-center justify-between gap-3">
         {/* Track Title and Circuit Details */}
@@ -605,7 +605,7 @@ export const CircuitMap2D: React.FC<CircuitMap2DProps> = ({
       </div>
 
       {/* Interactive SVG Canvas Area */}
-      <div className="relative flex-1 bg-gradient-to-b from-zinc-950 to-zinc-900 overflow-hidden flex items-center justify-center p-3 select-none">
+      <div className="relative flex-1 min-h-0 bg-gradient-to-b from-zinc-950 to-zinc-900 overflow-hidden flex items-center justify-center p-3 select-none">
         {/* Subtle Background Radial Grid */}
         <div className="absolute inset-0 bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:24px_24px] opacity-25 pointer-events-none" />
 
