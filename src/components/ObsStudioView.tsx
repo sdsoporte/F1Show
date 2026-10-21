@@ -14,7 +14,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { LiveDriverState, SessionRecord, Turn, BoothSpeaker } from '../types/f1';
-import { ThreeCommentatorStudio } from './ThreeCommentatorStudio';
+import { Studio3DSwitcher } from './Studio3DSwitcher';
 
 interface ObsStudioViewProps {
   session: SessionRecord;
@@ -251,7 +251,7 @@ export const ObsStudioView: React.FC<ObsStudioViewProps> = ({
             <div className="absolute inset-0 flex flex-col justify-between">
               {/* 3D Avatars Studio Canvas */}
               <div className="flex-1 w-full h-full">
-                <ThreeCommentatorStudio
+                <Studio3DSwitcher
                   activeSpeaker={activeSpeaker}
                   isSpeaking={isSpeaking}
                   currentTurnQuote={currentTurn?.text}

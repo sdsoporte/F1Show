@@ -30,7 +30,7 @@ import { CircuitMap2D } from './components/CircuitMap2D';
 import { PlaybackControls } from './components/PlaybackControls';
 import { EvidenceModal } from './components/EvidenceModal';
 import { SignalRMonitorModal } from './components/SignalRMonitorModal';
-import { ThreeCommentatorStudio } from './components/ThreeCommentatorStudio';
+import { Studio3DSwitcher } from './components/Studio3DSwitcher';
 import { HeadToHeadTelemetry } from './components/HeadToHeadTelemetry';
 import { ObsStudioView } from './components/ObsStudioView';
 import { generateGeminiTurn } from './services/booth';
@@ -685,7 +685,7 @@ export const App: React.FC = () => {
             {/* Left Column: 3D Studio Canvas */}
             <div className="lg:col-span-7 h-full flex flex-col gap-2 overflow-hidden">
               <div className="flex-1 min-h-0 overflow-hidden">
-                <ThreeCommentatorStudio
+                <Studio3DSwitcher
                   activeSpeaker={currentSpeakingPersona}
                   isSpeaking={isSpeakingState}
                   currentTurnQuote={turns[turns.length - 1]?.text}
