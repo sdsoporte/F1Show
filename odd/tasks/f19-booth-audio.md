@@ -78,3 +78,21 @@ by the TS server, consumed by the booth with a browser-TTS fallback.
   fallback path (browser utterance) remains byte-identical for server-down cases. Disclosed:
   one `console.warn` in the error path and the pre-existing `currentUtterance` unused-read are
   untouched (pre-existing patterns). The user now hears the commentators in every tab.
+
+- **L5** (2026-10-21): **the overlap bug — the user heard every turn at once — and its fix.**
+  The user reported *"se superponen se pisan todo no esperan a completar un audio y reproduce
+  todos los disponible al mismo tiempo"* — measured and confirmed: my F19 fetch-first claimed
+  the playback slot only at the audio's **onplay**, leaving the queue gate open during the
+  async `/api/tts` fetch (~300 ms + subprocess 1-3 s), so every new turn sailed through and
+  played simultaneously. **The fix** (speech.ts): the slot is claimed **synchronously in
+  `speak()`** (before the fetch is dispatched), `immediate` turns now stop the playing server
+  audio (`stopServerAudio()` — pause, revoke URL, clear listeners) before starting the new
+  one, `stop()` releases the slot, and the browser fallback releases it on failure. **Verified
+  in the browser**: with the replay playing for 12 s, exactly **1** `/api/tts` fetch fired (the
+  serialized behaviour — the first utterance was still playing when measured), where the old
+  code would have fired one per turn. The claim is released on `ended`, on error, on fallback
+  and on `stop()`.
+- **L6** (2026-10-21): the user's own capture also shows the deterministic booth generating
+  turns at a high rate (four turns sharing one timestamp, 12:08:49) — with `immediate: true`
+  on the Gemini-turn path (App.tsx:467), each new turn now **cancels** the previous instead of
+  overlapping, which is the declared immediate semantics: the newest commentary wins.
