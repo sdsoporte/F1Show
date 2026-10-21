@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI } from '@google/genai';
+import { resolveGeminiProvider } from './server/geminiProvider';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,18 +11,11 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json());
 
-// Initialize Google Gen AI client with User-Agent telemetry
-const apiKey = process.env.GEMINI_API_KEY || '';
-const ai = apiKey
-  ? new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    })
-  : null;
+// Initialize Google Gen AI client: direct key or CLIproxy, per GEMINI_PROVIDER.
+// The startup log names the active provider (never a key value).
+const resolved = resolveGeminiProvider(process.env as Record<string, string | undefined>);
+const ai = resolved.client;
+console.log(`[Gemini] provider: ${resolved.detail}`);
 
 /**
  * Route: POST /api/gemini/commentary
@@ -118,13 +111,13 @@ Generate your response following the EVIDENCE protocol on line 1, followed by yo
     return res.json({
       text: generatedText,
       modelId: 'gemini-3.8-flash',
-      isConfigured: true,
+      isConfigured: resolved.provider !== 'none',
     });
   } catch (error: any) {
     console.error('Error generating Gemini commentary:', error);
     return res.status(500).json({
       error: error?.message || 'Failed to generate commentary with Gemini',
-      isConfigured: Boolean(apiKey),
+      isConfigured: resolved.provider !== 'none',
     });
   }
 });
@@ -135,7 +128,8 @@ Generate your response following the EVIDENCE protocol on line 1, followed by yo
  */
 app.get('/api/gemini/status', (_req, res) => {
   res.json({
-    available: Boolean(apiKey),
+    available: resolved.provider !== 'none',
+    provider: resolved.provider,
     model: 'gemini-3.8-flash',
   });
 });
