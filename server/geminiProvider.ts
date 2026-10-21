@@ -15,7 +15,9 @@ const USER_AGENT = 'aistudio-build';
 /**
  * Resolves which Gemini provider the commentary server uses.
  *
- * - GEMINI_PROVIDER=direct  → GEMINI_API_KEY is required.
+ * - GEMINI_PROVIDER=direct  → GEMINI_API_KEY is required. If GOOGLE_GEMINI_BASE_URL is also
+ *                             set, the client points there (gateway/proxy in native
+ *                             Gemini dialect); otherwise the first-party endpoint.
  * - GEMINI_PROVIDER=proxy   → CLIPROXY_BASE_URL + CLIPROXY_API_KEY are required
  *                             (the CLIproxy gateway, native Gemini dialect).
  * - GEMINI_PROVIDER=auto    → direct if GEMINI_API_KEY is set, else proxy if the
@@ -57,7 +59,11 @@ export function resolveGeminiProvider(env: Record<string, string | undefined>): 
     if (directKey.length === 0) {
       throw new Error('GEMINI_PROVIDER=direct requires GEMINI_API_KEY to be set');
     }
-    return { provider: 'direct', client: buildClient(directKey), detail: 'direct (GEMINI_API_KEY)' };
+    const baseUrl = env.GOOGLE_GEMINI_BASE_URL?.trim() || undefined;
+    const detail = baseUrl
+      ? `direct (GEMINI_API_KEY via ${baseUrl})`
+      : 'direct (GEMINI_API_KEY)';
+    return { provider: 'direct', client: buildClient(directKey, baseUrl), detail };
   }
 
   if (wantProxy) {

@@ -54,3 +54,28 @@ at startup.
   upstream). The alternative — consuming the proxy's OpenAI-compatible endpoint from the TS
   server — is a different client shape and stays a user decision. Option A (direct key)
   remains zero-change.
+
+- **L3** (2026-10-21): **the credential mystery resolved by the user.** pi's `auth.json`
+  (`/home/s/.pi/agent/auth.json`, inspected masked — structure and lengths only, values never
+  printed) holds `cli-proxy.key` — a **51-character key with prefix `sk-uc4`** and
+  `base_url http://127.0.0.1:8317/v1` — whereas `clients.env.sh`'s `CLIPROXY_API_KEY` and
+  `OPENAI_API_KEY` are both 24 characters. The native-dialect rejections of T2 are therefore
+  explained: the working CLIproxy credential is the 51-char key in pi's auth store, not the
+  24-char vars. The user confirmed the proxy is already working and closed the thread
+  ("ya quedó funcionando, no es necesario") — no further testing. Wiring `server.ts` to that
+  credential for option B remains available if wanted later.
+
+- **L4** (2026-10-21): **L3 corrected by the user's clarification + the full census.** auth.json
+  was pointed at for **comparison, not authority** — and the user asserted the credential is the
+  same one held in `clients.env.sh`. The full variable census (the first one was **truncated at
+  12 names**, which hid the decisive row) measured: `clients.env.sh` **does** hold the working
+  credential — `GEMINI_API_KEY` = 51 chars, prefix `sk-uc4` (the same key as pi's auth.json) —
+  under the **existing names** `GEMINI_API_KEY` + `GOOGLE_GEMINI_BASE_URL`
+  (`http://127.0.0.1:8317/v1`). My T2 failure had measured the wrong variable
+  (`CLIPROXY_API_KEY`, 24 chars, `sk-tes` — the OpenAI/Anthropic dialects' key). **Fix
+  applied:** the `direct` provider now honors `GOOGLE_GEMINI_BASE_URL` as an optional base URL,
+  and the live verification closed the loop: server startup resolves
+  *`direct (GEMINI_API_KEY via http://127.0.0.1:8317/v1)`*, `/api/gemini/status` returns
+  `available: true`, and the earlier `bun -e` native generation with that exact key+base
+  returned `"ok"` — **F08's untested native-dialect wiring is now verified end-to-end**, with
+  zero renames of the user's existing env names.
