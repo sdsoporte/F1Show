@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { resolveGeminiProvider } from './server/geminiProvider';
+import { loadPrivateEnv } from './server/loadPrivateEnv';
 import { spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
@@ -16,7 +17,11 @@ app.use(express.json());
 
 // Initialize Google Gen AI client: direct key or CLIproxy, per GEMINI_PROVIDER.
 // The startup log names the active provider (never a key value).
+// Definitive config: the operator's gitignored private env loads automatically —
+// no manual sourcing needed. Real environment values always win over the file.
+const privateVarsLoaded = loadPrivateEnv(process.cwd());
 const resolved = resolveGeminiProvider(process.env as Record<string, string | undefined>);
+console.log(`[env] private variables loaded: ${privateVarsLoaded}`);
 const ai = resolved.client;
 console.log(`[Gemini] provider: ${resolved.detail}`);
 
